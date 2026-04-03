@@ -1,7 +1,7 @@
 import os
 import json
 import hashlib
-import csv
+import logging
 from datetime import datetime, timezone
 
 import requests
@@ -11,131 +11,137 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 CINS_URL = "https://cinsarmy.com/list/ci-badguys.txt"
 OUTPUT_FILE = os.path.join(SCRIPT_DIR, "cins_army.json")
-TRACKING_CSV = os.path.join(SCRIPT_DIR, "last_run.csv")
+TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
+OLD_TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
 TIMEOUT = 30
 
+# Logging configuration
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%H:%M:%S'
+)
 
 def is_valid_ip(line: str) -> bool:
     parts = line.split(".")
     if len(parts) != 4:
         return False
-
     for part in parts:
         if not part.isdigit():
             return False
         value = int(part)
         if value < 0 or value > 255:
             return False
-
     return True
 
-
 def fetch_cins_list(url: str) -> list[str]:
-    if not url:
-        raise ValueError("CINS_URL est vide dans le fichier .env")
-
     response = requests.get(url, timeout=TIMEOUT)
     response.raise_for_status()
-
     ips = []
     for raw_line in response.text.splitlines():
         line = raw_line.strip()
-
-        if not line:
+        if not line or line.startswith("#"):
             continue
-        if line.startswith("#"):
-            continue
-
         if is_valid_ip(line):
             ips.append(line)
-
     return ips
 
+def load_tracking():
+    if os.path.exists(TRACKING_FILE):
+        try:
+            with open(TRACKING_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logging.warning(f"Impossible de lire le tracking JSON : {e}")
+    
+    if os.path.exists(OLD_TRACKING_FILE):
+        try:
+            import csv
+            with open(OLD_TRACKING_FILE, "r", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                rows = list(reader)
+                if len(rows) > 1 and rows[1]:
+                    return {"last_sync_success": rows[1][0]}
+        except:
+            pass
+    return {}
 
-def normalize_records(ips: list[str]) -> list[dict]:
-    collected_at = datetime.now(timezone.utc).isoformat()
-
-    records = []
-    for ip in ips:
-        record = {
-            "indicator": ip,
-            "type": "ip",
-            "source": "cins_army",
-            "threat": "malicious_ip",
-            "collected_at": collected_at,
-            "hash": hashlib.sha256(f"cins_army:{ip}".encode("utf-8")).hexdigest()
-        }
-        records.append(record)
-
-    return records
-
-
-def deduplicate_records(records: list[dict]) -> list[dict]:
-    seen = set()
-    unique = []
-
-    for record in records:
-        key = (record["source"], record["indicator"])
-        if key not in seen:
-            seen.add(key)
-            unique.append(record)
-
-    return unique
-
-
-def save_json(records: list[dict], output_file: str) -> None:
-    # Optionnel: On pourrait charger l'existant ici pour ne pas tout écraser, mais on garde la logique initiale.
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(records, f, ensure_ascii=False, indent=2)
-
-
-def get_last_run():
-    if not os.path.exists(TRACKING_CSV):
-        return None
+def save_tracking_atomic(tracking):
+    tmp_file = TRACKING_FILE + ".tmp"
     try:
-        with open(TRACKING_CSV, "r", encoding="utf-8") as f:
-            reader = csv.reader(f)
-            rows = list(reader)
-            if len(rows) > 1 and rows[1]:
-                return rows[1][0]
-    except Exception:
-        return None
-    return None
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(tracking, f, indent=4, ensure_ascii=False)
+        os.replace(tmp_file, TRACKING_FILE)
+    except Exception as e:
+        logging.error(f"Erreur tracking : {e}")
 
+def load_existing_data():
+    if os.path.exists(OUTPUT_FILE):
+        try:
+            with open(OUTPUT_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+        except Exception:
+            pass
+    return []
 
-def update_last_run(dt_iso):
-    with open(TRACKING_CSV, "w", encoding="utf-8", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["date_extraction"])
-        writer.writerow([dt_iso])
-
+def save_json_atomic(data):
+    tmp_file = OUTPUT_FILE + ".tmp"
+    try:
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+        os.replace(tmp_file, OUTPUT_FILE)
+    except Exception as e:
+        logging.error(f"Erreur lors de la sauvegarde JSON : {e}")
 
 def main():
     try:
-        print("[+] Téléchargement de la liste CINS Army...")
-        last_run = get_last_run()
-        print(f"[i] Dernière exécution: {last_run}")
+        logging.info("Téléchargement de la liste CINS Army...")
+        tracking = load_tracking()
+        last_run = tracking.get("last_sync_success")
+        if last_run:
+            logging.info(f"Dernière exécution réussie : {last_run}")
         
         ips = fetch_cins_list(CINS_URL)
-        print(f"[+] {len(ips)} IP récupérées")
+        logging.info(f"{len(ips)} IP récupérées")
 
-        records = normalize_records(ips)
-        records = deduplicate_records(records)
+        existing_data = load_existing_data()
+        existing_indicators = {item["indicator"] for item in existing_data}
+        
+        collected_at = datetime.now(timezone.utc).isoformat()
+        new_records = []
+        
+        for ip in ips:
+            if ip not in existing_indicators:
+                record = {
+                    "indicator": ip,
+                    "type": "ip",
+                    "source": "cins_army",
+                    "threat": "malicious_ip",
+                    "collected_at": collected_at,
+                    "hash": hashlib.sha256(f"cins_army:{ip}".encode("utf-8")).hexdigest()
+                }
+                new_records.append(record)
+        
+        if new_records:
+            logging.info(f"{len(new_records)} nouveaux records trouvés.")
+            updated_data = existing_data + new_records
+            save_json_atomic(updated_data)
+        else:
+            logging.info("Aucun nouveau record trouvé.")
 
-        save_json(records, OUTPUT_FILE)
-        print(f"[+] Fichier JSON créé : {OUTPUT_FILE}")
+        tracking["last_sync_success"] = collected_at
+        save_tracking_atomic(tracking)
 
-        current_run = datetime.now(timezone.utc).isoformat()
-        update_last_run(current_run)
-        print(f"[+] last_run.csv mis à jour: {current_run}")
+        if os.path.exists(OLD_TRACKING_FILE):
+            try:
+                os.remove(OLD_TRACKING_FILE)
+                logging.info(f"Ancien fichier de tracking supprimé : {OLD_TRACKING_FILE}")
+            except:
+                pass
 
-    except requests.HTTPError as e:
-        print(f"[ERREUR HTTP] {e}")
-    except requests.RequestException as e:
-        print(f"[ERREUR RESEAU] {e}")
     except Exception as e:
-        print(f"[ERREUR] {e}")
-
+        logging.error(f"Erreur lors de l'exécution : {e}")
 
 if __name__ == "__main__":
-    main()
+    main()

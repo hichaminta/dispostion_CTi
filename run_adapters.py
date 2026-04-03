@@ -3,7 +3,7 @@ import sys
 import json
 import logging
 from adapters import (
-    DgssiAdapter, ThreatfoxAdapter, AbuseipdbAdapter, CinsAdapter,
+    ThreatfoxAdapter, AbuseipdbAdapter, CinsAdapter,
     MalwarebazaarAdapter, OpenphishAdapter, PhishtankAdapter,
     VirustotalAdapter, NvdAdapter, PulsediveAdapter,
     FeodotrackerAdapter, SpamhausAdapter, OtxAdapter, UrlhausAdapter
@@ -57,7 +57,6 @@ def run_all_adapters(target_source=None):
     
     # Mapping entre fichiers sources et classes d'adapters
     sources_config = [
-        {"path": "Sources_data/dgssi/dgssi_bulletins.jsonl", "adapter": DgssiAdapter(), "name": "dgssi"},
         {"path": "Sources_data/ThreatFox/threatfox_data.json", "adapter": ThreatfoxAdapter(), "name": "threatfox"},
         {"path": "Sources_data/AbuseIPDB/abuseipdb_data.json", "adapter": AbuseipdbAdapter(), "name": "abuseipdb"},
         {"path": "Sources_data/CINS Army/cins_army.json", "adapter": CinsAdapter(), "name": "cins_army"},

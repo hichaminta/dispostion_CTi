@@ -1,5 +1,4 @@
 from .base_adapter import BaseAdapter
-from .dgssi_adapter import DgssiAdapter
 from .threatfox_adapter import ThreatfoxAdapter
 from .abuseipdb_adapter import AbuseipdbAdapter
 from .cins_adapter import CinsAdapter

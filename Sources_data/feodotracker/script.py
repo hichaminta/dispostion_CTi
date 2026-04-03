@@ -1,8 +1,7 @@
 import os
-import csv
 import json
 import ipaddress
-from io import StringIO
+import logging
 from datetime import datetime, timezone
 
 import requests
@@ -13,7 +12,8 @@ import requests
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 OUTPUT_JSON = os.path.join(SCRIPT_DIR, "feodo_data.json")
-TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
+TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
+OLD_TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
 
 FEODO_URL = "https://feodotracker.abuse.ch/downloads/ipblocklist.json"
 
@@ -22,27 +22,18 @@ HEADERS = {
 }
 TIMEOUT = 30
 
+# Logging configuration
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%H:%M:%S'
+)
 
 # =========================================================
 # UTILS
 # =========================================================
-def ensure_dirs():
-    pass
-
-
 def utc_now_iso():
     return datetime.now(timezone.utc).isoformat()
-
-
-def save_json(path, data):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-
-def save_text(path, text):
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(text)
-
 
 def is_valid_ip(value):
     try:
@@ -51,25 +42,62 @@ def is_valid_ip(value):
     except ValueError:
         return False
 
+def load_tracking():
+    if os.path.exists(TRACKING_FILE):
+        try:
+            with open(TRACKING_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logging.warning(f"Impossible de lire le tracking JSON : {e}")
+    
+    if os.path.exists(OLD_TRACKING_FILE):
+        try:
+            import csv
+            with open(OLD_TRACKING_FILE, "r", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                rows = list(reader)
+                if len(rows) > 1 and rows[1]:
+                    return {"last_sync_success": rows[1][0]}
+        except:
+            pass
+    return {}
+
+def save_tracking_atomic(tracking):
+    tmp_file = TRACKING_FILE + ".tmp"
+    try:
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(tracking, f, indent=4, ensure_ascii=False)
+        os.replace(tmp_file, TRACKING_FILE)
+    except Exception as e:
+        logging.error(f"Erreur tracking : {e}")
+
+def load_existing_data():
+    if os.path.exists(OUTPUT_JSON):
+        try:
+            with open(OUTPUT_JSON, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+        except Exception:
+            pass
+    return []
+
+def save_json_atomic(data):
+    tmp_file = OUTPUT_JSON + ".tmp"
+    try:
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+        os.replace(tmp_file, OUTPUT_JSON)
+    except Exception as e:
+        logging.error(f"Erreur lors de la sauvegarde JSON : {e}")
 
 # =========================================================
 # DOWNLOAD
 # =========================================================
 def download_feed():
-    print(f"[+] Download: {FEODO_URL}")
+    logging.info(f"Download: {FEODO_URL}")
     r = requests.get(FEODO_URL, headers=HEADERS, timeout=TIMEOUT)
     r.raise_for_status()
-
-    return {
-        "url": FEODO_URL,
-        "downloaded_at": utc_now_iso(),
-        "http_status": r.status_code,
-        "content_type": r.headers.get("Content-Type"),
-        "last_modified": r.headers.get("Last-Modified"),
-        "etag": r.headers.get("ETag"),
-        "text": r.text
-    }
-
+    return r.text
 
 # =========================================================
 # PARSE JSON
@@ -81,133 +109,76 @@ def parse_feodo_json(raw_text):
     if not isinstance(data, list):
         return items
 
+    collected_at = utc_now_iso()
     for idx, row in enumerate(data, start=1):
-        first_seen = (row.get("first_seen") or "").strip()
         dst_ip = (row.get("ip_address") or "").strip()
-        dst_port = row.get("port")
-        c2_status = (row.get("status") or "").strip()
-        last_online = (row.get("last_online") or "").strip()
-        malware = (row.get("malware") or "").strip()
-        
-        hostname = (row.get("hostname") or "").strip()
-        as_number = row.get("as_number")
-        as_name = (row.get("as_name") or "").strip()
-        country = (row.get("country") or "").strip()
-
         if not dst_ip or not is_valid_ip(dst_ip):
             continue
 
-        try:
-            ip_obj = ipaddress.ip_address(dst_ip)
-            ip_version = ip_obj.version
-        except ValueError:
-            continue
-
-        try:
-            port_value = int(dst_port) if dst_port else None
-        except (ValueError, TypeError):
-            port_value = None
-
+        ip_obj = ipaddress.ip_address(dst_ip)
         item = {
             "source": "feodotracker",
             "source_provider": "abuse.ch",
             "feed_name": "ipblocklist",
             "ioc_type": "ip",
             "ioc_value": dst_ip,
-            "ip_version": ip_version,
-            "port": port_value,
-            "c2_status": c2_status,
-            "malware_family": malware,
-            "hostname": hostname if hostname else None,
-            "as_number": as_number,
-            "as_name": as_name if as_name else None,
-            "country": country if country else None,
-            "first_seen_utc": first_seen if first_seen else None,
-            "last_online": last_online if last_online else None,
+            "ip_version": ip_obj.version,
+            "port": row.get("port"),
+            "c2_status": (row.get("status") or "").strip(),
+            "malware_family": (row.get("malware") or "").strip(),
+            "hostname": (row.get("hostname") or "").strip() or None,
+            "as_number": row.get("as_number"),
+            "as_name": (row.get("as_name") or "").strip() or None,
+            "country": (row.get("country") or "").strip() or None,
+            "first_seen_utc": (row.get("first_seen") or "").strip() or None,
+            "last_online": (row.get("last_online") or "").strip() or None,
             "source_url": FEODO_URL,
-            "collected_at": utc_now_iso(),
-            "raw_row_number": idx
+            "collected_at": collected_at
         }
         items.append(item)
-
     return items
 
-
-# =========================================================
-# DEDUP
-# =========================================================
-def deduplicate(items):
-    seen = set()
-    out = []
-
-    for item in items:
-        key = (
-            item.get("ioc_value"),
-            item.get("port"),
-            item.get("malware_family"),
-            item.get("c2_status")
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(item)
-
-    return out
-
-
-# =========================================================
-# SUMMARY
-# =========================================================
-def build_summary(items):
-    summary = {
-        "generated_at": utc_now_iso(),
-        "total_items": len(items),
-        "online_count": 0,
-        "offline_count": 0,
-        "by_malware_family": {}
-    }
-
-    for item in items:
-        status = (item.get("c2_status") or "").lower()
-        fam = item.get("malware_family") or "unknown"
-
-        if status == "online":
-            summary["online_count"] += 1
-        elif status == "offline":
-            summary["offline_count"] += 1
-
-        summary["by_malware_family"][fam] = summary["by_malware_family"].get(fam, 0) + 1
-
-    return summary
-
-
-# =========================================================
-# MAIN
-# =========================================================
 def main():
-    ensure_dirs()
-
     try:
-        raw = download_feed()
+        tracking = load_tracking()
+        last_run = tracking.get("last_sync_success")
+        if last_run:
+            logging.info(f"Dernière exécution : {last_run}")
 
-        # parse + normalize
-        items = parse_feodo_json(raw["text"])
-        items = deduplicate(items)
-        summary = build_summary(items)
+        raw_text = download_feed()
+        new_items = parse_feodo_json(raw_text)
+        
+        existing_data = load_existing_data()
+        # Clé de déduplication : ioc_value + malware_family
+        existing_keys = { (item["ioc_value"], item["malware_family"]) for item in existing_data }
+        
+        to_add = []
+        for item in new_items:
+            key = (item["ioc_value"], item["malware_family"])
+            if key not in existing_keys:
+                to_add.append(item)
+        
+        if to_add:
+            logging.info(f"{len(to_add)} nouveaux IOCs ajoutés.")
+            updated_data = existing_data + to_add
+            save_json_atomic(updated_data)
+        else:
+            logging.info("Aucun nouvel IOC trouvé.")
 
-        save_json(OUTPUT_JSON, items)
+        now_str = utc_now_iso()
+        tracking["last_sync_success"] = now_str
+        save_tracking_atomic(tracking)
 
-        print(f"[OK] IOC extraits: {len(items)}")
-        print(f"Fichier sauvegardé : {OUTPUT_JSON}")
-        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        if os.path.exists(OLD_TRACKING_FILE):
+            try:
+                os.remove(OLD_TRACKING_FILE)
+                logging.info(f"Ancien fichier de tracking supprimé : {OLD_TRACKING_FILE}")
+            except:
+                pass
 
-    except requests.HTTPError as e:
-        print(f"[ERROR] HTTP: {e}")
-    except requests.RequestException as e:
-        print(f"[ERROR] Réseau: {e}")
     except Exception as e:
-        print(f"[ERROR] Inattendu: {e}")
-
+        logging.error(f"Erreur : {e}")
 
 if __name__ == "__main__":
     main()
+()
