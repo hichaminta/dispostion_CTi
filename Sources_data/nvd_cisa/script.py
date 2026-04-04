@@ -12,7 +12,7 @@ load_dotenv(find_dotenv())
 API_KEY = os.getenv("NVD_API_KEY")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_JSON = os.path.join(SCRIPT_DIR, "cve_data.json")
+OUTPUT_JSON = os.path.join(SCRIPT_DIR, "nvd_data.json")
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 OLD_TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
 CISA_KEV_JSON = os.path.join(SCRIPT_DIR, "cisa.json")
@@ -60,11 +60,10 @@ def load_existing_data():
         try:
             with open(OUTPUT_JSON, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if isinstance(data, dict) and "cves" in data:
-                    return data
+                return data if isinstance(data, list) else []
         except Exception:
             pass
-    return {"metadata": {"total_cves": 0, "generated_at": ""}, "cves": {}}
+    return []
 
 def save_json_atomic(data):
     tmp_file = OUTPUT_JSON + ".tmp"
@@ -154,7 +153,7 @@ def main():
 
     kev = load_cisa_kev()
     existing_data = load_existing_data()
-    cves_dict = existing_data["cves"]
+    existing_ids = {item["cve_id"] for item in existing_data if item.get("cve_id")}
     
     start_index = 0
     total_new = 0
@@ -185,18 +184,20 @@ def main():
             
             cvss_info = extract_cvss_list(vuln)
             
-            cve_item = {
-                "cve_id": cve_id,
-                "published": cve.get("published"),
-                "last_modified": cve.get("lastModified"),
-                "source": cve.get("sourceIdentifier", "N/A"),
-                "description": description,
-                "cvss": cvss_info,
-                "exploited": 1 if cve_id.upper() in kev else 0,
-                "collected_at": now.isoformat()
-            }
-            cves_dict[cve_id] = cve_item
-            total_new += 1
+            if cve_id not in existing_ids:
+                cve_item = {
+                    "cve_id": cve_id,
+                    "published": cve.get("published"),
+                    "last_modified": cve.get("lastModified"),
+                    "source": cve.get("sourceIdentifier", "N/A"),
+                    "description": description,
+                    "cvss": cvss_info,
+                    "exploited": 1 if cve_id.upper() in kev else 0,
+                    "collected_at": now.isoformat()
+                }
+                existing_data.append(cve_item)
+                existing_ids.add(cve_id)
+                total_new += 1
         
         total_results = data.get("totalResults", 0)
         logging.info(f"Progress : {start_index + len(vulnerabilities)} / {total_results}")
@@ -206,9 +207,6 @@ def main():
         start_index += 500
         time.sleep(0.6) # Rate limit protection
 
-    existing_data["metadata"]["total_cves"] = len(cves_dict)
-    existing_data["metadata"]["last_sync"] = now.isoformat()
-    
     save_json_atomic(existing_data)
     
     tracking["latest_modified"] = now_str
@@ -222,7 +220,7 @@ def main():
         except:
             pass
     
-    logging.info(f"Extraction terminée. {total_new} CVEs traitées, {len(cves_dict)} au total.")
+    logging.info(f"Extraction terminée. {total_new} CVEs traitées, {len(existing_data)} au total.")
 
 if __name__ == "__main__":
     main()

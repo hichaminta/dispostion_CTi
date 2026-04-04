@@ -10,7 +10,7 @@ import requests
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 CINS_URL = "https://cinsarmy.com/list/ci-badguys.txt"
-OUTPUT_FILE = os.path.join(SCRIPT_DIR, "cins_army.json")
+OUTPUT_FILE = os.path.join(SCRIPT_DIR, "cins_army_data.json")
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 OLD_TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
 TIMEOUT = 30

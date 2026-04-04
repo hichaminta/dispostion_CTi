@@ -13,41 +13,15 @@ from adapters import (
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 def load_data(file_path):
-    """Charge les données depuis un fichier JSON ou JSONL."""
+    """Charge les données depuis un fichier JSON standaridsé (liste d'objets)."""
     if not os.path.exists(file_path):
         logging.warning(f"Fichier non trouvé : {file_path}")
         return []
     
     try:
-        if file_path.endswith('.jsonl'):
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return [json.loads(line) for line in f if line.strip()]
-        else:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                
-                # Gestion des structures par source
-                if isinstance(data, dict):
-                    if 'iocs' in data:
-                        return data['iocs']
-                    if 'cves' in data:
-                        return list(data['cves'].values())
-                    
-                    # Cas général d'id mapping (ex: URLHaus)
-                    # Si toutes les valeurs sont des listes, on les aplatit
-                    first_value = next(iter(data.values())) if data else None
-                    if isinstance(first_value, list):
-                        all_items = []
-                        for val in data.values():
-                            if isinstance(val, list):
-                                all_items.extend(val)
-                            else:
-                                all_items.append(val)
-                        return all_items
-                    
-                    return [data]
-                
-                return data if isinstance(data, list) else [data]
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
     except Exception as e:
         logging.error(f"Erreur lors du chargement de {file_path} : {e}")
         return []
@@ -59,17 +33,16 @@ def run_all_adapters(target_source=None):
     sources_config = [
         {"path": "Sources_data/ThreatFox/threatfox_data.json", "adapter": ThreatfoxAdapter(), "name": "threatfox"},
         {"path": "Sources_data/AbuseIPDB/abuseipdb_data.json", "adapter": AbuseipdbAdapter(), "name": "abuseipdb"},
-        {"path": "Sources_data/CINS Army/cins_army.json", "adapter": CinsAdapter(), "name": "cins_army"},
+        {"path": "Sources_data/CINS Army/cins_army_data.json", "adapter": CinsAdapter(), "name": "cins_army"},
         {"path": "Sources_data/MalwareBazaar Community API/malwarebazaar_data.json", "adapter": MalwarebazaarAdapter(), "name": "malwarebazaar"},
         {"path": "Sources_data/OpenPhish/openphish_data.json", "adapter": OpenphishAdapter(), "name": "openphish"},
-        {"path": "Sources_data/PhishTank/verified_online.json", "adapter": PhishtankAdapter(), "name": "phishtank"},
-        {"path": "Sources_data/VirusTotal/virustotal_enrichment.json", "adapter": VirustotalAdapter(), "name": "virustotal"},
-        {"path": "Sources_data/feodotracker/feodo_data.json", "adapter": FeodotrackerAdapter(), "name": "feodotracker"},
-        {"path": "Sources_data/pulsedive/pulsedive_iocs.json", "adapter": PulsediveAdapter(), "name": "pulsedive"},
+        {"path": "Sources_data/PhishTank/phishtank_data.json", "adapter": PhishtankAdapter(), "name": "phishtank"},
+        {"path": "Sources_data/VirusTotal/virustotal_data.json", "adapter": VirustotalAdapter(), "name": "virustotal"},
+        {"path": "Sources_data/feodotracker/feodotracker_data.json", "adapter": FeodotrackerAdapter(), "name": "feodotracker"},
+        {"path": "Sources_data/pulsedive/pulsedive_data.json", "adapter": PulsediveAdapter(), "name": "pulsedive"},
         {"path": "Sources_data/Spamhaus/spamhaus_data.json", "adapter": SpamhausAdapter(), "name": "spamhaus"},
-        {"path": "Sources_data/url/urlhaus_full.json", "adapter": UrlhausAdapter(), "name": "urlhaus"},
-        # {"path": "Sources_data/Otx alienvault/otx_pulses.json", "adapter": OtxAdapter(), "name": "otx_alienvault"},
-        {"path": "Sources_data/nvd_cisa/cve_data_exploited.json", "adapter": NvdAdapter(), "name": "nvd"},
+        {"path": "Sources_data/url/urlhaus_data.json", "adapter": UrlhausAdapter(), "name": "urlhaus"},
+        {"path": "Sources_data/nvd_cisa/nvd_data.json", "adapter": NvdAdapter(), "name": "nvd"},
     ]
 
     # Filtrage si une source spécifique est demandée

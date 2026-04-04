@@ -2,6 +2,9 @@ import requests
 import json
 import os
 import csv
+import sys
+import io
+import zipfile
 from datetime import datetime, timedelta
 from dotenv import load_dotenv, find_dotenv
 
@@ -10,11 +13,15 @@ load_dotenv(find_dotenv(), override=False)
 
 API_KEY      = os.getenv("THREATFOX_API_KEY", "")
 API_URL      = "https://threatfox-api.abuse.ch/api/v1/"
+SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_JSON  = os.path.join(SCRIPT_DIR, "threatfox_data.json")
-TRACKING_CSV = os.path.join(SCRIPT_DIR, "last_run.csv")
+TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
+OLD_TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
 
-# Nombre de jours d'IOCs à récupérer lors de la première exécution
-DAYS_FIRST_RUN = 90
+# Nombre de jours d'IOCs à récupérer lors de la première exécution (Limite API = 7)
+DAYS_FIRST_RUN = 7
+# Template pour l'export bulk (v2) - nécessite l'Auth-Key dans l'URL
+BULK_EXPORT_URL_TEMPLATE = "https://threatfox-api.abuse.ch/v2/files/exports/{api_key}/full.json.zip"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -30,36 +37,49 @@ def load_existing_data() -> list:
     return []
 
 
-def save_data(data: list):
-    """Sauvegarde la liste complète des IOCs en JSON."""
-    with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
-
-
-def get_last_run_date() -> datetime | None:
-    """Lit la dernière date d'exécution depuis le CSV de suivi."""
-    if not os.path.exists(TRACKING_CSV):
-        return None
+def save_json_atomic(data: list):
+    """Sauvegarde la liste complète des IOCs en JSON de manière atomique."""
+    tmp_file = OUTPUT_JSON + ".tmp"
     try:
-        with open(TRACKING_CSV, "r", encoding="utf-8") as f:
-            rows = list(csv.reader(f))
-        # Ignore l'en-tête, prend la dernière ligne
-        data_rows = [r for r in rows if r and r[0] != "date_extraction"]
-        if data_rows:
-            return datetime.strptime(data_rows[-1][0], "%Y-%m-%d %H:%M:%S")
-    except Exception:
-        pass
-    return None
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+        os.replace(tmp_file, OUTPUT_JSON)
+    except Exception as e:
+        print(f"Erreur lors de la sauvegarde JSON : {e}")
+
+def load_tracking():
+    """Charge le tracking JSON ou migre depuis l'ancien CSV."""
+    if os.path.exists(TRACKING_FILE):
+        try:
+            with open(TRACKING_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    
+    # Migration depuis l'ancien CSV
+    if os.path.exists(OLD_TRACKING_FILE):
+        try:
+            with open(OLD_TRACKING_FILE, "r", encoding="utf-8") as f:
+                rows = list(csv.reader(f))
+                data_rows = [r for r in rows if r and r[0] != "date_extraction"]
+                if data_rows:
+                    return {"latest_modified": data_rows[-1][0]}
+        except:
+            pass
+    return {}
+
+def save_tracking_atomic(tracking: dict):
+    """Sauvegarde le tracking JSON de manière atomique."""
+    tmp_file = TRACKING_FILE + ".tmp"
+    try:
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(tracking, f, indent=4, ensure_ascii=False)
+        os.replace(tmp_file, TRACKING_FILE)
+    except Exception as e:
+        print(f"Erreur lors de la sauvegarde du tracking : {e}")
 
 
-def save_last_run():
-    """Enregistre la date/heure de l'exécution dans le CSV de suivi."""
-    file_exists = os.path.exists(TRACKING_CSV)
-    with open(TRACKING_CSV, "a", encoding="utf-8", newline="") as f:
-        writer = csv.writer(f)
-        if not file_exists:
-            writer.writerow(["date_extraction"])
-        writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
+# Les anciennes fonctions CSV sont supprimées au profit des fonctions atomiques
 
 
 def build_headers() -> dict:
@@ -103,6 +123,57 @@ def fetch_iocs(days: int) -> list:
     return data_iocs or []
 
 
+def fetch_bulk_iocs() -> list:
+    """
+    Télécharge et décompresse l'export complet JSON de ThreatFox (derniers 6 mois).
+    """
+    if not API_KEY or API_KEY == "your_threatfox_api_key_here":
+        print("  ✗ Erreur : Clé API requise pour l'export bulk.")
+        return []
+
+    url = BULK_EXPORT_URL_TEMPLATE.format(api_key=API_KEY)
+    print(f"  → Téléchargement de l'export complet (bulk ZIP)...")
+    try:
+        response = requests.get(url, timeout=300)
+        if response.status_code != 200:
+            print(f"  ✗ Erreur HTTP {response.status_code} lors du téléchargement bulk.")
+            return []
+            
+        # Décompression du ZIP en mémoire
+        with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+            # On cherche le premier fichier .json dans le ZIP
+            json_filename = [f for f in z.namelist() if f.endswith('.json')][0]
+            with z.open(json_filename) as f:
+                data_iocs = json.load(f)
+                
+    except Exception as e:
+        print(f"  ✗ Erreur lors du téléchargement/décompression bulk : {e}")
+        return []
+
+    if isinstance(data_iocs, dict):
+        # L'export bulk est un dictionnaire {id: [ioc_data]}
+        # On doit injecter l'ID si absent de l'objet intérieur
+        print(f"  → Dictionnaire détecté ({len(data_iocs)} entrées), mise à plat...")
+        flattened = []
+        for ioc_id, item_or_list in data_iocs.items():
+            if isinstance(item_or_list, list):
+                for subitem in item_or_list:
+                    if isinstance(subitem, dict) and "id" not in subitem:
+                        subitem["id"] = ioc_id
+                    flattened.append(subitem)
+            else:
+                if isinstance(item_or_list, dict) and "id" not in item_or_list:
+                    item_or_list["id"] = ioc_id
+                flattened.append(item_or_list)
+        return flattened
+
+    if not isinstance(data_iocs, list):
+        print(f"  ✗ Format inattendu pour l'export bulk (reçu {type(data_iocs)})")
+        return []
+
+    return data_iocs
+
+
 def normalize_ioc(raw: dict) -> dict:
     """Normalise un IOC brut en un dictionnaire uniforme."""
     return {
@@ -128,6 +199,13 @@ def normalize_ioc(raw: dict) -> dict:
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main():
+    # Fix Windows encoding issues for arrow characters
+    if sys.platform == "win32":
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except:
+            pass
+
     print("=" * 60)
     print("ThreatFox IOC Extraction")
     print("=" * 60)
@@ -136,32 +214,46 @@ def main():
         print("[AVERTISSEMENT] Aucune clé API configurée dans .env")
         print("  Les requêtes publiques (sans auth) sont limitées.")
 
-    # Détermine combien de jours récupérer d'après le last_run.csv
-    existing   = load_existing_data()
-    last_run   = get_last_run_date()
+    # Arguments CLI
+    is_full_sync = "--full" in sys.argv
 
-    if last_run is None:
-        days = DAYS_FIRST_RUN
-        print(f"  Première exécution → récupération des {days} derniers jours")
+    # Détermine combien de jours récupérer d'après le tracking
+    existing   = load_existing_data()
+    tracking   = load_tracking()
+    last_run_str = tracking.get("latest_modified")
+    
+    last_run = None
+    if last_run_str:
+        try:
+            last_run = datetime.strptime(last_run_str, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            pass
+
+    if is_full_sync or last_run is None:
+        is_full_sync = True
+        print("  → Premier lancement ou mode --full : récupération de l'export complet (bulk)...")
+        days = 0 
     else:
         delta = datetime.now() - last_run
-        days  = max(1, delta.days + 1)   # +1 pour ne pas rater la dernière journée
-        print(f"  Dernière exécution : {last_run.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"  Intervalle         : {delta.days} jour(s) → récupération des {days} derniers jours")
+        days  = max(1, delta.days + 1)
+        print(f"  Dernière exécution (tracking) : {last_run_str}")
+        print(f"  Intervalle : {delta.days} jour(s) → récupération des {days} derniers jours")
 
     print(f"\n[1/3] Chargement des données existantes : {len(existing)} IOCs")
 
     # Récupère les nouveaux IOCs
     print(f"\n[2/3] Extraction des IOCs...")
-    raw_iocs = fetch_iocs(days)
-    print(f"  → {len(raw_iocs)} IOCs reçus de l'API")
+    if is_full_sync:
+        raw_iocs = fetch_bulk_iocs()
+    else:
+        raw_iocs = fetch_iocs(days)
+    print(f"  → {len(raw_iocs)} IOCs reçus.")
 
     if not raw_iocs:
         print("\nAucun IOC récupéré. Vérifiez votre clé API ou réessayez plus tard.")
-        save_last_run()
         return
 
-    # Fusion incrémentale (dédoublonnage par 'id')
+    # Fusion incrémentale
     print(f"\n[3/3] Fusion et dédoublonnage...")
     existing_ids = {item["id"] for item in existing if item.get("id")}
     new_entries = []
@@ -174,22 +266,23 @@ def main():
 
     if new_entries:
         existing.extend(new_entries)
-        save_data(existing)
+        save_json_atomic(existing)
         print(f"  ✓ {len(new_entries)} nouveaux IOCs ajoutés.")
         print(f"  ✓ Total en base : {len(existing)} IOCs")
-
-        # Résumé par type
-        types = {}
-        for ioc in new_entries:
-            t = ioc.get("ioc_type", "unknown")
-            types[t] = types.get(t, 0) + 1
-        print("\n  Répartition des nouveaux IOCs par type :")
-        for t, count in sorted(types.items(), key=lambda x: -x[1]):
-            print(f"    {t:<30} {count}")
     else:
         print("  ✓ Aucun nouvel IOC (tout est déjà en base).")
 
-    save_last_run()
+    # Mise à jour du tracking
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    tracking["latest_modified"] = now_str
+    tracking["last_sync_success"] = datetime.now().isoformat()
+    save_tracking_atomic(tracking)
+    
+    # Nettoyage CSV final
+    if os.path.exists(OLD_TRACKING_FILE):
+        try: os.remove(OLD_TRACKING_FILE)
+        except: pass
+    
     print(f"\nDonnées sauvegardées dans : {OUTPUT_JSON}")
     print("=" * 60)
 

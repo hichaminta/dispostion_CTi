@@ -13,7 +13,8 @@ import csv
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 OUTPUT_JSON = os.path.join(SCRIPT_DIR, "spamhaus_data.json")
-TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
+TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
+OLD_TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
 
 SPAMHAUS_FEEDS = {
     "drop": "https://www.spamhaus.org/drop/drop.txt",
@@ -35,32 +36,46 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def get_last_run_date() -> str:
-    """Récupère la date de la dernière extraction depuis le fichier CSV."""
+def load_tracking():
+    """Charge le tracking JSON ou migre depuis l'ancien CSV."""
     if os.path.exists(TRACKING_FILE):
-        with open(TRACKING_FILE, "r", encoding="utf-8") as f:
-            reader = csv.reader(f)
-            rows = [row for row in reader if row and len(row) > 0]
-            if rows:
-                if rows[0][0] == "date_extraction":
-                    if len(rows) > 1:
-                        return rows[-1][0]
-                    else:
-                        return None
-                return rows[-1][0]
-    return None
+        try:
+            with open(TRACKING_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    
+    # Migration depuis l'ancien CSV
+    if os.path.exists(OLD_TRACKING_FILE):
+        try:
+            with open(OLD_TRACKING_FILE, "r", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                rows = list(reader)
+                if rows:
+                    return {"latest_modified": rows[-1][0]}
+        except:
+            pass
+    return {}
 
+def save_tracking_atomic(tracking: dict):
+    """Sauvegarde le tracking JSON de manière atomique."""
+    tmp_file = TRACKING_FILE + ".tmp"
+    try:
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(tracking, f, indent=4, ensure_ascii=False)
+        os.replace(tmp_file, TRACKING_FILE)
+    except Exception as e:
+        print(f"Erreur tracking : {e}")
 
-def save_last_run_date(date_str: str) -> None:
-    """Sauvegarde la date de l'extraction actuelle dans le fichier CSV."""
-    with open(TRACKING_FILE, "a", encoding="utf-8", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow([date_str])
-
-
-def safe_write_json(path: str, data: Any) -> None:
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+def save_json_atomic(path: str, data: Any) -> None:
+    """Sauvegarde les données JSON de manière atomique."""
+    tmp_file = path + ".tmp"
+    try:
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_file, path)
+    except Exception as e:
+        print(f"Erreur lors de la sauvegarde JSON atomique : {e}")
 
 
 def safe_write_text(path: str, text: str) -> None:
@@ -221,11 +236,12 @@ def build_summary(items: List[Dict[str, Any]]) -> Dict[str, Any]:
 # Main
 # ============================================================
 def main() -> None:
-    last_date = get_last_run_date()
+    tracking = load_tracking()
+    last_date = tracking.get("latest_modified")
     if last_date:
-        print(f"Dernière extraction exécutée le : {last_date}")
+        print(f"Dernière extraction (tracking) : {last_date}")
     else:
-        print("Aucune exécution précédente trouvée dans last_run.csv.")
+        print("Aucune exécution précédente trouvée.")
 
     print("Début de l'extraction...")
 
@@ -262,21 +278,24 @@ def main() -> None:
     all_items = deduplicate_items(all_items)
     summary = build_summary(all_items)
 
-    output_data = {
-        "metadata": summary,
-        "raw_metadata": raw_metadata,
-        "iocs": all_items
-    }
-    safe_write_json(OUTPUT_JSON, output_data)
+    # Standard JSON Output: A flat list of records
+    save_json_atomic(OUTPUT_JSON, all_items)
 
     print("\n========== SUMMARY ==========")
     print(json.dumps(summary, indent=2, ensure_ascii=False))
     print(f"\n[OK] Données enregistrées dans : {OUTPUT_JSON}")
 
-    # Sauvegarde de la date pour la prochaine fois
+    # Mise à jour du tracking
     now_str = utc_now_iso()
-    save_last_run_date(now_str)
-    print(f"[OK] Date d'extraction sauvegardée : {now_str}")
+    tracking["latest_modified"] = now_str
+    tracking["last_sync_success"] = now_str
+    save_tracking_atomic(tracking)
+    print(f"[OK] tracking.json mis à jour : {now_str}")
+
+    # Nettoyage CSV
+    if os.path.exists(OLD_TRACKING_FILE):
+        try: os.remove(OLD_TRACKING_FILE)
+        except: pass
 
 
 if __name__ == "__main__":

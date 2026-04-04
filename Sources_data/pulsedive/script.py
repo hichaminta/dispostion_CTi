@@ -14,30 +14,50 @@ API_KEY = os.getenv("PULSEDIVE_API_KEY")
 BASE_URL = "https://pulsedive.com/api/explore.php"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_FILE = os.path.join(SCRIPT_DIR, "pulsedive_iocs.json")
-TRACKING_CSV = os.path.join(SCRIPT_DIR, "last_run.csv")
+OUTPUT_FILE = os.path.join(SCRIPT_DIR, "pulsedive_data.json")
+TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
+OLD_TRACKING_CSV = os.path.join(SCRIPT_DIR, "last_run.csv")
 
 
-def get_last_run():
-    if not os.path.exists(TRACKING_CSV):
-        return None
+def load_tracking():
+    if os.path.exists(TRACKING_FILE):
+        try:
+            with open(TRACKING_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    if os.path.exists(OLD_TRACKING_CSV):
+        try:
+            with open(OLD_TRACKING_CSV, "r", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                rows = list(reader)
+                if len(rows) > 1 and rows[1]:
+                    return {"last_sync_success": rows[1][0]}
+        except:
+            pass
+    return {}
 
-    try:
-        with open(TRACKING_CSV, "r", encoding="utf-8") as f:
-            reader = csv.reader(f)
-            rows = list(reader)
-            if len(rows) > 1 and rows[1]:
-                return rows[1][0]  # Return the date from the second row
-    except Exception:
-        return None
+def save_tracking_atomic(tracking):
+    tmp_file = TRACKING_FILE + ".tmp"
+    with open(tmp_file, "w", encoding="utf-8") as f:
+        json.dump(tracking, f, indent=4, ensure_ascii=False)
+    os.replace(tmp_file, TRACKING_FILE)
 
-    return None
+def load_existing_data():
+    if os.path.exists(OUTPUT_FILE):
+        with open(OUTPUT_FILE, "r", encoding="utf-8") as f:
+            try:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+            except:
+                pass
+    return []
 
-def update_last_run(dt_iso):
-    with open(TRACKING_CSV, "w", encoding="utf-8", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["date_extraction"])
-        writer.writerow([dt_iso])
+def save_json_atomic(data):
+    tmp_file = OUTPUT_FILE + ".tmp"
+    with open(tmp_file, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+    os.replace(tmp_file, OUTPUT_FILE)
 
 
 def fetch_iocs(limit=50):
@@ -124,20 +144,33 @@ def save_json(data):
 
 def main():
     print("Extraction Pulsedive IOC (Maximisée)...")
-    last_run = get_last_run()
-    print(f"[i] Dernière exécution: {last_run}")
+    tracking = load_tracking()
+    print(f"[i] Dernière exécution: {tracking.get('last_sync_success')}")
 
     iocs = fetch_iocs()
 
     if not iocs:
         print("Aucune donnée récupérée")
     else:
-        added = save_json(iocs)
-        print(f"{added} nouveaux IOC ajoutés (Total unique extrait : {len(iocs)})")
+        existing = load_existing_data()
+        existing_indicators = {item['indicator'] for item in existing}
+        new_data = [item for item in iocs if item['indicator'] not in existing_indicators]
+        
+        if new_data:
+            combined = existing + new_data
+            save_json_atomic(combined)
+            print(f"{len(new_data)} nouveaux IOC ajoutés (Total unique extrait : {len(iocs)})")
+        else:
+            print("Aucun nouveau record.")
 
     current_run = datetime.now(timezone.utc).isoformat()
-    update_last_run(current_run)
-    print(f"[+] last_run.csv mis à jour: {current_run}")
+    tracking["last_sync_success"] = current_run
+    save_tracking_atomic(tracking)
+    
+    if os.path.exists(OLD_TRACKING_CSV):
+        try: os.remove(OLD_TRACKING_CSV)
+        except: pass
+    print(f"[+] tracking.json mis à jour: {current_run}")
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ import requests
 # =========================================================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-OUTPUT_JSON = os.path.join(SCRIPT_DIR, "feodo_data.json")
+OUTPUT_JSON = os.path.join(SCRIPT_DIR, "feodotracker_data.json")
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 OLD_TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
 

@@ -1,324 +1,241 @@
-import base64
-import csv
-import json
 import os
-import re
+import json
+import logging
+import requests
+import sys
 import time
 from datetime import datetime, timezone
-from urllib.parse import quote
-
-import requests
 from dotenv import load_dotenv, find_dotenv
 
+# ── Configuration ──────────────────────────────────────────────────────────────
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(find_dotenv())
+API_KEY = os.getenv("VIRUSTOTAL_API_KEY", "").strip()
+API_URL = "https://www.virustotal.com/api/v3"
 
-load_dotenv(find_dotenv(), override=False)
+# Les fichiers de sortie selon config.py
+OUTPUT_JSON = os.path.join(SCRIPT_DIR, "virustotal_data.json")
+TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 
-API_KEY = os.getenv("VIRUSTOTAL_API_KEY", "")
-OUTPUT_JSON = os.path.join(SCRIPT_DIR, "virustotal_enrichment.json")
-TRACKING_CSV = os.path.join(SCRIPT_DIR, "last_run.csv")
-API_BASE_URL = "https://www.virustotal.com/api/v3"
-TIMEOUT = 60
-MIN_INTERVAL_SECONDS = 15
-DEFAULT_MAX_INDICATORS = int(os.getenv("VIRUSTOTAL_MAX_INDICATORS", "20"))
-
-COMMON_KEYS = {
-    "indicator",
-    "ioc",
-    "ip",
-    "ipaddress",
-    "domain",
-    "hostname",
-    "host",
-    "url",
-    "md5",
-    "sha1",
-    "sha256",
-}
-
-IP_PATTERN = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$")
-MD5_PATTERN = re.compile(r"^[A-Fa-f0-9]{32}$")
-SHA1_PATTERN = re.compile(r"^[A-Fa-f0-9]{40}$")
-SHA256_PATTERN = re.compile(r"^[A-Fa-f0-9]{64}$")
-DOMAIN_PATTERN = re.compile(
-    r"^(?=.{1,253}$)(?!-)(?:[A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$"
+# Logging configuration
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%H:%M:%S'
 )
 
+# Throttling pour l'API publique (4 requêtes/minute = 15s d'attente)
+IS_PUBLIC_KEY = True # On assume public par défaut pour la sécurité des quotas
+THROTTLE_DELAY = 15 
 
-def load_existing_output() -> list[dict]:
-    if not os.path.exists(OUTPUT_JSON):
+# ── Helpers ────────────────────────────────────────────────────────────────────
+def now_utc_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+def load_tracking():
+    if os.path.exists(TRACKING_FILE):
+        try:
+            with open(TRACKING_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logging.warning(f"Impossible de lire le tracking JSON : {e}")
+    return {}
+
+def save_tracking_atomic(tracking):
+    tmp_file = TRACKING_FILE + ".tmp"
+    try:
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(tracking, f, indent=4, ensure_ascii=False)
+        os.replace(tmp_file, TRACKING_FILE)
+    except Exception as e:
+        logging.error(f"Erreur tracking : {e}")
+
+def load_existing_data():
+    if os.path.exists(OUTPUT_JSON):
+        try:
+            with open(OUTPUT_JSON, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+        except Exception:
+            pass
+    return []
+
+def save_json_atomic(data):
+    tmp_file = OUTPUT_JSON + ".tmp"
+    try:
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+        os.replace(tmp_file, OUTPUT_JSON)
+    except Exception as e:
+        logging.error(f"Erreur lors de la sauvegarde JSON : {e}")
+
+# ── API Calls ──────────────────────────────────────────────────────────────────
+def vt_get(endpoint, params=None):
+    headers = {"x-apikey": API_KEY}
+    url = f"{API_URL}{endpoint}"
+    response = requests.get(url, headers=headers, params=params, timeout=30)
+    
+    if response.status_code == 429:
+        logging.warning("Quota API VirusTotal atteint. Attente de 60s...")
+        time.sleep(60)
+        return vt_get(endpoint, params)
+    
+    response.raise_for_status()
+    return response.json()
+
+def fetch_notifications(limit=10):
+    """Récupère les notifications Hunting (YARA)."""
+    logging.info("Vérification des notifications Hunting...")
+    try:
+        data = vt_get("/intelligence/hunting_notifications", params={"filter": "tag:malicious", "limit": limit})
+        return data.get("data", [])
+    except Exception as e:
+        logging.warning(f"Impossible de récupérer les notifications (Hunting peut être désactivé) : {e}")
         return []
 
+def fetch_recent_comments(limit=10):
+    """Récupère les derniers commentaires de la communauté."""
+    logging.info("Vérification des derniers commentaires de la communauté...")
     try:
-        with open(OUTPUT_JSON, "r", encoding="utf-8") as handle:
-            return json.load(handle)
+        data = vt_get("/comments", params={"limit": limit})
+        return data.get("data", [])
+    except Exception as e:
+        logging.error(f"Erreur lors de la récupération des commentaires : {e}")
+        return []
+
+def get_item_report(item_type, item_id):
+    """Récupère le rapport complet pour un fichier, URL, domaine ou IP."""
+    logging.info(f"Extraction des données détaillées pour {item_id}...")
+    endpoint = f"/{item_type}s/{item_id}"
+    try:
+        report = vt_get(endpoint)
+        return report.get("data", {})
+    except Exception as e:
+        logging.error(f"Erreur rapport {item_id} : {e}")
+        return None
+
+def get_item_relationships(item_type, item_id, relationship):
+    """Récupère les relations (ex: contacted_ips)."""
+    endpoint = f"/{item_type}s/{item_id}/{relationship}"
+    try:
+        data = vt_get(endpoint, params={"limit": 10})
+        return data.get("data", [])
     except Exception:
         return []
 
-
-def save_output(records: list[dict]) -> None:
-    with open(OUTPUT_JSON, "w", encoding="utf-8") as handle:
-        json.dump(records, handle, ensure_ascii=False, indent=2)
-
-
-def save_last_run() -> None:
-    file_exists = os.path.exists(TRACKING_CSV)
-    with open(TRACKING_CSV, "a", encoding="utf-8", newline="") as handle:
-        writer = csv.writer(handle)
-        if not file_exists:
-            writer.writerow(["date_extraction"])
-        writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
-
-
-def is_valid_ipv4(value: str) -> bool:
-    if not IP_PATTERN.match(value):
-        return False
-
-    parts = value.split(".")
-    return all(0 <= int(part) <= 255 for part in parts)
-
-
-def detect_indicator_type(value: str) -> str | None:
-    candidate = value.strip()
-    if not candidate:
-        return None
-
-    lowered = candidate.lower()
-
-    if lowered.startswith(("http://", "https://")):
-        return "url"
-    if is_valid_ipv4(candidate):
-        return "ip"
-    if SHA256_PATTERN.match(candidate):
-        return "file"
-    if SHA1_PATTERN.match(candidate):
-        return "file"
-    if MD5_PATTERN.match(candidate):
-        return "file"
-    if DOMAIN_PATTERN.match(lowered):
-        return "domain"
-
-    return None
-
-
-def iter_json_files(root_dir: str) -> list[str]:
-    json_files = []
-    for current_root, dirs, files in os.walk(root_dir):
-        relative_root = os.path.relpath(current_root, root_dir)
-        parts = {part.lower() for part in relative_root.split(os.sep)}
-
-        if "virustotal" in parts or "dashboard" in parts or ".git" in parts:
-            continue
-
-        dirs[:] = [d for d in dirs if d.lower() not in {"virustotal", "dashboard", ".git"}]
-
-        for name in files:
-            if not name.lower().endswith(".json"):
-                continue
-            json_files.append(os.path.join(current_root, name))
-
-    return sorted(json_files)
-
-
-def extract_from_object(obj, file_path: str, results: list[dict]) -> None:
-    if isinstance(obj, dict):
-        for key, value in obj.items():
-            normalized_key = str(key).strip().lower()
-            if normalized_key in COMMON_KEYS and isinstance(value, str):
-                indicator_type = detect_indicator_type(value)
-                if indicator_type:
-                    results.append(
-                        {
-                            "indicator": value.strip(),
-                            "indicator_type": indicator_type,
-                            "source_file": os.path.relpath(file_path, ROOT_DIR),
-                        }
-                    )
-
-            extract_from_object(value, file_path, results)
-        return
-
-    if isinstance(obj, list):
-        for item in obj:
-            extract_from_object(item, file_path, results)
-
-
-def collect_indicators() -> list[dict]:
-    candidates = []
-    for file_path in iter_json_files(ROOT_DIR):
-        try:
-            with open(file_path, "r", encoding="utf-8") as handle:
-                payload = json.load(handle)
-        except Exception:
-            continue
-
-        extract_from_object(payload, file_path, candidates)
-
-    unique = []
-    seen = set()
-    for item in candidates:
-        key = (item["indicator_type"], item["indicator"])
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(item)
-
-    return unique
-
-
-def vt_headers() -> dict:
-    return {
-        "x-apikey": API_KEY,
-        "accept": "application/json",
-    }
-
-
-def build_lookup(indicator: str, indicator_type: str) -> tuple[str, str]:
-    if indicator_type == "ip":
-        return f"{API_BASE_URL}/ip_addresses/{indicator}", indicator
-    if indicator_type == "domain":
-        return f"{API_BASE_URL}/domains/{indicator}", indicator
-    if indicator_type == "file":
-        return f"{API_BASE_URL}/files/{indicator}", indicator
-    if indicator_type == "url":
-        encoded = base64.urlsafe_b64encode(indicator.encode("utf-8")).decode("utf-8").strip("=")
-        return f"{API_BASE_URL}/urls/{encoded}", encoded
-
-    raise ValueError(f"Type d'indicateur non supporte: {indicator_type}")
-
-
-def wait_for_rate_limit(last_request_time: float | None) -> None:
-    if last_request_time is None:
-        return
-
-    elapsed = time.time() - last_request_time
-    remaining = MIN_INTERVAL_SECONDS - elapsed
-    if remaining > 0:
-        print(f"  -> Attente {remaining:.1f}s pour respecter la limite publique VirusTotal...")
-        time.sleep(remaining)
-
-
-def extract_stats(attributes: dict) -> dict:
-    stats = attributes.get("last_analysis_stats", {}) or {}
-    return {
-        "malicious": stats.get("malicious", 0),
-        "suspicious": stats.get("suspicious", 0),
-        "harmless": stats.get("harmless", 0),
-        "undetected": stats.get("undetected", 0),
-        "timeout": stats.get("timeout", 0),
-    }
-
-
-def build_gui_url(indicator: str, indicator_type: str, lookup_id: str) -> str:
-    if indicator_type == "ip":
-        return f"https://www.virustotal.com/gui/ip-address/{quote(indicator, safe='')}"
-    if indicator_type == "domain":
-        return f"https://www.virustotal.com/gui/domain/{quote(indicator, safe='')}"
-    if indicator_type == "file":
-        return f"https://www.virustotal.com/gui/file/{quote(indicator, safe='')}"
-    if indicator_type == "url":
-        return f"https://www.virustotal.com/gui/url/{lookup_id}"
-    return "https://www.virustotal.com/gui/home/search"
-
-
-def normalize_response(candidate: dict, response_json: dict, lookup_id: str) -> dict:
-    data = response_json.get("data", {})
-    attributes = data.get("attributes", {})
-
-    return {
-        "indicator": candidate["indicator"],
-        "indicator_type": candidate["indicator_type"],
-        "source_file": candidate["source_file"],
-        "vt_id": data.get("id"),
-        "vt_type": data.get("type"),
-        "stats": extract_stats(attributes),
-        "reputation": attributes.get("reputation"),
-        "last_analysis_date": attributes.get("last_analysis_date"),
-        "last_modification_date": attributes.get("last_modification_date"),
-        "country": attributes.get("country"),
-        "as_owner": attributes.get("as_owner"),
-        "tags": attributes.get("tags", []),
-        "meaningful_name": attributes.get("meaningful_name"),
-        "title": attributes.get("title"),
-        "gui_url": build_gui_url(candidate["indicator"], candidate["indicator_type"], lookup_id),
-        "enriched_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-
-def enrich_candidates(candidates: list[dict], existing_records: list[dict]) -> list[dict]:
-    existing_keys = {
-        (record.get("indicator_type"), record.get("indicator"))
-        for record in existing_records
-    }
-    pending = [
-        candidate
-        for candidate in candidates
-        if (candidate["indicator_type"], candidate["indicator"]) not in existing_keys
-    ]
-
-    if not pending:
-        print("Aucun nouvel indicateur a enrichir.")
-        return existing_records
-
-    batch = pending[:DEFAULT_MAX_INDICATORS]
-    print(f"{len(batch)} indicateur(s) seront envoyes a VirusTotal sur {len(pending)} en attente.")
-
-    enriched = list(existing_records)
-    last_request_time = None
-
-    for index, candidate in enumerate(batch, start=1):
-        wait_for_rate_limit(last_request_time)
-        url, lookup_id = build_lookup(candidate["indicator"], candidate["indicator_type"])
-
-        print(
-            f"[{index}/{len(batch)}] Enrichissement {candidate['indicator_type']} : {candidate['indicator']}"
-        )
-        try:
-            response = requests.get(url, headers=vt_headers(), timeout=TIMEOUT)
-            last_request_time = time.time()
-
-            if response.status_code == 401:
-                raise RuntimeError("Cle API VirusTotal invalide ou absente.")
-            if response.status_code == 429:
-                raise RuntimeError(
-                    "Limite VirusTotal atteinte. Relancez le script dans quelques minutes."
-                )
-
-            response.raise_for_status()
-            enriched.append(normalize_response(candidate, response.json(), lookup_id))
-        except Exception as exc:
-            print(f"  x Echec pour {candidate['indicator']}: {exc}")
-
-    return enriched
-
-
-def main() -> None:
-    print("=" * 60)
-    print("VirusTotal Enrichment")
-    print("=" * 60)
-
+# ── Main ───────────────────────────────────────────────────────────────────────
+def main():
     if not API_KEY:
-        print("[ERREUR] VIRUSTOTAL_API_KEY est vide dans le .env racine.")
-        print("Ajoutez votre cle puis relancez ce script.")
+        logging.error("Clé API VIRUSTOTAL_API_KEY manquante dans .env")
         return
 
-    existing_records = load_existing_output()
-    print(f"Donnees VirusTotal deja sauvegardees : {len(existing_records)}")
+    existing_data = load_existing_data()
+    existing_ids = { item.get("id") for item in existing_data if item.get("id") }
+    
+    tracking = load_tracking()
+    last_comment_id = tracking.get("last_comment_id")
+    last_notification_id = tracking.get("last_notification_id")
 
-    candidates = collect_indicators()
-    print(f"Indicateurs detectes dans les JSON du projet : {len(candidates)}")
+    # 1. Découverte de nouveaux items via commentaires
+    new_items_to_fetch = []
+    try:
+        comments = fetch_recent_comments(limit=25)
+        logging.info(f"{len(comments)} derniers commentaires récupérés.")
+        for comment in comments:
+            c_id = comment.get("id", "")
+            if c_id == last_comment_id:
+                break
+            
+            # L'ID d'un commentaire v3 est souvent au format : <type-prefix>-<target_id>-<random>
+            # f = file (sha256), u = url (url_id), d = domain, i = ip
+            parts = c_id.split("-")
+            if len(parts) >= 2:
+                ctype_prefix = parts[0]
+                target_id = parts[1]
+                
+                type_map = {"f": "file", "u": "url", "d": "domain", "i": "ip_address"}
+                if ctype_prefix in type_map:
+                    new_items_to_fetch.append({"id": target_id, "type": type_map[ctype_prefix]})
+        
+        if comments:
+            tracking["last_comment_id"] = comments[0].get("id")
+    except Exception as e:
+        logging.error(f"Erreur lors de la découverte via commentaires : {e}")
 
-    if not candidates:
-        print("Aucun indicateur compatible trouve dans les sorties JSON existantes.")
-        return
+    # 2. Découverte via notifications
+    notifications = fetch_notifications(limit=10)
+    for notif in notifications:
+        n_id = notif.get("id")
+        if n_id == last_notification_id:
+            break
+        
+        # Une notification est liée à un fichier
+        target = notif.get("relationships", {}).get("item", {}).get("data", {})
+        if target:
+            new_items_to_fetch.append(target)
+            
+    if notifications:
+        tracking["last_notification_id"] = notifications[0].get("id")
 
-    updated_records = enrich_candidates(candidates, existing_records)
-    save_output(updated_records)
-    save_last_run()
+    # 3. Extraction des données pour les items uniques découverts
+    unique_targets = {}
+    for t in new_items_to_fetch:
+        tid = t.get("id")
+        if tid and tid not in existing_ids:
+            unique_targets[tid] = t
 
-    print(f"\nSortie sauvegardee dans : {OUTPUT_JSON}")
-    print("Conseil: laissez VIRUSTOTAL_MAX_INDICATORS a une valeur basse avec l'API publique.")
-    print("=" * 60)
+    new_records = []
+    collected_at = now_utc_iso()
 
+    for tid, target in unique_targets.items():
+        ttype = target.get("type")
+        
+        # Throttling
+        if IS_PUBLIC_KEY and new_records:
+            logging.info(f"Pause de {THROTTLE_DELAY}s pour respecter le quota API...")
+            time.sleep(THROTTLE_DELAY)
+
+        report = get_item_report(ttype, tid)
+        if not report:
+            continue
+            
+        attr = report.get("attributes", {})
+        
+        # Enrichissement avec des relations (seulement pour les fichiers pour cet exemple)
+        relationships = {}
+        if ttype == "file":
+            relationships["contacted_ips"] = [r.get("id") for r in get_item_relationships("file", tid, "contacted_ips")]
+            relationships["contacted_domains"] = [r.get("id") for r in get_item_relationships("file", tid, "contacted_domains")]
+
+        record = {
+            "source": "virustotal",
+            "id": tid,
+            "type": ttype,
+            "attributes": {
+                "names": attr.get("names", []),
+                "reputation": attr.get("reputation"),
+                "total_votes": attr.get("total_votes"),
+                "last_analysis_stats": attr.get("last_analysis_stats"),
+                "tags": attr.get("tags", []),
+                "size": attr.get("size"),
+                "type_description": attr.get("type_description"),
+                "first_submission_date": attr.get("first_submission_date"),
+                "last_analysis_results": { k: v.get("result") for k, v in attr.get("last_analysis_results", {}).items() if v.get("result") }
+            },
+            "relationships": relationships,
+            "collected_at": collected_at
+        }
+        new_records.append(record)
+
+    if new_records:
+        logging.info(f"{len(new_records)} nouveaux items importés de VirusTotal.")
+        updated_data = existing_data + new_records
+        save_json_atomic(updated_data)
+    else:
+        logging.info("Aucun nouvel item découvert sur VirusTotal.")
+
+    tracking["last_sync_success"] = collected_at
+    save_tracking_atomic(tracking)
 
 if __name__ == "__main__":
     main()
