@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timezone
 
 import requests
+import sys
 
 # Base directory setup
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -95,10 +96,19 @@ def save_json_atomic(data):
         logging.error(f"Erreur lors de la sauvegarde JSON : {e}")
 
 def main():
+    # Fix Windows encoding issues for arrow characters
+    if sys.platform == "win32":
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except:
+            pass
+
     try:
         logging.info("Téléchargement de la liste CINS Army...")
         tracking = load_tracking()
-        last_run = tracking.get("last_sync_success")
+        tracking["last_sync_attempt"] = datetime.now(timezone.utc).isoformat()
+
+        last_run = tracking.get("last_run", tracking.get("last_sync_success"))
         if last_run:
             logging.info(f"Dernière exécution réussie : {last_run}")
         
@@ -111,7 +121,12 @@ def main():
         collected_at = datetime.now(timezone.utc).isoformat()
         new_records = []
         
-        for ip in ips:
+        total_ips = len(ips)
+        print(f"  → Filtrage de {total_ips} IPs...")
+        
+        for i, ip in enumerate(ips, 1):
+            print(f"[{i}/{total_ips}] Vérification : {ip}", end="\r")
+            sys.stdout.flush()
             if ip not in existing_indicators:
                 record = {
                     "indicator": ip,
@@ -123,14 +138,33 @@ def main():
                 }
                 new_records.append(record)
         
+        print("\n" + "="*50)
         if new_records:
             logging.info(f"{len(new_records)} nouveaux records trouvés.")
+            print("\nNouveaux records CINS Army ajoutés :")
+            display_limit = 20
+            for item in new_records[:display_limit]:
+                print(f" [+] {item['indicator']}")
+            if len(new_records) > display_limit:
+                print(f" ... et {len(new_records) - display_limit} autres.")
+                
             updated_data = existing_data + new_records
             save_json_atomic(updated_data)
         else:
             logging.info("Aucun nouveau record trouvé.")
+            updated_data = existing_data
+        print("="*50)
 
-        tracking["last_sync_success"] = collected_at
+        # Calcul des dates min/max pour le tracking
+        if updated_data:
+            dates = [item.get("collected_at") for item in updated_data if item.get("collected_at")]
+            if dates:
+                tracking["earliest_modified"] = min(dates)
+                tracking["latest_modified"] = max(dates)
+
+        now_str = datetime.now(timezone.utc).isoformat()
+        tracking["last_run"] = now_str
+        tracking["last_sync_success"] = now_str
         save_tracking_atomic(tracking)
 
         if os.path.exists(OLD_TRACKING_FILE):

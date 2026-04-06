@@ -68,24 +68,34 @@ def load_data():
             with open(OLD_DATA_FILE, "r", encoding="utf-8") as f:
                 raw_list = json.load(f)
                 if isinstance(raw_list, list):
-                    # Conversion list -> dict {id: data}
-                    migrated = {str(item.get("phish_id")): item for item in raw_list if item.get("phish_id")}
-                    print(f"  ✓ {len(migrated)} entrées migrées.")
-                    return migrated
+                    print(f"  ✓ {len(raw_list)} entrées migrées.")
+                    return raw_list
         except Exception as e:
             print(f"Erreur migration : {e}")
             
-    return {}
+    return []
 
 def fetch_phishtank_data():
     """Récupère le flux JSON de PhishTank."""
-    print(f"Fetching PhishTank data from {PHISHTANK_URL}...")
-    headers = {"User-Agent": USER_AGENT}
+    # HTTPS est souvent plus stable pour les redirections CDN
+    url = PHISHTANK_URL.replace("http://", "https://")
+    print(f"Fetching PhishTank data from {url}...")
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "application/json"
+    }
     
     try:
-        response = requests.get(PHISHTANK_URL, headers=headers, timeout=120)
+        # allow_redirects=True est par défaut, mais on s'assure d'un timeout généreux
+        response = requests.get(url, headers=headers, timeout=120, allow_redirects=True)
         response.raise_for_status()
         return response.json()
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            print("  ✗ Erreur 404 : Le dump PhishTank n'est pas encore prêt ou l'URL CDN a expiré. Réessayez dans quelques minutes.")
+        else:
+            print(f"  ✗ Erreur HTTP lors du téléchargement PhishTank : {e}")
+        return []
     except Exception as e:
         print(f"  ✗ Erreur lors du téléchargement PhishTank : {e}")
         return []
@@ -102,43 +112,74 @@ def update_database():
     print("Mise à jour de la base PhishTank")
     print("=" * 60)
 
+    tracking = load_tracking()
+    tracking["last_sync_attempt"] = datetime.now().isoformat()
+    
     data = load_data()
+    # On s'assure que data est bien une liste
+    if not isinstance(data, list):
+        data = []
+        
     existing_ids = {str(item.get("phish_id")) for item in data if item.get("phish_id")}
-    initial_count = len(data)
     
     raw_list = fetch_phishtank_data()
     if not raw_list:
+        print("  ! Aucune donnée récupérée ce tour-ci (PhishTank est peut-être en cours de mise à jour).")
+        # On sauvegarde quand même l'attempt
+        save_tracking_atomic(tracking)
         return
 
     new_entries = 0
     updated_entries = 0
-    print(f"  → Traitement de {len(raw_list)} entrées reçues...")
+    new_phish_items = []
+    total_raw = len(raw_list)
+    print(f"  → Traitement de {total_raw} entrées reçues...")
     
-    for item in raw_list:
+    for i, item in enumerate(raw_list, 1):
         phish_id = str(item.get("phish_id"))
         if not phish_id or phish_id == "None":
             continue
             
+        print(f"[{i}/{total_raw}] Vérification : {phish_id}", end="\r")
+        sys.stdout.flush()
+
         if phish_id not in existing_ids:
             data.append(item)
             existing_ids.add(phish_id)
+            new_phish_items.append(item)
             new_entries += 1
         else:
-            # On met à jour les infos si elles existent déjà (facultatif car online stream)
             updated_entries += 1
             
+    print("\n" + "="*50)
     if new_entries > 0 or updated_entries > 0:
         save_json_atomic(data)
-        print(f"\n[OK] Ajout de {new_entries} nouveaux phishings.")
-        print(f"[OK] Mise à jour de {updated_entries} phishings existants.")
-        print(f"[OK] Total en base : {len(data)} phishings.")
+        print(f"[OK] Ajout de {new_entries} nouveaux phishings.")
+        if new_phish_items:
+            print("\nDétail des nouveaux phishings :")
+            # On affiche les 20 premiers s'il y en a trop
+            display_limit = 20
+            for item in new_phish_items[:display_limit]:
+                print(f" [+] {item['phish_id']} - {item['url'][:70]}...")
+            if len(new_phish_items) > display_limit:
+                print(f" ... et {len(new_phish_items) - display_limit} autres.")
+
+        print(f"\n[OK] Total en base : {len(data)} phishings.")
     else:
         print(f"\nMise à jour terminée. Aucun changement. Total : {len(data)}")
+    print("="*50)
+
+    # Calcul des dates min/max pour le tracking
+    if data:
+        # submission_time est dans le format "2026-04-04T..."
+        dates = [item.get("submission_time") for item in data if item.get("submission_time")]
+        if dates:
+            tracking["earliest_modified"] = min(dates)
+            tracking["latest_modified"] = max(dates)
 
     # Mise à jour du tracking
     now_str = datetime.now().isoformat()
-    tracking = load_tracking()
-    tracking["latest_modified"] = now_str
+    tracking["last_run"] = now_str
     tracking["last_sync_success"] = now_str
     save_tracking_atomic(tracking)
     print(f"[+] tracking.json mis à jour: {now_str}")

@@ -237,7 +237,9 @@ def build_summary(items: List[Dict[str, Any]]) -> Dict[str, Any]:
 # ============================================================
 def main() -> None:
     tracking = load_tracking()
-    last_date = tracking.get("latest_modified")
+    tracking["last_sync_attempt"] = utc_now_iso()
+
+    last_date = tracking.get("last_run", tracking.get("latest_modified"))
     if last_date:
         print(f"Dernière extraction (tracking) : {last_date}")
     else:
@@ -246,48 +248,47 @@ def main() -> None:
     print("Début de l'extraction...")
 
     all_items = []
-    raw_metadata = []
-
+    # ... extraction logic ...
     for feed_name, url in SPAMHAUS_FEEDS.items():
         try:
             raw = download_feed(feed_name, url)
-
-            # Save raw metadata
-            raw_meta = {
-                k: v for k, v in raw.items() if k != "text"
-            }
-            raw_metadata.append(raw_meta)
-
-            # Normalize
             normalized = normalize_spamhaus_lines(
                 feed_name=feed_name,
                 raw_text=raw["text"],
                 source_url=url,
             )
             all_items.extend(normalized)
-
             print(f"[OK] {feed_name}: {len(normalized)} IOC")
-
-        except requests.HTTPError as e:
-            print(f"[ERROR] HTTP {feed_name}: {e}")
-        except requests.RequestException as e:
-            print(f"[ERROR] Network {feed_name}: {e}")
         except Exception as e:
-            print(f"[ERROR] Unexpected {feed_name}: {e}")
+            print(f"[ERROR] {feed_name}: {e}")
 
     all_items = deduplicate_items(all_items)
-    summary = build_summary(all_items)
+    
+    print("\n" + "="*50)
+    print(f"[OK] Total unique IOC extraits : {len(all_items)}")
+    if all_items:
+        print("\nDétail des IOC récupérés (Spamhaus) :")
+        display_limit = 20
+        for item in all_items[:display_limit]:
+            print(f" [+] {item['ioc_value']} ({item['feed_name']})")
+        if len(all_items) > display_limit:
+            print(f" ... et {len(all_items) - display_limit} autres.")
+    print("="*50)
 
     # Standard JSON Output: A flat list of records
     save_json_atomic(OUTPUT_JSON, all_items)
 
-    print("\n========== SUMMARY ==========")
-    print(json.dumps(summary, indent=2, ensure_ascii=False))
-    print(f"\n[OK] Données enregistrées dans : {OUTPUT_JSON}")
+    # Calcul des dates min/max pour le tracking
+    if all_items:
+        # collected_at est déjà en ISO UTC
+        dates = [item.get("collected_at") for item in all_items if item.get("collected_at")]
+        if dates:
+            tracking["earliest_modified"] = min(dates)
+            tracking["latest_modified"] = max(dates)
 
     # Mise à jour du tracking
     now_str = utc_now_iso()
-    tracking["latest_modified"] = now_str
+    tracking["last_run"] = now_str
     tracking["last_sync_success"] = now_str
     save_tracking_atomic(tracking)
     print(f"[OK] tracking.json mis à jour : {now_str}")

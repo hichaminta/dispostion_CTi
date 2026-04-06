@@ -133,11 +133,17 @@ def main():
     existing_ids = { item.get("id") for item in existing_data if item.get("id") }
     
     tracking = load_tracking()
+    tracking["last_sync_attempt"] = now_utc_iso()
+    
     last_comment_id = tracking.get("last_comment_id")
     last_notification_id = tracking.get("last_notification_id")
+    last_run = tracking.get("last_run", tracking.get("last_sync_success"))
+    if last_run:
+        logging.info(f"Dernière exécution : {last_run}")
 
     # 1. Découverte de nouveaux items via commentaires
     new_items_to_fetch = []
+    # ... (Discovery logic stays same) ...
     try:
         comments = fetch_recent_comments(limit=25)
         logging.info(f"{len(comments)} derniers commentaires récupérés.")
@@ -146,8 +152,6 @@ def main():
             if c_id == last_comment_id:
                 break
             
-            # L'ID d'un commentaire v3 est souvent au format : <type-prefix>-<target_id>-<random>
-            # f = file (sha256), u = url (url_id), d = domain, i = ip
             parts = c_id.split("-")
             if len(parts) >= 2:
                 ctype_prefix = parts[0]
@@ -169,7 +173,6 @@ def main():
         if n_id == last_notification_id:
             break
         
-        # Une notification est liée à un fichier
         target = notif.get("relationships", {}).get("item", {}).get("data", {})
         if target:
             new_items_to_fetch.append(target)
@@ -186,13 +189,19 @@ def main():
 
     new_records = []
     collected_at = now_utc_iso()
+    total_to_fetch = len(unique_targets)
+    
+    if total_to_fetch > 0:
+        logging.info(f"Début de l'extraction de {total_to_fetch} nouveaux items...")
 
-    for tid, target in unique_targets.items():
+    for i, (tid, target) in enumerate(unique_targets.items(), 1):
         ttype = target.get("type")
         
-        # Throttling
-        if IS_PUBLIC_KEY and new_records:
-            logging.info(f"Pause de {THROTTLE_DELAY}s pour respecter le quota API...")
+        print(f"[{i}/{total_to_fetch}] Extraction : {tid} ({ttype})", end="\r")
+        sys.stdout.flush()
+
+        if IS_PUBLIC_KEY and i > 1:
+            logging.info(f"\nPause de {THROTTLE_DELAY}s pour respecter le quota API (Item {i}/{total_to_fetch})...")
             time.sleep(THROTTLE_DELAY)
 
         report = get_item_report(ttype, tid)
@@ -201,7 +210,6 @@ def main():
             
         attr = report.get("attributes", {})
         
-        # Enrichissement avec des relations (seulement pour les fichiers pour cet exemple)
         relationships = {}
         if ttype == "file":
             relationships["contacted_ips"] = [r.get("id") for r in get_item_relationships("file", tid, "contacted_ips")]
@@ -219,6 +227,7 @@ def main():
                 "tags": attr.get("tags", []),
                 "size": attr.get("size"),
                 "type_description": attr.get("type_description"),
+                "score": attr.get("last_analysis_stats", {}).get("malicious", 0), # Added score for quick view
                 "first_submission_date": attr.get("first_submission_date"),
                 "last_analysis_results": { k: v.get("result") for k, v in attr.get("last_analysis_results", {}).items() if v.get("result") }
             },
@@ -227,14 +236,30 @@ def main():
         }
         new_records.append(record)
 
+    print("\n" + "="*50)
     if new_records:
         logging.info(f"{len(new_records)} nouveaux items importés de VirusTotal.")
+        print("\nNouveaux items ajoutés :")
+        for rec in new_records:
+            print(f" [+] {rec['id']} [{rec['type']}] - Score: {rec['attributes'].get('score', 0)}")
+        
         updated_data = existing_data + new_records
         save_json_atomic(updated_data)
     else:
         logging.info("Aucun nouvel item découvert sur VirusTotal.")
+        updated_data = existing_data
+    print("="*50)
 
-    tracking["last_sync_success"] = collected_at
+    # Calcul des dates min/max pour le tracking
+    if updated_data:
+        dates = [item.get("collected_at") for item in updated_data if item.get("collected_at")]
+        if dates:
+            tracking["earliest_modified"] = min(dates)
+            tracking["latest_modified"] = max(dates)
+
+    now_str = now_utc_iso()
+    tracking["last_run"] = now_str
+    tracking["last_sync_success"] = now_str
     save_tracking_atomic(tracking)
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@ import json
 import time
 import os
 import logging
+import argparse
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv, find_dotenv
 
@@ -14,8 +15,7 @@ API_KEY = os.getenv("NVD_API_KEY")
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_JSON = os.path.join(SCRIPT_DIR, "nvd_data.json")
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
-OLD_TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
-CISA_KEV_JSON = os.path.join(SCRIPT_DIR, "cisa.json")
+# OLD_TRACKING_FILE supprimé car passé au nouveau format
 
 # Logging configuration
 logging.basicConfig(
@@ -32,10 +32,12 @@ def load_tracking():
         except Exception as e:
             logging.warning(f"Impossible de lire le tracking JSON : {e}")
     
-    if os.path.exists(OLD_TRACKING_FILE):
+    # Tentative migration si l'ancien fichier existe encore localement
+    old_csv = os.path.join(SCRIPT_DIR, "last_run.csv")
+    if os.path.exists(old_csv):
         try:
             import csv
-            with open(OLD_TRACKING_FILE, "r", encoding="utf-8") as f:
+            with open(old_csv, "r", encoding="utf-8") as f:
                 reader = csv.reader(f)
                 rows = [row for row in reader if row and len(row) > 0]
                 if rows:
@@ -74,33 +76,6 @@ def save_json_atomic(data):
     except Exception as e:
         logging.error(f"Erreur lors de la sauvegarde JSON : {e}")
 
-def load_cisa_kev():
-    if not os.path.exists(CISA_KEV_JSON):
-        logging.warning(f"Fichier CISA KEV absent : {CISA_KEV_JSON}")
-        return set()
-    try:
-        with open(CISA_KEV_JSON, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        
-        items = []
-        if isinstance(data, list):
-            items = data
-        elif isinstance(data, dict):
-            for v in data.values():
-                if isinstance(v, list):
-                    items = v
-                    break
-        
-        kev = set()
-        for obj in items:
-            cve_id = obj.get("cveID") or obj.get("cve_id") or obj.get("id")
-            if cve_id:
-                kev.add(cve_id.strip().upper())
-        return kev
-    except Exception as e:
-        logging.error(f"Erreur lors du chargement de CISA KEV : {e}")
-        return set()
-
 def fetch_nvd_page(params, retries=3):
     headers = {"apiKey": API_KEY} if API_KEY else {}
     for i in range(retries):
@@ -135,23 +110,26 @@ def extract_cvss_list(vulnerability):
     return cvss_list
 
 def main():
+    parser = argparse.ArgumentParser(description="Extracteur NVD CVE")
+    parser.add_argument("--days", type=int, default=30, help="Nombre de jours à remonter (par défaut 30)")
+    parser.add_argument("--full", action="store_true", help="Extraction sur les 120 derniers jours (limite NVD)")
+    args = parser.parse_args()
+
     tracking = load_tracking()
     last_run_str = tracking.get("latest_modified")
     now = datetime.now(timezone.utc)
     now_str = now.strftime("%Y-%m-%dT%H:%M:%S.000")
     
-    params = {"resultsPerPage": 500, "startIndex": 0}
-    if last_run_str:
+    if last_run_str and not args.full:
         logging.info(f"Extraction incrémentale à partir de : {last_run_str}")
-        params["lastModStartDate"] = last_run_str
-        params["lastModEndDate"] = now_str
+        start_date_str = last_run_str
+    elif args.full:
+        logging.info("Mode --full : extraction des 120 derniers jours (limite API).")
+        start_date_str = (now - timedelta(days=120)).strftime("%Y-%m-%dT%H:%M:%S.000")
     else:
-        logging.info("Aucune date précédente trouvée, extraction des 7 derniers jours par défaut.")
-        default_start = now - timedelta(days=7)
-        params["lastModStartDate"] = default_start.strftime("%Y-%m-%dT%H:%M:%S.000")
-        params["lastModEndDate"] = now_str
+        logging.info(f"Extraction des {args.days} derniers jours par défaut.")
+        start_date_str = (now - timedelta(days=args.days)).strftime("%Y-%m-%dT%H:%M:%S.000")
 
-    kev = load_cisa_kev()
     existing_data = load_existing_data()
     existing_ids = {item["cve_id"] for item in existing_data if item.get("cve_id")}
     
@@ -159,12 +137,18 @@ def main():
     total_new = 0
     
     while True:
-        params["startIndex"] = start_index
+        params = {
+            "resultsPerPage": 500,
+            "startIndex": start_index,
+            "lastModStartDate": start_date_str,
+            "lastModEndDate": now_str
+        }
+        
         try:
-            logging.info(f"Requête NVD Index {start_index}...")
+            logging.info(f"Requête NVD Index {start_index}... (Période: {start_date_str} -> {now_str})")
             data = fetch_nvd_page(params)
         except Exception as e:
-            logging.error(f"Échec critique : {e}")
+            logging.error(f"Échec critique sur la page {start_index} : {e}")
             break
             
         vulnerabilities = data.get("vulnerabilities", [])
@@ -192,7 +176,6 @@ def main():
                     "source": cve.get("sourceIdentifier", "N/A"),
                     "description": description,
                     "cvss": cvss_info,
-                    "exploited": 1 if cve_id.upper() in kev else 0,
                     "collected_at": now.isoformat()
                 }
                 existing_data.append(cve_item)
@@ -200,12 +183,13 @@ def main():
                 total_new += 1
         
         total_results = data.get("totalResults", 0)
-        logging.info(f"Progress : {start_index + len(vulnerabilities)} / {total_results}")
+        count_received = start_index + len(vulnerabilities)
+        logging.info(f"Progression : {count_received} / {total_results}")
         
-        if (start_index + len(vulnerabilities)) >= total_results:
+        if count_received >= total_results:
             break
         start_index += 500
-        time.sleep(0.6) # Rate limit protection
+        time.sleep(0.8) # Rate limit protection (NVD API est sensible)
 
     save_json_atomic(existing_data)
     
@@ -213,14 +197,16 @@ def main():
     tracking["last_sync_success"] = now.isoformat()
     save_tracking_atomic(tracking)
     
-    if os.path.exists(OLD_TRACKING_FILE):
+    # Nettoyage de l'ancien CSV s'il existe encore
+    old_csv = os.path.join(SCRIPT_DIR, "last_run.csv")
+    if os.path.exists(old_csv):
         try:
-            os.remove(OLD_TRACKING_FILE)
-            logging.info(f"Ancien fichier de tracking supprimé : {OLD_TRACKING_FILE}")
+            os.remove(old_csv)
+            logging.info(f"Ancien fichier de tracking supprimé : {old_csv}")
         except:
             pass
     
-    logging.info(f"Extraction terminée. {total_new} CVEs traitées, {len(existing_data)} au total.")
+    logging.info(f"Extraction terminée. {total_new} nouvelles CVEs extraites, {len(existing_data)} au total.")
 
 if __name__ == "__main__":
     main()

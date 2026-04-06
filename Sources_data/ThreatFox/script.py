@@ -220,12 +220,18 @@ def main():
     # Détermine combien de jours récupérer d'après le tracking
     existing   = load_existing_data()
     tracking   = load_tracking()
-    last_run_str = tracking.get("latest_modified")
+    tracking["last_sync_attempt"] = datetime.now().isoformat()
+    
+    last_run_str = tracking.get("last_run", tracking.get("latest_modified"))
     
     last_run = None
     if last_run_str:
         try:
-            last_run = datetime.strptime(last_run_str, "%Y-%m-%d %H:%M:%S")
+            # Gestion de formats multiples (ISO ou YMD HMS)
+            if "T" in last_run_str:
+                last_run = datetime.fromisoformat(last_run_str.replace("Z", "+00:00")).replace(tzinfo=None)
+            else:
+                last_run = datetime.strptime(last_run_str, "%Y-%m-%d %H:%M:%S")
         except ValueError:
             pass
 
@@ -267,15 +273,28 @@ def main():
     if new_entries:
         existing.extend(new_entries)
         save_json_atomic(existing)
+        print("\n" + "="*50)
         print(f"  ✓ {len(new_entries)} nouveaux IOCs ajoutés.")
+        print("\nDétail des nouveaux IOC :")
+        for item in new_entries:
+            print(f" [+] {item['id']} ({item['ioc_type']}) - {item['threat_type']}")
+        print("="*50)
         print(f"  ✓ Total en base : {len(existing)} IOCs")
     else:
-        print("  ✓ Aucun nouvel IOC (tout est déjà en base).")
+        print(f"  ✓ Aucun nouvel IOC (tout est déjà en base).")
+
+    # Calcul des dates min/max pour le tracking
+    if existing:
+        # first_seen est au format "YYYY-MM-DD HH:MM:SS"
+        dates = [item.get("first_seen") for item in existing if item.get("first_seen")]
+        if dates:
+            tracking["earliest_modified"] = min(dates)
+            tracking["latest_modified"] = max(dates)
 
     # Mise à jour du tracking
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    tracking["latest_modified"] = now_str
-    tracking["last_sync_success"] = datetime.now().isoformat()
+    now_str = datetime.now().isoformat()
+    tracking["last_run"] = now_str
+    tracking["last_sync_success"] = now_str
     save_tracking_atomic(tracking)
     
     # Nettoyage CSV final

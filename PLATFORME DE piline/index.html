@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CTI Pipeline — Plateforme PFE</title>
+    <meta name="description" content="Plateforme de monitoring du pipeline CTI — Extraction, Normalisation, Enrichissement, Stockage et Visualisation des données Cyber Threat Intelligence.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <!-- Animated background -->
+    <div class="bg-grid"></div>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+    <div class="bg-glow bg-glow-3"></div>
+
+    <div class="app-container">
+        <!-- ==================== HEADER ==================== -->
+        <header class="main-header" id="main-header">
+            <div class="title-group">
+                <div class="logo-mark">
+                    <i data-lucide="shield-check"></i>
+                </div>
+                <div>
+                    <h1>CTI <span class="gradient-text">Pipeline</span></h1>
+                    <p class="subtitle">Plateforme de Cyber Threat Intelligence — PFE</p>
+                </div>
+            </div>
+            <div class="header-stats" id="header-stats">
+                <div class="mini-stat">
+                    <i data-lucide="database" class="stat-icon"></i>
+                    <div class="stat-content">
+                        <span id="total-sources" class="value">--</span>
+                        <span class="label">Sources</span>
+                    </div>
+                </div>
+                <div class="mini-stat">
+                    <i data-lucide="crosshair" class="stat-icon"></i>
+                    <div class="stat-content">
+                        <span id="total-iocs" class="value">--</span>
+                        <span class="label">IOCs</span>
+                    </div>
+                </div>
+                <div class="mini-stat">
+                    <i data-lucide="bug" class="stat-icon"></i>
+                    <div class="stat-content">
+                        <span id="total-cves" class="value">--</span>
+                        <span class="label">CVEs</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- ==================== PIPELINE FLOW ==================== -->
+        <section class="pipeline-section" id="pipeline-section">
+            <div class="section-title">
+                <i data-lucide="git-branch"></i>
+                <h2>Étapes du Pipeline</h2>
+                <span class="section-badge">Flux de données</span>
+            </div>
+            <div class="pipeline-flow" id="pipeline-flow">
+                <!-- Stage 1: Extraction -->
+                <div class="pipeline-stage active" id="stage-extraction" data-stage="extraction">
+                    <div class="stage-glow"></div>
+                    <div class="stage-icon-wrap">
+                        <i data-lucide="download-cloud"></i>
+                    </div>
+                    <div class="stage-info">
+                        <h3>Extraction</h3>
+                        <p class="stage-desc">Collecte de données depuis 13 sources CTI</p>
+                    </div>
+                    <div class="stage-status">
+                        <span class="stage-badge stage-badge-active">
+                            <span class="pulse-dot"></span> Opérationnel
+                        </span>
+                    </div>
+                </div>
+
+                <div class="pipeline-connector active">
+                    <div class="connector-line">
+                        <div class="connector-particle"></div>
+                    </div>
+                    <i data-lucide="chevron-right" class="connector-arrow"></i>
+                </div>
+
+                <!-- Stage 2: Normalisation -->
+                <div class="pipeline-stage planned" id="stage-normalisation" data-stage="normalisation">
+                    <div class="stage-icon-wrap">
+                        <i data-lucide="filter"></i>
+                    </div>
+                    <div class="stage-info">
+                        <h3>Normalisation</h3>
+                        <p class="stage-desc">Uniformisation des schémas de données</p>
+                    </div>
+                    <div class="stage-status">
+                        <span class="stage-badge stage-badge-planned">
+                            <i data-lucide="clock" style="width:12px;height:12px"></i> Planifié
+                        </span>
+                    </div>
+                </div>
+
+                <div class="pipeline-connector">
+                    <div class="connector-line"></div>
+                    <i data-lucide="chevron-right" class="connector-arrow"></i>
+                </div>
+
+                <!-- Stage 3: Enrichissement -->
+                <div class="pipeline-stage planned" id="stage-enrichissement" data-stage="enrichissement">
+                    <div class="stage-icon-wrap">
+                        <i data-lucide="sparkles"></i>
+                    </div>
+                    <div class="stage-info">
+                        <h3>Enrichissement</h3>
+                        <p class="stage-desc">Corrélation et scoring des menaces</p>
+                    </div>
+                    <div class="stage-status">
+                        <span class="stage-badge stage-badge-planned">
+                            <i data-lucide="clock" style="width:12px;height:12px"></i> Planifié
+                        </span>
+                    </div>
+                </div>
+
+                <div class="pipeline-connector">
+                    <div class="connector-line"></div>
+                    <i data-lucide="chevron-right" class="connector-arrow"></i>
+                </div>
+
+                <!-- Stage 4: Stockage -->
+                <div class="pipeline-stage planned" id="stage-stockage" data-stage="stockage">
+                    <div class="stage-icon-wrap">
+                        <i data-lucide="hard-drive"></i>
+                    </div>
+                    <div class="stage-info">
+                        <h3>Stockage</h3>
+                        <p class="stage-desc">Persistance structurée (STIX/TAXII)</p>
+                    </div>
+                    <div class="stage-status">
+                        <span class="stage-badge stage-badge-planned">
+                            <i data-lucide="clock" style="width:12px;height:12px"></i> Planifié
+                        </span>
+                    </div>
+                </div>
+
+                <div class="pipeline-connector">
+                    <div class="connector-line"></div>
+                    <i data-lucide="chevron-right" class="connector-arrow"></i>
+                </div>
+
+                <!-- Stage 5: Visualisation -->
+                <div class="pipeline-stage planned" id="stage-visualisation" data-stage="visualisation">
+                    <div class="stage-icon-wrap">
+                        <i data-lucide="bar-chart-3"></i>
+                    </div>
+                    <div class="stage-info">
+                        <h3>Visualisation</h3>
+                        <p class="stage-desc">Tableaux de bord analytiques</p>
+                    </div>
+                    <div class="stage-status">
+                        <span class="stage-badge stage-badge-planned">
+                            <i data-lucide="clock" style="width:12px;height:12px"></i> Planifié
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== EXTRACTION DETAIL ==================== -->
+        <section class="extraction-section" id="extraction-section">
+            <div class="extraction-header">
+                <div class="section-title">
+                    <i data-lucide="download-cloud"></i>
+                    <h2>Module d'Extraction</h2>
+                    <span class="section-badge section-badge-active">Active</span>
+                </div>
+                <div class="extraction-controls">
+                    <span id="last-updated" class="last-sync-text">Status: Chargement...</span>
+                    <button id="run-pipeline-btn" class="run-btn">
+                        <i data-lucide="play"></i>
+                        <span>Lancer toutes les extractions</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="dashboard-grid">
+                <!-- System Status -->
+                <div class="status-card glass" id="system-status-card">
+                    <div class="card-header">
+                        <i data-lucide="activity"></i>
+                        <h3>État du Système</h3>
+                    </div>
+                    <div class="status-indicator">
+                        <div class="pulse-ring-wrap">
+                            <div class="pulse-ring"></div>
+                            <div class="pulse-center">
+                                <i data-lucide="check" class="pulse-icon"></i>
+                            </div>
+                        </div>
+                        <span id="overall-status" class="status-text">Opérationnel</span>
+                        <div class="status-meta">
+                            <span id="active-count" class="active-count">13/13 sources actives</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sources Table -->
+                <div class="sources-card glass" id="sources-card">
+                    <div class="card-header">
+                        <i data-lucide="table-2"></i>
+                        <h3>Sources d'Extraction</h3>
+                    </div>
+                    <div class="table-container">
+                        <table id="sources-table">
+                            <thead>
+                                <tr>
+                                    <th>Source</th>
+                                    <th>Type</th>
+                                    <th>Statut</th>
+                                    <th>Enregistrements</th>
+                                    <th>Plage Temporelle</th>
+                                    <th>Dernière Sync</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sources-body">
+                                <!-- Dynamic content -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== LIVE CONSOLE ==================== -->
+        <section class="console-section glass" id="console-section" style="display:none;">
+            <div class="console-header">
+                <div class="section-title">
+                    <i data-lucide="terminal"></i>
+                    <h2>Console d'Extraction</h2>
+                    <span class="console-status-badge" id="console-status-badge">
+                        <span class="pulse-dot"></span> En cours
+                    </span>
+                </div>
+                <div class="console-controls">
+                    <button class="console-btn" id="console-clear-btn" title="Vider la console">
+                        <i data-lucide="trash-2"></i>
+                    </button>
+                    <button class="console-btn console-close-btn" id="console-close-btn" title="Fermer la console">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="console-body" id="console-body">
+                <pre class="console-output" id="console-output">En attente du lancement...</pre>
+            </div>
+        </section>
+
+        <!-- ==================== DATA VIEWER ==================== -->
+        <section class="data-viewer-section glass" id="data-viewer-section" style="display:none;">
+            <div class="data-viewer-header">
+                <div class="section-title">
+                    <i data-lucide="eye"></i>
+                    <h2 id="data-viewer-title">Données Extraites</h2>
+                    <span class="section-badge section-badge-active" id="data-viewer-count">0 enregistrements</span>
+                </div>
+                <div class="data-viewer-controls">
+                    <div class="pagination-controls" id="pagination-controls">
+                        <button class="page-btn" id="prev-page-btn" title="Page précédente">
+                            <i data-lucide="chevron-left"></i>
+                        </button>
+                        <span class="page-info" id="page-info">Page 1 / 1</span>
+                        <button class="page-btn" id="next-page-btn" title="Page suivante">
+                            <i data-lucide="chevron-right"></i>
+                        </button>
+                    </div>
+                    <button class="close-viewer-btn" id="close-viewer-btn" title="Fermer">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="data-viewer-body">
+                <div class="data-table-container" id="data-table-container">
+                    <div class="data-loading" id="data-loading">
+                        <i data-lucide="loader-2" class="spin" style="width:32px;height:32px;color:var(--accent)"></i>
+                        <p>Chargement des données...</p>
+                    </div>
+                    <table class="data-table" id="data-table" style="display:none;">
+                        <thead id="data-table-head"></thead>
+                        <tbody id="data-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== FOOTER ==================== -->
+        <footer class="main-footer">
+            <p>PFE — Plateforme CTI Pipeline &copy; 2026</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+

@@ -141,7 +141,9 @@ def parse_feodo_json(raw_text):
 def main():
     try:
         tracking = load_tracking()
-        last_run = tracking.get("last_sync_success")
+        tracking["last_sync_attempt"] = utc_now_iso()
+        
+        last_run = tracking.get("last_run", tracking.get("last_sync_success"))
         if last_run:
             logging.info(f"Dernière exécution : {last_run}")
 
@@ -153,20 +155,45 @@ def main():
         existing_keys = { (item["ioc_value"], item["malware_family"]) for item in existing_data }
         
         to_add = []
-        for item in new_items:
+        total_new = len(new_items)
+        if total_new > 0:
+            logging.info(f"Vérification de {total_new} nouveaux items potentiels...")
+            
+        for i, item in enumerate(new_items, 1):
             key = (item["ioc_value"], item["malware_family"])
+            print(f"[{i}/{total_new}] Vérification : {item['ioc_value']}", end="\r")
+            import sys
+            sys.stdout.flush()
             if key not in existing_keys:
                 to_add.append(item)
         
+        print("\n" + "="*50)
         if to_add:
             logging.info(f"{len(to_add)} nouveaux IOCs ajoutés.")
+            print("\nNouveaux IOC ajoutés :")
+            # Limite d'affichage à 20
+            display_limit = 20
+            for item in to_add[:display_limit]:
+                print(f" [+] {item['ioc_value']} ({item['malware_family']})")
+            if len(to_add) > display_limit:
+                print(f" ... et {len(to_add) - display_limit} autres.")
+                
             updated_data = existing_data + to_add
             save_json_atomic(updated_data)
         else:
             logging.info("Aucun nouvel IOC trouvé.")
+            updated_data = existing_data
+        print("="*50)
 
-        now_str = utc_now_iso()
-        tracking["last_sync_success"] = now_str
+        # Calcul des dates min/max pour le tracking
+        if updated_data:
+            dates = [item.get("collected_at") for item in updated_data if item.get("collected_at")]
+            if dates:
+                tracking["earliest_modified"] = min(dates)
+                tracking["latest_modified"] = max(dates)
+
+        tracking["last_run"] = utc_now_iso()
+        tracking["last_sync_success"] = tracking["last_run"]
         save_tracking_atomic(tracking)
 
         if os.path.exists(OLD_TRACKING_FILE):

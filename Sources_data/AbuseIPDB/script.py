@@ -1,6 +1,7 @@
 import requests
 import json
 import os
+import sys
 import logging
 from datetime import datetime, timezone
 from dotenv import load_dotenv, find_dotenv
@@ -96,6 +97,9 @@ def main():
         logging.error("Clé API ABUSEIPDB_API_KEY absente du fichier .env")
         return
 
+    tracking = load_tracking()
+    tracking["last_sync_attempt"] = datetime.now(timezone.utc).isoformat()
+    
     headers = {
         "Key": API_KEY,
         "Accept": "application/json"
@@ -110,8 +114,7 @@ def main():
         logging.error(f"Erreur lors de la requête API : {e}")
         return
 
-    tracking = load_tracking()
-    last_run_str = tracking.get("latest_modified")
+    last_run_str = tracking.get("last_run", tracking.get("latest_modified"))
     last_run_dt = None
     
     if last_run_str:
@@ -133,12 +136,18 @@ def main():
     now_str = now.isoformat()
     
     latest_seen_dt = last_run_dt
+    ips_to_process = data.get("data", [])
+    total_ips = len(ips_to_process)
+    new_ips_list = []
 
-    for ip in data.get("data", []):
+    for i, ip in enumerate(ips_to_process, 1):
         ip_addr = ip["ipAddress"]
         score = ip["abuseConfidenceScore"]
         last_reported_str = ip.get("lastReportedAt")
         
+        print(f"[{i}/{total_ips}] Vérification : {ip_addr}", end="\r")
+        sys.stdout.flush()
+
         last_reported_dt = None
         if last_reported_str:
             try:
@@ -161,7 +170,7 @@ def main():
         else:
             details = None
             if api_calls < MAX_API_CALLS_CHECK:
-                logging.info(f"Obtention des détails pour {ip_addr}...")
+                logging.info(f"\nObtention des détails pour {ip_addr}...")
                 details = get_ip_details(ip_addr, API_KEY)
                 api_calls += 1
             
@@ -175,17 +184,37 @@ def main():
                     "lastReportedAt": last_reported_str,
                     "extracted_at": now_str
                 }
+            new_ips_list.append({"ip": ip_addr, "score": score})
             new_entries_count += 1
-            if score >= 90:
-                logging.warning(f"ALERTE : {ip_addr} (Confidence: {score})")
 
+    print("\n" + "="*50)
     if new_entries_count > 0 or updated_entries_count > 0:
-        save_json_atomic(list(existing_ips.values()))
         logging.info(f"Extraction terminée. {new_entries_count} nouvelles IPs, {updated_entries_count} mises à jour.")
+        if new_ips_list:
+            print("\nNouvelles IPs ajoutées :")
+            # On affiche les 20 premières s'il y en a trop
+            display_limit = 20
+            for item in new_ips_list[:display_limit]:
+                status = "🚨 ALERTE" if item['score'] >= 90 else "ℹ️ INFO"
+                print(f" [+] {item['ip']} (Score: {item['score']}) - {status}")
+            if len(new_ips_list) > display_limit:
+                print(f" ... et {len(new_ips_list) - display_limit} autres.")
     else:
         logging.info("Aucune nouvelle IP ou mise à jour trouvée.")
+    print("="*50)
 
-    tracking["latest_modified"] = latest_seen_dt.isoformat() if latest_seen_dt else now_str
+    updated_list = list(existing_ips.values())
+    if new_entries_count > 0 or updated_entries_count > 0:
+        save_json_atomic(updated_list)
+
+    # Calcul des dates min/max pour le tracking
+    if updated_list:
+        dates = [item.get("lastReportedAt") for item in updated_list if item.get("lastReportedAt")]
+        if dates:
+            tracking["earliest_modified"] = min(dates)
+            tracking["latest_modified"] = max(dates)
+
+    tracking["last_run"] = now_str
     tracking["last_sync_success"] = now_str
     save_tracking_atomic(tracking)
     

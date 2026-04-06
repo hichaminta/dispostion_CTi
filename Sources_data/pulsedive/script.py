@@ -145,25 +145,47 @@ def save_json(data):
 def main():
     print("Extraction Pulsedive IOC (Maximisée)...")
     tracking = load_tracking()
-    print(f"[i] Dernière exécution: {tracking.get('last_sync_success')}")
+    tracking["last_sync_attempt"] = datetime.now(timezone.utc).isoformat()
+    
+    last_run = tracking.get("last_run", tracking.get("last_sync_success"))
+    print(f"[i] Dernière exécution: {last_run}")
 
     iocs = fetch_iocs()
 
     if not iocs:
         print("Aucune donnée récupérée")
+        updated_data = load_existing_data()
     else:
         existing = load_existing_data()
         existing_indicators = {item['indicator'] for item in existing}
         new_data = [item for item in iocs if item['indicator'] not in existing_indicators]
         
         if new_data:
-            combined = existing + new_data
-            save_json_atomic(combined)
+            updated_data = existing + new_data
+            save_json_atomic(updated_data)
+            print("\n" + "="*50)
             print(f"{len(new_data)} nouveaux IOC ajoutés (Total unique extrait : {len(iocs)})")
+            print("\nNouveaux IOC Pulsedive ajoutés :")
+            display_limit = 20
+            for item in new_data[:display_limit]:
+                print(f" [+] {item['indicator']} (Risque: {item['risk']})")
+            if len(new_data) > display_limit:
+                print(f" ... et {len(new_data) - display_limit} autres.")
+            print("="*50)
         else:
             print("Aucun nouveau record.")
+            updated_data = existing
+
+    # Calcul des dates min/max pour le tracking
+    if updated_data:
+        # first_seen (stamp_added) est déjà au format ISO UTC
+        dates = [item.get("first_seen") for item in updated_data if item.get("first_seen")]
+        if dates:
+            tracking["earliest_modified"] = min(dates)
+            tracking["latest_modified"] = max(dates)
 
     current_run = datetime.now(timezone.utc).isoformat()
+    tracking["last_run"] = current_run
     tracking["last_sync_success"] = current_run
     save_tracking_atomic(tracking)
     

@@ -210,13 +210,18 @@ def update_database():
 
     new_entries = 0
     updated_entries = 0
-    print(f"  → Traitement de {len(urls)} URLs reçues...")
+    new_urls_list = []
+    total_raw = len(urls)
+    print(f"  → Traitement de {total_raw} URLs reçues...")
     
-    for item in urls:
+    for i, item in enumerate(urls, 1):
         url_id = str(item.get("id"))
         
         if not url_id or url_id == "None":
             continue
+
+        print(f"[{i}/{total_raw}] Vérification : {url_id}", end="\r")
+        sys.stdout.flush()
 
         # Extraction de toutes les données possibles
         url_val = item.get("url")
@@ -243,22 +248,42 @@ def update_database():
         if url_id not in existing_ids:
             data.append(entry_data)
             existing_ids.add(url_id)
+            new_urls_list.append(entry_data)
             new_entries += 1
         else:
-            # Pour URLhaus, on ne met à jour que si nécessaire ou on ignore
             updated_entries += 1
             
+    print("\n" + "="*50)
     if new_entries > 0 or updated_entries > 0:
         save_json_atomic(data)
-        print(f"\n[OK] Ajout de {new_entries} nouvelles URLs.")
-        print(f"[OK] Mise à jour de {updated_entries} URLs existantes.")
-        print(f"[OK] Total en base : {len(data)} URLs")
+        print(f"[OK] Ajout de {new_entries} nouvelles URLs.")
+        if new_urls_list:
+            print("\nDétail des nouvelles URLs :")
+            display_limit = 20
+            for item in new_urls_list[:display_limit]:
+                print(f" [+] {item['url'][:70]}... ({item['threat']})")
+            if len(new_urls_list) > display_limit:
+                print(f" ... et {len(new_urls_list) - display_limit} autres.")
+
+        print(f"  ✓ Total en base : {len(data)} URLs")
     else:
         print(f"\nMise à jour terminée. Aucun changement. Total : {len(data)}")
+    print("="*50)
 
     # Mise à jour du tracking
+    tracking = load_tracking()
+    tracking["last_sync_attempt"] = datetime.now().isoformat()
+    
+    # Calcul des dates min/max pour le tracking
+    if data:
+        # dateadded est au format "YYYY-MM-DD HH:MM:SS"
+        dates = [item.get("dateadded") for item in data if item.get("dateadded")]
+        if dates:
+            tracking["earliest_modified"] = min(dates)
+            tracking["latest_modified"] = max(dates)
+
     now_str = datetime.now().isoformat()
-    tracking["latest_modified"] = now_str
+    tracking["last_run"] = now_str
     tracking["last_sync_success"] = now_str
     save_tracking_atomic(tracking)
     print(f"[+] tracking.json mis à jour: {now_str}")

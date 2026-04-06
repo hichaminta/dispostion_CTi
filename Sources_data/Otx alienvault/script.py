@@ -140,7 +140,7 @@ def sync_pulses(otx, modified_since, existing_data, existing_ids, tracking, mode
                 future = executor.submit(fetch_pulse_indicators, otx, pulse)
                 futures[future] = pulse
             
-            # Traitement des tâches terminées
+            # Traitement des tâches terminées (collecte progressive)
             done_futures = [f for f in futures if f.done()]
             for f in done_futures:
                 try:
@@ -191,10 +191,12 @@ def sync_pulses(otx, modified_since, existing_data, existing_ids, tracking, mode
                 logging.error(f"Erreur Pulse final : {e}")
 
     # Mise à jour finale du tracking pour cette phase
+    now_iso = datetime.now(timezone.utc).isoformat()
     tracking.update({
         "earliest_modified": earliest_seen,
         "latest_modified": latest_seen,
-        "last_sync_success": datetime.now(timezone.utc).isoformat()
+        "last_run": now_iso,
+        "last_sync_success": now_iso
     })
     save_tracking_atomic(tracking)
     save_json_atomic(existing_data)

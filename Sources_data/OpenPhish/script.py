@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import requests
+import sys
 from datetime import datetime, timezone
 
 # ── Configuration ──────────────────────────────────────────────────────────────
@@ -83,43 +84,79 @@ def fetch_openphish_feed():
     return urls
 
 def main():
-    logging.info("Chargement des données existantes...")
-    existing_data = load_existing_data()
-    existing_urls = { item.get("url") for item in existing_data if item.get("url") }
-    
-    tracking = load_tracking()
-    last_run = tracking.get("last_sync_success")
-    if last_run:
-        logging.info(f"Dernière extraction : {last_run}")
+    # Fix Windows encoding issues for arrow characters
+    if sys.platform == "win32":
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except:
+            pass
 
-    logging.info(f"Téléchargement du feed depuis {FEED_URL}...")
     try:
-        raw_urls = fetch_openphish_feed()
-        logging.info(f"{len(raw_urls)} URL(s) récupérées.")
+        logging.info("Chargement des données existantes...")
+        existing_data = load_existing_data()
+        existing_urls = { item.get("url") for item in existing_data if item.get("url") }
+        
+        tracking = load_tracking()
+        tracking["last_sync_attempt"] = now_utc_iso()
+
+        last_run = tracking.get("last_run", tracking.get("last_sync_success"))
+        if last_run:
+            logging.info(f"Dernière extraction : {last_run}")
+
+        logging.info(f"Téléchargement du feed depuis {FEED_URL}...")
+        try:
+            raw_urls = fetch_openphish_feed()
+            logging.info(f"{len(raw_urls)} URL(s) récupérées.")
+        except Exception as e:
+            logging.error(f"Erreur de téléchargement : {e}")
+            return
+
+        collected_time = now_utc_iso()
+        new_items = []
+        total_urls = len(raw_urls)
+        print(f"  → Filtrage de {total_urls} URLs...")
+        
+        for i, url in enumerate(raw_urls, 1):
+            print(f"[{i}/{total_urls}] Vérification : {url[:70]}...", end="\r")
+            sys.stdout.flush()
+            if url not in existing_urls:
+                new_items.append({
+                    "source": "openphish",
+                    "url": url,
+                    "first_seen": None,
+                    "collected_at": collected_time
+                })
+
+        print("\n" + "="*50)
+        if new_items:
+            logging.info(f"{len(new_items)} nouvelle(s) URL(s) trouvée(s).")
+            print("\nNouvelles URLs OpenPhish ajoutées :")
+            display_limit = 20
+            for item in new_items[:display_limit]:
+                print(f" [+] {item['url']}")
+            if len(new_items) > display_limit:
+                print(f" ... et {len(new_items) - display_limit} autres.")
+                
+            updated_data = existing_data + new_items
+            save_json_atomic(updated_data)
+        else:
+            logging.info("Aucune nouvelle URL trouvée.")
+            updated_data = existing_data
+        print("="*50)
+
+        # Calcul des dates min/max pour le tracking
+        if updated_data:
+            dates = [item.get("collected_at") for item in updated_data if item.get("collected_at")]
+            if dates:
+                tracking["earliest_modified"] = min(dates)
+                tracking["latest_modified"] = max(dates)
+
+        tracking["last_run"] = now_utc_iso()
+        tracking["last_sync_success"] = tracking["last_run"]
+        save_tracking_atomic(tracking)
+
     except Exception as e:
-        logging.error(f"Erreur de téléchargement : {e}")
-        return
-
-    collected_time = now_utc_iso()
-    new_items = []
-    for url in raw_urls:
-        if url not in existing_urls:
-            new_items.append({
-                "source": "openphish",
-                "url": url,
-                "first_seen": None,
-                "collected_at": collected_time
-            })
-
-    if new_items:
-        logging.info(f"{len(new_items)} nouvelle(s) URL(s) trouvée(s).")
-        updated_data = existing_data + new_items
-        save_json_atomic(updated_data)
-    else:
-        logging.info("Aucune nouvelle URL trouvée.")
-
-    tracking["last_sync_success"] = collected_time
-    save_tracking_atomic(tracking)
+        logging.error(f"Erreur fatale : {e}")
 
     if os.path.exists(OLD_TRACKING_FILE):
         try:
