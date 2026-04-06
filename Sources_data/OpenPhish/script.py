@@ -3,31 +3,37 @@ import json
 import logging
 import requests
 import sys
+import threading
 from datetime import datetime, timezone
 
-# ── Configuration ──────────────────────────────────────────────────────────────
+# =========================
+# Configuration CTI / SOC
+# =========================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-
 OUTPUT_JSON = os.path.join(SCRIPT_DIR, "openphish_data.json")
+
 # Daily export configuration
 today_str = datetime.now().strftime("%Y-%m-%d")
 DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"openphish_data_{today_str}.json")
 
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 OLD_TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
-
 FEED_URL = "https://openphish.com/feed.txt"
 
-# Logging configuration
+SAVE_EVERY = 100
+
+# Configuration du logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     datefmt='%H:%M:%S'
 )
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
-def now_utc_iso():
-    return datetime.now(timezone.utc).isoformat()
+write_lock = threading.Lock()
+
+# =========================
+# Fonctions Utilitaires
+# =========================
 
 def load_tracking():
     if os.path.exists(TRACKING_FILE):
@@ -36,17 +42,6 @@ def load_tracking():
                 return json.load(f)
         except Exception as e:
             logging.warning(f"Impossible de lire le tracking JSON : {e}")
-    
-    if os.path.exists(OLD_TRACKING_FILE):
-        try:
-            import csv
-            with open(OLD_TRACKING_FILE, "r", encoding="utf-8") as f:
-                reader = csv.reader(f)
-                rows = list(reader)
-                if len(rows) > 1 and rows[1]:
-                    return {"last_sync_success": rows[1][0]}
-        except:
-            pass
     return {}
 
 def save_tracking_atomic(tracking):
@@ -81,98 +76,107 @@ def save_json_atomic(data, filepath=None):
 def fetch_openphish_feed():
     response = requests.get(FEED_URL, timeout=30)
     response.raise_for_status()
-    urls = []
-    for line in response.text.splitlines():
-        url = line.strip()
-        if url:
-            urls.append(url)
-    return urls
+    return [line.strip() for line in response.text.splitlines() if line.strip()]
+
+# =========================
+# Logique de synchronisation
+# =========================
+
+def sync_openphish(urls, existing_data, existing_urls, tracking, new_records_total, mode="AFTER"):
+    added_count = 0
+    scanned_count = 0
+    
+    earliest_seen = tracking.get("earliest_modified")
+    latest_seen = tracking.get("latest_modified")
+    
+    collected_at = datetime.now(timezone.utc).isoformat()
+    total_urls = len(urls)
+
+    logging.info(f"Démarrage synchronisation [{mode}] ({total_urls} URLs à traiter)...")
+
+    for i, url in enumerate(urls, 1):
+        scanned_count += 1
+        
+        if url not in existing_urls:
+            print(f"[{i}/{total_urls}] Nouveau phishing : {url[:50]}...", end="\r")
+            sys.stdout.flush()
+
+            record = {
+                "source": "openphish",
+                "url": url,
+                "collected_at": collected_at
+            }
+            existing_data.append(record)
+            existing_urls.add(url)
+            new_records_total.append(record)
+            added_count += 1
+            
+            # Mise à jour des bornes
+            if not earliest_seen or collected_at < earliest_seen:
+                earliest_seen = collected_at
+            if not latest_seen or collected_at > latest_seen:
+                latest_seen = collected_at
+
+        if added_count > 0 and added_count % SAVE_EVERY == 0:
+            save_json_atomic(existing_data)
+            tracking.update({
+                "earliest_modified": earliest_seen,
+                "latest_modified": latest_seen,
+                "last_sync_attempt": datetime.now(timezone.utc).isoformat()
+            })
+            save_tracking_atomic(tracking)
+
+    print("\n")
+    return scanned_count, added_count, earliest_seen, latest_seen
 
 def main():
-    # Fix Windows encoding issues for arrow characters
     if sys.platform == "win32":
-        try:
-            sys.stdout.reconfigure(encoding='utf-8')
-        except:
-            pass
+        try: sys.stdout.reconfigure(encoding='utf-8')
+        except: pass
+
+    # 1. Charger données
+    existing_data = load_existing_data()
+    existing_urls = {item.get("url") for item in existing_data if item.get("url")}
+    logging.info(f"Indexation : {len(existing_urls)} URLs chargées.")
+
+    tracking = load_tracking()
+
+    # 2. Récupérer feed
+    try:
+        urls = fetch_openphish_feed()
+        logging.info(f"{len(urls)} URLs récupérées d'OpenPhish.")
+    except Exception as e:
+        logging.error(f"Erreur téléchargement : {e}")
+        return
+
+    new_records_total = []
 
     try:
-        logging.info("Chargement des données existantes...")
-        existing_data = load_existing_data()
-        existing_urls = { item.get("url") for item in existing_data if item.get("url") }
-        
-        tracking = load_tracking()
-        tracking["last_sync_attempt"] = now_utc_iso()
+        # Phase unique pour OpenPhish (Full Sync du feed actuel)
+        sc_1, ad_1, e1, l1 = sync_openphish(urls, existing_data, existing_urls, tracking, new_records_total, mode="FULL_SYNC")
+        tracking["earliest_modified"] = e1
+        tracking["latest_modified"] = l1
+        logging.info(f"Bilan : {ad_1} nouvelles URLs.")
 
-        last_run = tracking.get("last_run", tracking.get("last_sync_success"))
-        if last_run:
-            logging.info(f"Dernière extraction : {last_run}")
+    except KeyboardInterrupt:
+        logging.warning("Interruption.")
 
-        logging.info(f"Téléchargement du feed depuis {FEED_URL}...")
-        try:
-            raw_urls = fetch_openphish_feed()
-            logging.info(f"{len(raw_urls)} URL(s) récupérées.")
-        except Exception as e:
-            logging.error(f"Erreur de téléchargement : {e}")
-            return
+    # 3. Finition
+    now_iso = datetime.now(timezone.utc).isoformat()
+    tracking.update({
+        "last_run": now_iso,
+        "last_sync_success": now_iso
+    })
+    save_tracking_atomic(tracking)
+    save_json_atomic(existing_data)
+    
+    if new_records_total:
+        logging.info(f"Export journalier : {len(new_records_total)} items")
+        save_json_atomic(new_records_total, DAILY_OUTPUT_JSON)
 
-        collected_time = now_utc_iso()
-        new_items = []
-        total_urls = len(raw_urls)
-        print(f"  → Filtrage de {total_urls} URLs...")
-        
-        for i, url in enumerate(raw_urls, 1):
-            print(f"[{i}/{total_urls}] Vérification : {url[:70]}...", end="\r")
-            sys.stdout.flush()
-            if url not in existing_urls:
-                new_items.append({
-                    "source": "openphish",
-                    "url": url,
-                    "first_seen": None,
-                    "collected_at": collected_time
-                })
-
-        print("\n" + "="*50)
-        if new_items:
-            logging.info(f"{len(new_items)} nouvelle(s) URL(s) trouvée(s).")
-            print("\nNouvelles URLs OpenPhish ajoutées :")
-            display_limit = 20
-            for item in new_items[:display_limit]:
-                print(f" [+] {item['url']}")
-            if len(new_items) > display_limit:
-                print(f" ... et {len(new_items) - display_limit} autres.")
-                
-            updated_data = existing_data + new_items
-            save_json_atomic(updated_data)
-            
-            # Save daily export
-            logging.info(f"Sauvegarde des {len(new_items)} nouvelles URL(s) dans {DAILY_OUTPUT_JSON}")
-            save_json_atomic(new_items, DAILY_OUTPUT_JSON)
-        else:
-            logging.info("Aucune nouvelle URL trouvée.")
-            updated_data = existing_data
-        print("="*50)
-
-        # Calcul des dates min/max pour le tracking
-        if updated_data:
-            dates = [item.get("collected_at") for item in updated_data if item.get("collected_at")]
-            if dates:
-                tracking["earliest_modified"] = min(dates)
-                tracking["latest_modified"] = max(dates)
-
-        tracking["last_run"] = now_utc_iso()
-        tracking["last_sync_success"] = tracking["last_run"]
-        save_tracking_atomic(tracking)
-
-    except Exception as e:
-        logging.error(f"Erreur fatale : {e}")
-
-    if os.path.exists(OLD_TRACKING_FILE):
-        try:
-            os.remove(OLD_TRACKING_FILE)
-            logging.info(f"Ancien fichier de tracking supprimé : {OLD_TRACKING_FILE}")
-        except:
-            pass
+    if os.path.exists(OLD_TRACK_FILE := os.path.join(SCRIPT_DIR, "last_run.csv")):
+        os.remove(OLD_TRACK_FILE)
 
 if __name__ == "__main__":
     main()
+

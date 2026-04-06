@@ -2,19 +2,22 @@ import requests
 import json
 import os
 import time
-import csv
+import sys
+import threading
+import logging
 from dotenv import load_dotenv, find_dotenv
 from datetime import datetime, timezone
 
-# Charger .env depuis le dossier parent si nécessaire
+# =========================
+# Configuration CTI / SOC
+# =========================
 load_dotenv(find_dotenv())
-
 API_KEY = os.getenv("PULSEDIVE_API_KEY")
-
 BASE_URL = "https://pulsedive.com/api/explore.php"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_FILE = os.path.join(SCRIPT_DIR, "pulsedive_data.json")
+
 # Daily export configuration
 today_str = datetime.now().strftime("%Y-%m-%d")
 DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"pulsedive_data_{today_str}.json")
@@ -22,187 +25,161 @@ DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"pulsedive_data_{today_str}.json")
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 OLD_TRACKING_CSV = os.path.join(SCRIPT_DIR, "last_run.csv")
 
+SAVE_EVERY = 100
+
+# Configuration du logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%H:%M:%S'
+)
+
+write_lock = threading.Lock()
+
+# =========================
+# Fonctions Utilitaires
+# =========================
 
 def load_tracking():
     if os.path.exists(TRACKING_FILE):
         try:
             with open(TRACKING_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception:
-            pass
-    if os.path.exists(OLD_TRACKING_CSV):
-        try:
-            with open(OLD_TRACKING_CSV, "r", encoding="utf-8") as f:
-                reader = csv.reader(f)
-                rows = list(reader)
-                if len(rows) > 1 and rows[1]:
-                    return {"last_sync_success": rows[1][0]}
-        except:
-            pass
+        except Exception: pass
     return {}
 
 def save_tracking_atomic(tracking):
     tmp_file = TRACKING_FILE + ".tmp"
-    with open(tmp_file, "w", encoding="utf-8") as f:
-        json.dump(tracking, f, indent=4, ensure_ascii=False)
-    os.replace(tmp_file, TRACKING_FILE)
+    try:
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(tracking, f, indent=4, ensure_ascii=False)
+        os.replace(tmp_file, TRACKING_FILE)
+    except Exception as e:
+        logging.error(f"Erreur tracking : {e}")
 
 def load_existing_data():
     if os.path.exists(OUTPUT_FILE):
-        with open(OUTPUT_FILE, "r", encoding="utf-8") as f:
-            try:
+        try:
+            with open(OUTPUT_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 return data if isinstance(data, list) else []
-            except:
-                pass
+        except Exception: pass
     return []
 
 def save_json_atomic(data, filepath=None):
     target_file = filepath if filepath else OUTPUT_FILE
     tmp_file = target_file + ".tmp"
-    with open(tmp_file, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
-    os.replace(tmp_file, target_file)
+    try:
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+        os.replace(tmp_file, target_file)
+    except Exception as e:
+        logging.error(f"Erreur sauvegarde JSON ({target_file}) : {e}")
 
+def fetch_pulsedive_by_risk(risk, limit=50):
+    params = {"limit": limit, "pretty": 1, "key": API_KEY, "q": f"risk={risk}"}
+    try:
+        response = requests.get(BASE_URL, params=params, timeout=30)
+        if response.status_code == 200:
+            return response.json().get("results", [])
+    except Exception as e:
+        logging.error(f"Erreur risk={risk}: {e}")
+    return []
 
-def fetch_iocs(limit=50):
-    """
-    Récupère des IOC depuis Pulsedive en maximisant les résultats
-    """
-    all_results = []
+# =========================
+# Logique de synchronisation
+# =========================
+
+def sync_pulsedive(raw_list, existing_data, existing_ids, tracking, new_records_total, mode="AFTER"):
+    added_count = 0
+    scanned_count = 0
     
-    # Itérer sur différents niveaux de risque pour maximiser l'extraction (limite API stricte = 50 par requête)
-    risk_levels = ["critical", "high", "medium", "low", "none", "unknown"]
+    earliest_seen = tracking.get("earliest_modified")
+    latest_seen = tracking.get("latest_modified")
+    
+    collected_at = datetime.now(timezone.utc).isoformat()
+    total_raw = len(raw_list)
+    logging.info(f"Démarrage synchronisation [{mode}] ({total_raw} items à traiter)...")
 
-    for risk in risk_levels:
-        print(f"Extraction des IOC avec risque: {risk}...")
-        params = {
-            "limit": limit,
-            "pretty": 1,
-            "key": API_KEY,
-            "q": f"risk={risk}"
-        }
+    for i, item in enumerate(raw_list, 1):
+        scanned_count += 1
+        indicator = item.get("indicator")
+        # Pulsedive stamp_added format: "2026-04-06 10:00:00"
+        first_seen = item.get("stamp_added")
 
-        try:
-            response = requests.get(BASE_URL, params=params)
+        if indicator not in existing_ids:
+            print(f"[{i}/{total_raw}] Nouveau IOC : {indicator}", end="\r")
+            sys.stdout.flush()
 
-            if response.status_code != 200:
-                print(f"Erreur API pour risk={risk}:", response.status_code)
-                continue
-
-            data = response.json()
-
-            results_list = data.get("results", [])
-            print(f" - {len(results_list)} résultats trouvés pour {risk}")
-
-            for item in results_list:
-                record = {
-                    "indicator": item.get("indicator"),
-                    "type": item.get("type"),
-                    "risk": item.get("risk"),
-                    "threat": item.get("threat"),
-                    "category": item.get("category"),
-                    "first_seen": item.get("stamp_added"),
-                    "last_seen": item.get("stamp_updated"),
-                    "source": "pulsedive",
-                    "collected_at": datetime.now(timezone.utc).isoformat()
-                }
-
-                all_results.append(record)
-                
-            time.sleep(1) # Pause pour éviter le rate limit
+            item["collected_at"] = collected_at
+            existing_data.append(item)
+            existing_ids.add(indicator)
+            new_records_total.append(item)
+            added_count += 1
             
-        except Exception as e:
-            print(f"Erreur lors de la requête pour risk={risk}: {e}")
+            # Mise à jour des bornes
+            if first_seen:
+                if not earliest_seen or first_seen < earliest_seen:
+                    earliest_seen = first_seen
+                if not latest_seen or first_seen > latest_seen:
+                    latest_seen = first_seen
 
-    # Déduplication basée sur l'indicateur
-    unique_items = {}
-    for item in all_results:
-        unique_items[item["indicator"]] = item
-        
-    return list(unique_items.values())
+        if added_count > 0 and added_count % SAVE_EVERY == 0:
+            save_json_atomic(existing_data)
+            tracking.update({
+                "earliest_modified": earliest_seen,
+                "latest_modified": latest_seen,
+                "last_sync_attempt": datetime.now(timezone.utc).isoformat()
+            })
+            save_tracking_atomic(tracking)
 
-
-def save_json(data):
-    if os.path.exists(OUTPUT_FILE):
-        with open(OUTPUT_FILE, "r") as f:
-            existing = json.load(f)
-    else:
-        existing = []
-
-    # Extraire les indicateurs existants pour éviter les doublons au niveau global
-    existing_indicators = {item['indicator'] for item in existing}
-    
-    # Filtrer les nouvelles données
-    new_data = [item for item in data if item['indicator'] not in existing_indicators]
-
-    if not new_data:
-        return 0
-
-    combined = existing + new_data
-
-    with open(OUTPUT_FILE, "w") as f:
-        json.dump(combined, f, indent=4)
-        
-    return len(new_data)
-
+    print("\n")
+    return scanned_count, added_count, earliest_seen, latest_seen
 
 def main():
-    print("Extraction Pulsedive IOC (Maximisée)...")
+    if sys.platform == "win32":
+        try: sys.stdout.reconfigure(encoding='utf-8')
+        except: pass
+
+    # 1. Charger données
+    existing_data = load_existing_data()
+    existing_ids = {str(item.get("indicator")) for item in existing_data if item.get("indicator")}
+    logging.info(f"Indexation : {len(existing_ids)} items chargés.")
+
     tracking = load_tracking()
-    tracking["last_sync_attempt"] = datetime.now(timezone.utc).isoformat()
+    new_records_total = []
+
+    # 2. Explorer par risque
+    risk_levels = ["critical", "high", "medium", "low", "none", "unknown"]
     
-    last_run = tracking.get("last_run", tracking.get("last_sync_success"))
-    print(f"[i] Dernière exécution: {last_run}")
+    try:
+        for risk in risk_levels:
+            raw_list = fetch_pulsedive_by_risk(risk)
+            if raw_list:
+                sc1, ad1, e1, l1 = sync_pulsedive(raw_list, existing_data, existing_ids, tracking, new_records_total, mode=f"RISK_{risk.upper()}")
+                tracking["earliest_modified"] = e1
+                tracking["latest_modified"] = l1
+                time.sleep(1) # Rate limit protection
 
-    iocs = fetch_iocs()
+    except KeyboardInterrupt:
+        logging.warning("Interruption.")
 
-    if not iocs:
-        print("Aucune donnée récupérée")
-        updated_data = load_existing_data()
-    else:
-        existing = load_existing_data()
-        existing_indicators = {item['indicator'] for item in existing}
-        new_data = [item for item in iocs if item['indicator'] not in existing_indicators]
-        
-        if new_data:
-            updated_data = existing + new_data
-            save_json_atomic(updated_data)
-            
-            # Save daily export
-            print(f"  → Sauvegarde des {len(new_data)} nouveaux IOCs dans {DAILY_OUTPUT_JSON}")
-            save_json_atomic(new_data, DAILY_OUTPUT_JSON)
-            print("\n" + "="*50)
-            print(f"{len(new_data)} nouveaux IOC ajoutés (Total unique extrait : {len(iocs)})")
-            print("\nNouveaux IOC Pulsedive ajoutés :")
-            display_limit = 20
-            for item in new_data[:display_limit]:
-                print(f" [+] {item['indicator']} (Risque: {item['risk']})")
-            if len(new_data) > display_limit:
-                print(f" ... et {len(new_data) - display_limit} autres.")
-            print("="*50)
-        else:
-            print("Aucun nouveau record.")
-            updated_data = existing
-
-    # Calcul des dates min/max pour le tracking
-    if updated_data:
-        # first_seen (stamp_added) est déjà au format ISO UTC
-        dates = [item.get("first_seen") for item in updated_data if item.get("first_seen")]
-        if dates:
-            tracking["earliest_modified"] = min(dates)
-            tracking["latest_modified"] = max(dates)
-
-    current_run = datetime.now(timezone.utc).isoformat()
-    tracking["last_run"] = current_run
-    tracking["last_sync_success"] = current_run
+    # 3. Finition
+    now_iso = datetime.now(timezone.utc).isoformat()
+    tracking.update({
+        "last_run": now_iso,
+        "last_sync_success": now_iso
+    })
     save_tracking_atomic(tracking)
+    save_json_atomic(existing_data)
     
+    if new_records_total:
+        logging.info(f"Export journalier : {len(new_records_total)} items")
+        save_json_atomic(new_records_total, DAILY_OUTPUT_JSON)
+
     if os.path.exists(OLD_TRACKING_CSV):
         try: os.remove(OLD_TRACKING_CSV)
         except: pass
-    print(f"[+] tracking.json mis à jour: {current_run}")
-
 
 if __name__ == "__main__":
-    main()
+    main()

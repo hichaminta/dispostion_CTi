@@ -2,16 +2,17 @@ import os
 import json
 import hashlib
 import logging
-from datetime import datetime, timezone
-
-import requests
 import sys
+from datetime import datetime, timezone
+import requests
 
-# Base directory setup
+# =========================
+# Configuration CTI / SOC
+# =========================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-
 CINS_URL = "https://cinsarmy.com/list/ci-badguys.txt"
-OUTPUT_FILE = os.path.join(SCRIPT_DIR, "cins_army_data.json")
+OUTPUT_JSON = os.path.join(SCRIPT_DIR, "cins_army_data.json")
+
 # Daily export configuration
 today_str = datetime.now().strftime("%Y-%m-%d")
 DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"cins_army_data_{today_str}.json")
@@ -19,24 +20,26 @@ DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"cins_army_data_{today_str}.json")
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 OLD_TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
 TIMEOUT = 30
+SAVE_EVERY = 100
 
-# Logging configuration
+# Configuration du logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     datefmt='%H:%M:%S'
 )
 
+# =========================
+# Fonctions Utilitaires
+# =========================
+
 def is_valid_ip(line: str) -> bool:
     parts = line.split(".")
-    if len(parts) != 4:
-        return False
+    if len(parts) != 4: return False
     for part in parts:
-        if not part.isdigit():
-            return False
+        if not part.isdigit(): return False
         value = int(part)
-        if value < 0 or value > 255:
-            return False
+        if value < 0 or value > 255: return False
     return True
 
 def fetch_cins_list(url: str) -> list[str]:
@@ -45,10 +48,8 @@ def fetch_cins_list(url: str) -> list[str]:
     ips = []
     for raw_line in response.text.splitlines():
         line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if is_valid_ip(line):
-            ips.append(line)
+        if not line or line.startswith("#"): continue
+        if is_valid_ip(line): ips.append(line)
     return ips
 
 def load_tracking():
@@ -58,17 +59,6 @@ def load_tracking():
                 return json.load(f)
         except Exception as e:
             logging.warning(f"Impossible de lire le tracking JSON : {e}")
-    
-    if os.path.exists(OLD_TRACKING_FILE):
-        try:
-            import csv
-            with open(OLD_TRACKING_FILE, "r", encoding="utf-8") as f:
-                reader = csv.reader(f)
-                rows = list(reader)
-                if len(rows) > 1 and rows[1]:
-                    return {"last_sync_success": rows[1][0]}
-        except:
-            pass
     return {}
 
 def save_tracking_atomic(tracking):
@@ -81,9 +71,9 @@ def save_tracking_atomic(tracking):
         logging.error(f"Erreur tracking : {e}")
 
 def load_existing_data():
-    if os.path.exists(OUTPUT_FILE):
+    if os.path.exists(OUTPUT_JSON):
         try:
-            with open(OUTPUT_FILE, "r", encoding="utf-8") as f:
+            with open(OUTPUT_JSON, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 return data if isinstance(data, list) else []
         except Exception:
@@ -91,7 +81,7 @@ def load_existing_data():
     return []
 
 def save_json_atomic(data, filepath=None):
-    target_file = filepath if filepath else OUTPUT_FILE
+    target_file = filepath if filepath else OUTPUT_JSON
     tmp_file = target_file + ".tmp"
     try:
         with open(tmp_file, "w", encoding="utf-8") as f:
@@ -100,91 +90,108 @@ def save_json_atomic(data, filepath=None):
     except Exception as e:
         logging.error(f"Erreur lors de la sauvegarde JSON ({target_file}) : {e}")
 
+# =========================
+# Logique de synchronisation
+# =========================
+
+def sync_cins(ips, existing_data, existing_indicators, tracking, new_records_total, mode="AFTER"):
+    added_count = 0
+    scanned_count = 0
+    
+    earliest_seen = tracking.get("earliest_modified")
+    latest_seen = tracking.get("latest_modified")
+    
+    collected_at = datetime.now(timezone.utc).isoformat()
+    total_ips = len(ips)
+
+    logging.info(f"Démarrage synchronisation [{mode}] ({total_ips} IPs à traiter)...")
+
+    for i, ip in enumerate(ips, 1):
+        scanned_count += 1
+        
+        # Pour CINS, on n'a pas de date par IP dans le flux, 
+        # donc on se base sur l'existence ou non.
+        # Le mode "AFTER" vs "BEFORE" est ici plus structurel qu'incrémental par date API.
+        
+        if ip not in existing_indicators:
+            record = {
+                "indicator": ip,
+                "type": "ip",
+                "source": "cins_army",
+                "threat": "malicious_ip",
+                "collected_at": collected_at,
+                "hash": hashlib.sha256(f"cins_army:{ip}".encode("utf-8")).hexdigest()
+            }
+            existing_data.append(record)
+            existing_indicators.add(ip)
+            new_records_total.append(record)
+            added_count += 1
+            
+            # Mise à jour des bornes
+            if not earliest_seen or collected_at < earliest_seen:
+                earliest_seen = collected_at
+            if not latest_seen or collected_at > latest_seen:
+                latest_seen = collected_at
+
+        if added_count > 0 and added_count % SAVE_EVERY == 0:
+            save_json_atomic(existing_data)
+            tracking.update({
+                "earliest_modified": earliest_seen,
+                "latest_modified": latest_seen,
+                "last_sync_attempt": datetime.now(timezone.utc).isoformat()
+            })
+            save_tracking_atomic(tracking)
+
+    return scanned_count, added_count, earliest_seen, latest_seen
+
 def main():
-    # Fix Windows encoding issues for arrow characters
     if sys.platform == "win32":
-        try:
-            sys.stdout.reconfigure(encoding='utf-8')
-        except:
-            pass
+        try: sys.stdout.reconfigure(encoding='utf-8')
+        except: pass
+
+    # 1. Charger données
+    existing_data = load_existing_data()
+    existing_indicators = {item["indicator"] for item in existing_data if "indicator" in item}
+    logging.info(f"Indexation : {len(existing_indicators)} records chargés.")
+
+    tracking = load_tracking()
+
+    # 2. Récupérer liste
+    try:
+        ips = fetch_cins_list(CINS_URL)
+        logging.info(f"{len(ips)} IPs récupérées de CINS Army.")
+    except Exception as e:
+        logging.error(f"Erreur téléchargement : {e}")
+        return
+
+    new_records_total = []
 
     try:
-        logging.info("Téléchargement de la liste CINS Army...")
-        tracking = load_tracking()
-        tracking["last_sync_attempt"] = datetime.now(timezone.utc).isoformat()
+        # Phase unique pour CINS car pas de dates par item, mais on garde la structure
+        sc_1, ad_1, e1, l1 = sync_cins(ips, existing_data, existing_indicators, tracking, new_records_total, mode="FULL_SYNC")
+        tracking["earliest_modified"] = e1
+        tracking["latest_modified"] = l1
+        logging.info(f"Bilan : {ad_1} nouveaux records.")
 
-        last_run = tracking.get("last_run", tracking.get("last_sync_success"))
-        if last_run:
-            logging.info(f"Dernière exécution réussie : {last_run}")
-        
-        ips = fetch_cins_list(CINS_URL)
-        logging.info(f"{len(ips)} IP récupérées")
+    except KeyboardInterrupt:
+        logging.warning("Interruption.")
 
-        existing_data = load_existing_data()
-        existing_indicators = {item["indicator"] for item in existing_data}
-        
-        collected_at = datetime.now(timezone.utc).isoformat()
-        new_records = []
-        
-        total_ips = len(ips)
-        print(f"  → Filtrage de {total_ips} IPs...")
-        
-        for i, ip in enumerate(ips, 1):
-            print(f"[{i}/{total_ips}] Vérification : {ip}", end="\r")
-            sys.stdout.flush()
-            if ip not in existing_indicators:
-                record = {
-                    "indicator": ip,
-                    "type": "ip",
-                    "source": "cins_army",
-                    "threat": "malicious_ip",
-                    "collected_at": collected_at,
-                    "hash": hashlib.sha256(f"cins_army:{ip}".encode("utf-8")).hexdigest()
-                }
-                new_records.append(record)
-        
-        print("\n" + "="*50)
-        if new_records:
-            logging.info(f"{len(new_records)} nouveaux records trouvés.")
-            print("\nNouveaux records CINS Army ajoutés :")
-            display_limit = 20
-            for item in new_records[:display_limit]:
-                print(f" [+] {item['indicator']}")
-            if len(new_records) > display_limit:
-                print(f" ... et {len(new_records) - display_limit} autres.")
-                
-            updated_data = existing_data + new_records
-            save_json_atomic(updated_data)
-            
-            # Save daily export
-            logging.info(f"Sauvegarde des {len(new_records)} nouveaux records dans {DAILY_OUTPUT_JSON}")
-            save_json_atomic(new_records, DAILY_OUTPUT_JSON)
-        else:
-            logging.info("Aucun nouveau record trouvé.")
-            updated_data = existing_data
-        print("="*50)
+    # 3. Finition
+    now_iso = datetime.now(timezone.utc).isoformat()
+    tracking.update({
+        "last_run": now_iso,
+        "last_sync_success": now_iso
+    })
+    save_tracking_atomic(tracking)
+    save_json_atomic(existing_data)
+    
+    if new_records_total:
+        logging.info(f"Export journalier : {len(new_records_total)} items")
+        save_json_atomic(new_records_total, DAILY_OUTPUT_JSON)
 
-        # Calcul des dates min/max pour le tracking
-        if updated_data:
-            dates = [item.get("collected_at") for item in updated_data if item.get("collected_at")]
-            if dates:
-                tracking["earliest_modified"] = min(dates)
-                tracking["latest_modified"] = max(dates)
-
-        now_str = datetime.now(timezone.utc).isoformat()
-        tracking["last_run"] = now_str
-        tracking["last_sync_success"] = now_str
-        save_tracking_atomic(tracking)
-
-        if os.path.exists(OLD_TRACKING_FILE):
-            try:
-                os.remove(OLD_TRACKING_FILE)
-                logging.info(f"Ancien fichier de tracking supprimé : {OLD_TRACKING_FILE}")
-            except:
-                pass
-
-    except Exception as e:
-        logging.error(f"Erreur lors de l'exécution : {e}")
+    if os.path.exists(OLD_TRACK_FILE := os.path.join(SCRIPT_DIR, "last_run.csv")):
+        os.remove(OLD_TRACK_FILE)
 
 if __name__ == "__main__":
-    main()
+    main()
+

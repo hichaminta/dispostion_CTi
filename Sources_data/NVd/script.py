@@ -4,29 +4,40 @@ import time
 import os
 import logging
 import argparse
+import threading
+import sys
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv, find_dotenv
 
-# Base configuration
+# =========================
+# Configuration CTI / SOC
+# =========================
 BASE_NVD_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 load_dotenv(find_dotenv())
 API_KEY = os.getenv("NVD_API_KEY")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_JSON = os.path.join(SCRIPT_DIR, "nvd_data.json")
+
 # Daily export configuration
 today_str = datetime.now().strftime("%Y-%m-%d")
 DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"nvd_data_{today_str}.json")
 
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
-# OLD_TRACKING_FILE supprimé car passé au nouveau format
 
-# Logging configuration
+# Configuration du logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     datefmt='%H:%M:%S'
 )
+
+write_lock = threading.Lock()
+SAVE_EVERY = 500
+
+# =========================
+# Fonctions Utilitaires
+# =========================
 
 def load_tracking():
     if os.path.exists(TRACKING_FILE):
@@ -89,136 +100,141 @@ def fetch_nvd_page(params, retries=3):
             r.raise_for_status()
             return r.json()
         except Exception as e:
-            if i == retries - 1:
-                raise e
-            logging.warning(f"Tentative {i+1} échouée, nouvel essai dans 2s... ({e})")
+            if i == retries - 1: raise e
+            logging.warning(f"Tentative {i+1} échouée... ({e})")
             time.sleep(2)
 
 def extract_cvss_list(vulnerability):
     metrics = vulnerability.get("cve", {}).get("metrics", {})
     cvss_list = []
-    # CVSS 3.1
-    if "cvssMetricV31" in metrics:
-        for m in metrics["cvssMetricV31"]:
-            cvss = m.get("cvssData", {})
-            cvss_list.append({"version": "3.1", "score": cvss.get("baseScore", "N/A"), "vector": cvss.get("vectorString", "N/A")})
-    # CVSS 3.0
-    elif "cvssMetricV30" in metrics:
-        for m in metrics["cvssMetricV30"]:
-            cvss = m.get("cvssData", {})
-            cvss_list.append({"version": "3.0", "score": cvss.get("baseScore", "N/A"), "vector": cvss.get("vectorString", "N/A")})
-    # CVSS 2.0
-    if "cvssMetricV2" in metrics:
-        for m in metrics["cvssMetricV2"]:
-            cvss = m.get("cvssData", {})
-            cvss_list.append({"version": "2.0", "score": cvss.get("baseScore", "N/A"), "vector": cvss.get("vectorString", "N/A")})
+    # Simplified extraction logic
+    for v in ["cvssMetricV31", "cvssMetricV30", "cvssMetricV2"]:
+        if v in metrics:
+            for m in metrics[v]:
+                cvss = m.get("cvssData", {})
+                cvss_list.append({
+                    "version": v[-2:].replace("V", ""),
+                    "score": cvss.get("baseScore", "N/A"),
+                    "vector": cvss.get("vectorString", "N/A")
+                })
     return cvss_list
 
-def main():
-    parser = argparse.ArgumentParser(description="Extracteur NVD CVE")
-    parser.add_argument("--days", type=int, default=30, help="Nombre de jours à remonter (par défaut 30)")
-    parser.add_argument("--full", action="store_true", help="Extraction sur les 120 derniers jours (limite NVD)")
-    args = parser.parse_args()
+# =========================
+# Logique de synchronisation
+# =========================
 
-    tracking = load_tracking()
-    last_run_str = tracking.get("latest_modified")
-    now = datetime.now(timezone.utc)
-    now_str = now.strftime("%Y-%m-%dT%H:%M:%S.000")
-    
-    if last_run_str and not args.full:
-        logging.info(f"Extraction incrémentale à partir de : {last_run_str}")
-        start_date_str = last_run_str
-    elif args.full:
-        logging.info("Mode --full : extraction des 120 derniers jours (limite API).")
-        start_date_str = (now - timedelta(days=120)).strftime("%Y-%m-%dT%H:%M:%S.000")
-    else:
-        logging.info(f"Extraction des {args.days} derniers jours par défaut.")
-        start_date_str = (now - timedelta(days=args.days)).strftime("%Y-%m-%dT%H:%M:%S.000")
-
-    existing_data = load_existing_data()
-    existing_ids = {item["cve_id"] for item in existing_data if item.get("cve_id")}
-    
+def sync_nvd(start_date_str, end_date_str, existing_data, existing_ids, tracking, new_records_total, mode="AFTER"):
+    added_count = 0
+    scanned_count = 0
     start_index = 0
-    total_new = 0
-    new_cves = [] # Collect new CVEs for daily export
     
+    earliest_seen = tracking.get("earliest_modified")
+    latest_seen = tracking.get("latest_modified")
+
+    logging.info(f"Démarrage synchronisation [{mode}] ({start_date_str} -> {end_date_str})...")
+
     while True:
         params = {
             "resultsPerPage": 500,
             "startIndex": start_index,
             "lastModStartDate": start_date_str,
-            "lastModEndDate": now_str
+            "lastModEndDate": end_date_str
         }
         
         try:
-            logging.info(f"Requête NVD Index {start_index}... (Période: {start_date_str} -> {now_str})")
             data = fetch_nvd_page(params)
         except Exception as e:
-            logging.error(f"Échec critique sur la page {start_index} : {e}")
+            logging.error(f"Erreur page {start_index}: {e}")
             break
             
         vulnerabilities = data.get("vulnerabilities", [])
-        if not vulnerabilities:
-            break
+        if not vulnerabilities: break
             
         for vuln in vulnerabilities:
+            scanned_count += 1
             cve = vuln.get("cve", {})
             cve_id = cve.get("id")
-            if not cve_id: continue
-            
-            description = "N/A"
-            for desc in cve.get("descriptions", []):
-                if desc.get("lang") == "en":
-                    description = desc.get("value", "N/A")
-                    break
-            
-            cvss_info = extract_cvss_list(vuln)
-            
+            mod_date = cve.get("lastModified")
+
             if cve_id not in existing_ids:
+                description = "N/A"
+                for desc in cve.get("descriptions", []):
+                    if desc.get("lang") == "en":
+                        description = desc.get("value", "N/A")
+                        break
+                
                 cve_item = {
                     "cve_id": cve_id,
                     "published": cve.get("published"),
-                    "last_modified": cve.get("lastModified"),
-                    "source": cve.get("sourceIdentifier", "N/A"),
+                    "last_modified": mod_date,
                     "description": description,
-                    "cvss": cvss_info,
-                    "collected_at": now.isoformat()
+                    "cvss": extract_cvss_list(vuln),
+                    "collected_at": datetime.now(timezone.utc).isoformat()
                 }
                 existing_data.append(cve_item)
-                new_cves.append(cve_item)
                 existing_ids.add(cve_id)
-                total_new += 1
-        
-        total_results = data.get("totalResults", 0)
-        count_received = start_index + len(vulnerabilities)
-        logging.info(f"Progression : {count_received} / {total_results}")
-        
-        if count_received >= total_results:
-            break
-        start_index += 500
-        time.sleep(0.8) # Rate limit protection (NVD API est sensible)
+                new_records_total.append(cve_item)
+                added_count += 1
+                
+                if mod_date:
+                    if not earliest_seen or mod_date < earliest_seen:
+                        earliest_seen = mod_date
+                    if not latest_seen or mod_date > latest_seen:
+                        latest_seen = mod_date
 
+        total_results = data.get("totalResults", 0)
+        logging.info(f"Progression : {start_index + len(vulnerabilities)} / {total_results}")
+        
+        if start_index + len(vulnerabilities) >= total_results: break
+        start_index += 500
+        time.sleep(0.6) # Rate limit
+
+    return scanned_count, added_count, earliest_seen, latest_seen
+
+def main():
+    tracking = load_tracking()
+    existing_data = load_existing_data()
+    existing_ids = {item["cve_id"] for item in existing_data if "cve_id" in item}
+    logging.info(f"Indexation : {len(existing_ids)} CVEs chargées.")
+
+    now = datetime.now(timezone.utc)
+    now_str = now.strftime("%Y-%m-%dT%H:%M:%S.000")
+    
+    # Par défaut on remonte 30 jours si pas de tracking
+    latest_modified = tracking.get("latest_modified")
+    if not latest_modified:
+        latest_modified = (now - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S.000")
+    
+    new_records_total = []
+
+    try:
+        # Phase 1 : Nouveautés
+        sc1, ad1, e1, l1 = sync_nvd(latest_modified, now_str, existing_data, existing_ids, tracking, new_records_total, mode="AFTER")
+        tracking["earliest_modified"] = e1
+        tracking["latest_modified"] = l1
+        
+        # Phase 2 : Historique (Backfill 120j si demandé --full)
+        if "--full" in sys.argv:
+            hist_start = (now - timedelta(days=120)).strftime("%Y-%m-%dT%H:%M:%S.000")
+            sc2, ad2, e2, l2 = sync_nvd(hist_start, latest_modified, existing_data, existing_ids, tracking, new_records_total, mode="BEFORE")
+            tracking["earliest_modified"] = e2
+            tracking["latest_modified"] = l2
+
+    except KeyboardInterrupt:
+        logging.warning("Interruption.")
+
+    # Finition
+    now_iso = now.isoformat()
+    tracking.update({
+        "last_run": now_iso,
+        "last_sync_success": now_iso
+    })
+    save_tracking_atomic(tracking)
     save_json_atomic(existing_data)
     
-    # Save daily export if new CVEs were found
-    if new_cves:
-        logging.info(f"Sauvegarde des {len(new_cves)} nouvelles CVEs dans {DAILY_OUTPUT_JSON}")
-        save_json_atomic(new_cves, DAILY_OUTPUT_JSON)
-    
-    tracking["latest_modified"] = now_str
-    tracking["last_sync_success"] = now.isoformat()
-    save_tracking_atomic(tracking)
-    
-    # Nettoyage de l'ancien CSV s'il existe encore
-    old_csv = os.path.join(SCRIPT_DIR, "last_run.csv")
-    if os.path.exists(old_csv):
-        try:
-            os.remove(old_csv)
-            logging.info(f"Ancien fichier de tracking supprimé : {old_csv}")
-        except:
-            pass
-    
-    logging.info(f"Extraction terminée. {total_new} nouvelles CVEs extraites, {len(existing_data)} au total.")
+    if new_records_total:
+        logging.info(f"Export journalier : {len(new_records_total)} items")
+        save_json_atomic(new_records_total, DAILY_OUTPUT_JSON)
 
 if __name__ == "__main__":
     main()
