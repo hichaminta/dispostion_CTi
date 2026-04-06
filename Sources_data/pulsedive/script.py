@@ -15,6 +15,10 @@ BASE_URL = "https://pulsedive.com/api/explore.php"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_FILE = os.path.join(SCRIPT_DIR, "pulsedive_data.json")
+# Daily export configuration
+today_str = datetime.now().strftime("%Y-%m-%d")
+DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"pulsedive_data_{today_str}.json")
+
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 OLD_TRACKING_CSV = os.path.join(SCRIPT_DIR, "last_run.csv")
 
@@ -53,11 +57,12 @@ def load_existing_data():
                 pass
     return []
 
-def save_json_atomic(data):
-    tmp_file = OUTPUT_FILE + ".tmp"
+def save_json_atomic(data, filepath=None):
+    target_file = filepath if filepath else OUTPUT_FILE
+    tmp_file = target_file + ".tmp"
     with open(tmp_file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
-    os.replace(tmp_file, OUTPUT_FILE)
+    os.replace(tmp_file, target_file)
 
 
 def fetch_iocs(limit=50):
@@ -163,6 +168,10 @@ def main():
         if new_data:
             updated_data = existing + new_data
             save_json_atomic(updated_data)
+            
+            # Save daily export
+            print(f"  → Sauvegarde des {len(new_data)} nouveaux IOCs dans {DAILY_OUTPUT_JSON}")
+            save_json_atomic(new_data, DAILY_OUTPUT_JSON)
             print("\n" + "="*50)
             print(f"{len(new_data)} nouveaux IOC ajoutés (Total unique extrait : {len(iocs)})")
             print("\nNouveaux IOC Pulsedive ajoutés :")

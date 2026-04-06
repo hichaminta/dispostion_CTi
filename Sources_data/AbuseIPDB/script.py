@@ -11,6 +11,10 @@ load_dotenv(find_dotenv())
 API_KEY = os.getenv("ABUSEIPDB_API_KEY")
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_JSON = os.path.join(SCRIPT_DIR, "abuseipdb_data.json")
+# Daily export configuration
+today_str = datetime.now().strftime("%Y-%m-%d")
+DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"abuseipdb_data_{today_str}.json")
+
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 OLD_TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
 URL_BLACKLIST = "https://api.abuseipdb.com/api/v2/blacklist"
@@ -65,14 +69,15 @@ def load_existing_data():
             pass
     return []
 
-def save_json_atomic(data):
-    tmp_file = OUTPUT_JSON + ".tmp"
+def save_json_atomic(data, filepath=None):
+    target_file = filepath if filepath else OUTPUT_JSON
+    tmp_file = target_file + ".tmp"
     try:
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
-        os.replace(tmp_file, OUTPUT_JSON)
+        os.replace(tmp_file, target_file)
     except Exception as e:
-        logging.error(f"Erreur lors de la sauvegarde JSON : {e}")
+        logging.error(f"Erreur lors de la sauvegarde JSON ({target_file}) : {e}")
 
 def get_ip_details(ip_addr, api_key):
     headers = {
@@ -139,6 +144,7 @@ def main():
     ips_to_process = data.get("data", [])
     total_ips = len(ips_to_process)
     new_ips_list = []
+    new_entries_data = [] # Data for daily export
 
     for i, ip in enumerate(ips_to_process, 1):
         ip_addr = ip["ipAddress"]
@@ -177,6 +183,7 @@ def main():
             if details:
                 details["extracted_at"] = now_str
                 existing_ips[ip_addr] = details
+                new_entries_data.append(details)
             else:
                 existing_ips[ip_addr] = {
                     "ipAddress": ip_addr,
@@ -184,6 +191,7 @@ def main():
                     "lastReportedAt": last_reported_str,
                     "extracted_at": now_str
                 }
+                new_entries_data.append(existing_ips[ip_addr])
             new_ips_list.append({"ip": ip_addr, "score": score})
             new_entries_count += 1
 
@@ -206,6 +214,11 @@ def main():
     updated_list = list(existing_ips.values())
     if new_entries_count > 0 or updated_entries_count > 0:
         save_json_atomic(updated_list)
+        
+    # Save daily export if new entries found
+    if new_entries_data:
+        logging.info(f"Sauvegarde des {len(new_entries_data)} nouvelles IPs dans {DAILY_OUTPUT_JSON}")
+        save_json_atomic(new_entries_data, DAILY_OUTPUT_JSON)
 
     # Calcul des dates min/max pour le tracking
     if updated_list:

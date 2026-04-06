@@ -18,6 +18,10 @@ API_KEY = os.getenv("URLHAUS_API_KEY") or os.getenv("THREATFOX_API_KEY", "")
 # Configuration
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(SCRIPT_DIR, "urlhaus_data.json")
+# Daily export configuration
+today_str = datetime.now().strftime("%Y-%m-%d")
+DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"urlhaus_data_{today_str}.json")
+
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 
 # URLhaus JSON exports
@@ -47,15 +51,16 @@ def save_tracking_atomic(tracking: dict):
     except Exception as e:
         print(f"Erreur tracking : {e}")
 
-def save_json_atomic(data: dict):
+def save_json_atomic(data, filepath=None):
     """Sauvegarde la base de données JSON de manière atomique."""
-    tmp_file = DB_FILE + ".tmp"
+    target_file = filepath if filepath else DB_FILE
+    tmp_file = target_file + ".tmp"
     try:
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
-        os.replace(tmp_file, DB_FILE)
+        os.replace(tmp_file, target_file)
     except Exception as e:
-        print(f"Erreur sauvegarde JSON : {e}")
+        print(f"Erreur sauvegarde JSON ({target_file}) : {e}")
 
 def load_data():
     if os.path.exists(DB_FILE):
@@ -256,6 +261,11 @@ def update_database():
     print("\n" + "="*50)
     if new_entries > 0 or updated_entries > 0:
         save_json_atomic(data)
+        
+        # Save daily export if new entries were found
+        if new_urls_list:
+            print(f"  → Sauvegarde des {len(new_urls_list)} nouvelles URLs dans {DAILY_OUTPUT_JSON}")
+            save_json_atomic(new_urls_list, DAILY_OUTPUT_JSON)
         print(f"[OK] Ajout de {new_entries} nouvelles URLs.")
         if new_urls_list:
             print("\nDétail des nouvelles URLs :")

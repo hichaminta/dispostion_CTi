@@ -14,6 +14,10 @@ API_KEY = os.getenv("NVD_API_KEY")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_JSON = os.path.join(SCRIPT_DIR, "nvd_data.json")
+# Daily export configuration
+today_str = datetime.now().strftime("%Y-%m-%d")
+DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"nvd_data_{today_str}.json")
+
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 # OLD_TRACKING_FILE supprimé car passé au nouveau format
 
@@ -67,14 +71,15 @@ def load_existing_data():
             pass
     return []
 
-def save_json_atomic(data):
-    tmp_file = OUTPUT_JSON + ".tmp"
+def save_json_atomic(data, filepath=None):
+    target_file = filepath if filepath else OUTPUT_JSON
+    tmp_file = target_file + ".tmp"
     try:
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-        os.replace(tmp_file, OUTPUT_JSON)
+        os.replace(tmp_file, target_file)
     except Exception as e:
-        logging.error(f"Erreur lors de la sauvegarde JSON : {e}")
+        logging.error(f"Erreur lors de la sauvegarde JSON ({target_file}) : {e}")
 
 def fetch_nvd_page(params, retries=3):
     headers = {"apiKey": API_KEY} if API_KEY else {}
@@ -135,6 +140,7 @@ def main():
     
     start_index = 0
     total_new = 0
+    new_cves = [] # Collect new CVEs for daily export
     
     while True:
         params = {
@@ -179,6 +185,7 @@ def main():
                     "collected_at": now.isoformat()
                 }
                 existing_data.append(cve_item)
+                new_cves.append(cve_item)
                 existing_ids.add(cve_id)
                 total_new += 1
         
@@ -192,6 +199,11 @@ def main():
         time.sleep(0.8) # Rate limit protection (NVD API est sensible)
 
     save_json_atomic(existing_data)
+    
+    # Save daily export if new CVEs were found
+    if new_cves:
+        logging.info(f"Sauvegarde des {len(new_cves)} nouvelles CVEs dans {DAILY_OUTPUT_JSON}")
+        save_json_atomic(new_cves, DAILY_OUTPUT_JSON)
     
     tracking["latest_modified"] = now_str
     tracking["last_sync_success"] = now.isoformat()

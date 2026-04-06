@@ -12,6 +12,10 @@ import requests
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 OUTPUT_JSON = os.path.join(SCRIPT_DIR, "feodotracker_data.json")
+# Daily export configuration
+today_str = datetime.now().strftime("%Y-%m-%d")
+DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"feodotracker_data_{today_str}.json")
+
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 OLD_TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
 
@@ -81,14 +85,15 @@ def load_existing_data():
             pass
     return []
 
-def save_json_atomic(data):
-    tmp_file = OUTPUT_JSON + ".tmp"
+def save_json_atomic(data, filepath=None):
+    target_file = filepath if filepath else OUTPUT_JSON
+    tmp_file = target_file + ".tmp"
     try:
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
-        os.replace(tmp_file, OUTPUT_JSON)
+        os.replace(tmp_file, target_file)
     except Exception as e:
-        logging.error(f"Erreur lors de la sauvegarde JSON : {e}")
+        logging.error(f"Erreur lors de la sauvegarde JSON ({target_file}) : {e}")
 
 # =========================================================
 # DOWNLOAD
@@ -180,6 +185,10 @@ def main():
                 
             updated_data = existing_data + to_add
             save_json_atomic(updated_data)
+            
+            # Save daily export
+            logging.info(f"Sauvegarde des {len(to_add)} nouveaux IOCs dans {DAILY_OUTPUT_JSON}")
+            save_json_atomic(to_add, DAILY_OUTPUT_JSON)
         else:
             logging.info("Aucun nouvel IOC trouvé.")
             updated_data = existing_data

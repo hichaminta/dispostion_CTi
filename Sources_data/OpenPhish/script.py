@@ -9,6 +9,10 @@ from datetime import datetime, timezone
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 OUTPUT_JSON = os.path.join(SCRIPT_DIR, "openphish_data.json")
+# Daily export configuration
+today_str = datetime.now().strftime("%Y-%m-%d")
+DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"openphish_data_{today_str}.json")
+
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 OLD_TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
 
@@ -64,14 +68,15 @@ def load_existing_data():
             pass
     return []
 
-def save_json_atomic(data):
-    tmp_file = OUTPUT_JSON + ".tmp"
+def save_json_atomic(data, filepath=None):
+    target_file = filepath if filepath else OUTPUT_JSON
+    tmp_file = target_file + ".tmp"
     try:
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
-        os.replace(tmp_file, OUTPUT_JSON)
+        os.replace(tmp_file, target_file)
     except Exception as e:
-        logging.error(f"Erreur lors de la sauvegarde JSON : {e}")
+        logging.error(f"Erreur lors de la sauvegarde JSON ({target_file}) : {e}")
 
 def fetch_openphish_feed():
     response = requests.get(FEED_URL, timeout=30)
@@ -139,6 +144,10 @@ def main():
                 
             updated_data = existing_data + new_items
             save_json_atomic(updated_data)
+            
+            # Save daily export
+            logging.info(f"Sauvegarde des {len(new_items)} nouvelles URL(s) dans {DAILY_OUTPUT_JSON}")
+            save_json_atomic(new_items, DAILY_OUTPUT_JSON)
         else:
             logging.info("Aucune nouvelle URL trouvée.")
             updated_data = existing_data

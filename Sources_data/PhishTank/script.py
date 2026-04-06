@@ -14,6 +14,10 @@ USER_AGENT = f"phishtank/{API_KEY}" if API_KEY else "phishtank/python-extraction
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(SCRIPT_DIR, "phishtank_data.json")
+# Daily export configuration
+today_str = datetime.now().strftime("%Y-%m-%d")
+DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"phishtank_data_{today_str}.json")
+
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 OLD_DATA_FILE = os.path.join(SCRIPT_DIR, "verified_online.json")
 
@@ -39,15 +43,16 @@ def save_tracking_atomic(tracking: dict):
     except Exception as e:
         print(f"Erreur tracking : {e}")
 
-def save_json_atomic(data: dict):
+def save_json_atomic(data, filepath=None):
     """Sauvegarde la base de données JSON de manière atomique."""
-    tmp_file = DB_FILE + ".tmp"
+    target_file = filepath if filepath else DB_FILE
+    tmp_file = target_file + ".tmp"
     try:
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
-        os.replace(tmp_file, DB_FILE)
+        os.replace(tmp_file, target_file)
     except Exception as e:
-        print(f"Erreur sauvegarde JSON : {e}")
+        print(f"Erreur sauvegarde JSON ({target_file}) : {e}")
 
 def load_data():
     """Charge la base de données existante (ou migre l'ancien fichier)."""
@@ -154,6 +159,11 @@ def update_database():
     print("\n" + "="*50)
     if new_entries > 0 or updated_entries > 0:
         save_json_atomic(data)
+        
+        # Save daily export if new entries were found
+        if new_phish_items:
+            print(f"  → Sauvegarde des {len(new_phish_items)} nouveaux phishings dans {DAILY_OUTPUT_JSON}")
+            save_json_atomic(new_phish_items, DAILY_OUTPUT_JSON)
         print(f"[OK] Ajout de {new_entries} nouveaux phishings.")
         if new_phish_items:
             print("\nDétail des nouveaux phishings :")

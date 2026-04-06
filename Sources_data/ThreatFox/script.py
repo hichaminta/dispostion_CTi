@@ -15,6 +15,10 @@ API_KEY      = os.getenv("THREATFOX_API_KEY", "")
 API_URL      = "https://threatfox-api.abuse.ch/api/v1/"
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_JSON  = os.path.join(SCRIPT_DIR, "threatfox_data.json")
+# Daily export configuration
+today_str = datetime.now().strftime("%Y-%m-%d")
+DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"threatfox_data_{today_str}.json")
+
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 OLD_TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
 
@@ -37,15 +41,16 @@ def load_existing_data() -> list:
     return []
 
 
-def save_json_atomic(data: list):
+def save_json_atomic(data, filepath=None):
     """Sauvegarde la liste complète des IOCs en JSON de manière atomique."""
-    tmp_file = OUTPUT_JSON + ".tmp"
+    target_file = filepath if filepath else OUTPUT_JSON
+    tmp_file = target_file + ".tmp"
     try:
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
-        os.replace(tmp_file, OUTPUT_JSON)
+        os.replace(tmp_file, target_file)
     except Exception as e:
-        print(f"Erreur lors de la sauvegarde JSON : {e}")
+        print(f"Erreur lors de la sauvegarde JSON ({target_file}) : {e}")
 
 def load_tracking():
     """Charge le tracking JSON ou migre depuis l'ancien CSV."""
@@ -273,6 +278,10 @@ def main():
     if new_entries:
         existing.extend(new_entries)
         save_json_atomic(existing)
+        
+        # Save daily export
+        print(f"  → Sauvegarde des {len(new_entries)} nouveaux IOCs dans {DAILY_OUTPUT_JSON}")
+        save_json_atomic(new_entries, DAILY_OUTPUT_JSON)
         print("\n" + "="*50)
         print(f"  ✓ {len(new_entries)} nouveaux IOCs ajoutés.")
         print("\nDétail des nouveaux IOC :")

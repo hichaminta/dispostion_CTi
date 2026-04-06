@@ -17,6 +17,10 @@ except ImportError:
 # =========================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_JSON = os.path.join(SCRIPT_DIR, "otx_pulses.json")
+# Daily export configuration
+today_str = datetime.now().strftime("%Y-%m-%d")
+DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"otx_pulses_{today_str}.json")
+
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 
 MAX_WORKERS = 10         # Threads pour l'enrichissement (IoCs)
@@ -79,15 +83,16 @@ def load_existing_data():
             pass
     return []
 
-def save_json_atomic(data):
+def save_json_atomic(data, filepath=None):
     """Sauvegarde atomique via .tmp + replace."""
-    tmp_file = OUTPUT_JSON + ".tmp"
+    target_file = filepath if filepath else OUTPUT_JSON
+    tmp_file = target_file + ".tmp"
     try:
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
-        os.replace(tmp_file, OUTPUT_JSON)
+        os.replace(tmp_file, target_file)
     except Exception as e:
-        logging.error(f"Erreur lors de la sauvegarde JSON : {e}")
+        logging.error(f"Erreur lors de la sauvegarde JSON ({target_file}) : {e}")
 
 def fetch_pulse_indicators(otx, pulse):
     """Télécharger les indicateurs d'un pulse."""
@@ -110,7 +115,7 @@ def fetch_pulse_indicators(otx, pulse):
 # Logique de synchronisation
 # =========================
 
-def sync_pulses(otx, modified_since, existing_data, existing_ids, tracking, mode="AFTER"):
+def sync_pulses(otx, modified_since, existing_data, existing_ids, tracking, new_pulses_list, mode="AFTER"):
     """
     mode "AFTER" : Récupère les nouveautés depuis modified_since.
     mode "BEFORE" : Récupère l'historique (ignore tout ce qui est >= EARLIEST).
@@ -147,6 +152,7 @@ def sync_pulses(otx, modified_since, existing_data, existing_ids, tracking, mode
                     result = f.result()
                     with write_lock:
                         existing_data.append(result)
+                        new_pulses_list.append(result)
                         existing_ids.add(result["id"])
                         added_count += 1
                         
@@ -180,6 +186,7 @@ def sync_pulses(otx, modified_since, existing_data, existing_ids, tracking, mode
             try:
                 result = f.result()
                 existing_data.append(result)
+                new_pulses_list.append(result)
                 existing_ids.add(result["id"])
                 added_count += 1
                 mod_date = result["modified"]
@@ -200,6 +207,11 @@ def sync_pulses(otx, modified_since, existing_data, existing_ids, tracking, mode
     })
     save_tracking_atomic(tracking)
     save_json_atomic(existing_data)
+    
+    # Save daily export if new pulses were found
+    if new_pulses_list:
+        logging.info(f"Sauvegarde des {len(new_pulses_list)} nouveaux pulses dans {DAILY_OUTPUT_JSON}")
+        save_json_atomic(new_pulses_list, DAILY_OUTPUT_JSON)
     
     return scanned_count, added_count
 
@@ -231,14 +243,16 @@ def main():
         # PHASE 1 : Nouveautés (FUTUR)
         # On part du plus récent pour aller vers maintenant
         logging.info("--- PHASE 1 : Récupération des nouveautés ---")
-        sc_1, ad_1 = sync_pulses(otx, tracking.get("latest_modified"), existing_data, existing_ids, tracking, mode="AFTER")
+        new_pulses_1 = []
+        sc_1, ad_1 = sync_pulses(otx, tracking.get("latest_modified"), existing_data, existing_ids, tracking, new_pulses_1, mode="AFTER")
         logging.info(f"Bilan Nouveautés : {sc_1} scannés, {ad_1} ajoutés.")
 
         # PHASE 2 : Historique (PASSÉ)
         # On repart de ZERO et on descend jusqu'à ce qu'on dépasse le plus ancien
         # Pour simplifier, on peut l'activer via une question ou le faire systématiquement
         logging.info("--- PHASE 2 : Complétion de l'historique ---")
-        sc_2, ad_2 = sync_pulses(otx, None, existing_data, existing_ids, tracking, mode="BEFORE")
+        new_pulses_2 = []
+        sc_2, ad_2 = sync_pulses(otx, None, existing_data, existing_ids, tracking, new_pulses_2, mode="BEFORE")
         logging.info(f"Bilan Historique : {sc_2} scannés, {ad_2} ajoutés.")
 
         logging.info("Toutes les phases de synchronisation sont terminées.")

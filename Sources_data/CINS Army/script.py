@@ -12,6 +12,10 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 CINS_URL = "https://cinsarmy.com/list/ci-badguys.txt"
 OUTPUT_FILE = os.path.join(SCRIPT_DIR, "cins_army_data.json")
+# Daily export configuration
+today_str = datetime.now().strftime("%Y-%m-%d")
+DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"cins_army_data_{today_str}.json")
+
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 OLD_TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
 TIMEOUT = 30
@@ -86,14 +90,15 @@ def load_existing_data():
             pass
     return []
 
-def save_json_atomic(data):
-    tmp_file = OUTPUT_FILE + ".tmp"
+def save_json_atomic(data, filepath=None):
+    target_file = filepath if filepath else OUTPUT_FILE
+    tmp_file = target_file + ".tmp"
     try:
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
-        os.replace(tmp_file, OUTPUT_FILE)
+        os.replace(tmp_file, target_file)
     except Exception as e:
-        logging.error(f"Erreur lors de la sauvegarde JSON : {e}")
+        logging.error(f"Erreur lors de la sauvegarde JSON ({target_file}) : {e}")
 
 def main():
     # Fix Windows encoding issues for arrow characters
@@ -150,6 +155,10 @@ def main():
                 
             updated_data = existing_data + new_records
             save_json_atomic(updated_data)
+            
+            # Save daily export
+            logging.info(f"Sauvegarde des {len(new_records)} nouveaux records dans {DAILY_OUTPUT_JSON}")
+            save_json_atomic(new_records, DAILY_OUTPUT_JSON)
         else:
             logging.info("Aucun nouveau record trouvé.")
             updated_data = existing_data

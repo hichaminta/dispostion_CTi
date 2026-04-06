@@ -13,6 +13,10 @@ import csv
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 OUTPUT_JSON = os.path.join(SCRIPT_DIR, "spamhaus_data.json")
+# Daily export configuration
+today_str = datetime.now().strftime("%Y-%m-%d")
+DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"spamhaus_data_{today_str}.json")
+
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
 OLD_TRACKING_FILE = os.path.join(SCRIPT_DIR, "last_run.csv")
 
@@ -56,6 +60,16 @@ def load_tracking():
         except:
             pass
     return {}
+    
+def load_existing_data():
+    if os.path.exists(OUTPUT_JSON):
+        try:
+            with open(OUTPUT_JSON, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+        except Exception:
+            pass
+    return []
 
 def save_tracking_atomic(tracking: dict):
     """Sauvegarde le tracking JSON de manière atomique."""
@@ -247,6 +261,12 @@ def main() -> None:
 
     print("Début de l'extraction...")
 
+    existing_data = load_existing_data()
+    existing_keys = set()
+    for item in existing_data:
+        key = (item.get("ioc_value"), item.get("feed_name"))
+        existing_keys.add(key)
+
     all_items = []
     # ... extraction logic ...
     for feed_name, url in SPAMHAUS_FEEDS.items():
@@ -264,6 +284,13 @@ def main() -> None:
 
     all_items = deduplicate_items(all_items)
     
+    # Identify truly new items for daily export
+    new_items = []
+    for item in all_items:
+        key = (item.get("ioc_value"), item.get("feed_name"))
+        if key not in existing_keys:
+            new_items.append(item)
+    
     print("\n" + "="*50)
     print(f"[OK] Total unique IOC extraits : {len(all_items)}")
     if all_items:
@@ -277,6 +304,11 @@ def main() -> None:
 
     # Standard JSON Output: A flat list of records
     save_json_atomic(OUTPUT_JSON, all_items)
+    
+    # Save daily export if new items were found
+    if new_items:
+        print(f"  → Sauvegarde des {len(new_items)} nouveaux IOCs dans {DAILY_OUTPUT_JSON}")
+        save_json_atomic(DAILY_OUTPUT_JSON, new_items)
 
     # Calcul des dates min/max pour le tracking
     if all_items:
