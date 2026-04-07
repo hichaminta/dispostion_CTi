@@ -1,180 +1,316 @@
+"""
+PhishTank — Script d'extraction CTI
+Stratégie multi-source :
+  1. PhishTank officiel (si PHISHTANK_API_KEY est défini dans .env)
+  2. OpenPhish (feed CSV public gratuit) — fallback 1
+  3. URLhaus (API JSON gratuite, focus malware/phishing) — fallback 2
+"""
+
 import requests
 import json
 import os
 import sys
+import io
+import csv
+import logging
 import threading
 from datetime import datetime, timezone
 from dotenv import load_dotenv, find_dotenv
 
-# =========================
-# Configuration CTI / SOC
-# =========================
+# ── Configuration ───────────────────────────────────────────────────────────
 load_dotenv(find_dotenv(), override=False)
-API_KEY = os.getenv("PHISHTANK_API_KEY", "")
-USER_AGENT = f"phishtank/{API_KEY}" if API_KEY else "phishtank/python-extraction-script"
+API_KEY = os.getenv("PHISHTANK_API_KEY", "").strip()
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_JSON = os.path.join(SCRIPT_DIR, "phishtank_data.json")
+SCRIPT_DIR       = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_JSON      = os.path.join(SCRIPT_DIR, "phishtank_data.json")
+TRACKING_FILE    = os.path.join(SCRIPT_DIR, "tracking.json")
+today_str        = datetime.now().strftime("%Y-%m-%d")
+DAILY_JSON       = os.path.join(SCRIPT_DIR, f"phishtank_data_{today_str}.json")
 
-# Daily export configuration
-today_str = datetime.now().strftime("%Y-%m-%d")
-DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"phishtank_data_{today_str}.json")
+SAVE_EVERY   = 500
+TIMEOUT      = 90
 
-TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
-PHISHTANK_URL = "https://data.phishtank.com/data/online-valid.json"
-
-SAVE_EVERY = 500
-
-# Configuration du logging
-import logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%H:%M:%S'
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+    stream=sys.stdout,
 )
 
 write_lock = threading.Lock()
 
-# =========================
-# Fonctions Utilitaires
-# =========================
+# ── Sources ─────────────────────────────────────────────────────────────────
+PHISHTANK_URL_AUTH  = f"http://data.phishtank.com/data/{API_KEY}/online-valid.json"
+PHISHTANK_URL_ANON  = "http://data.phishtank.com/data/online-valid.json"
+OPENPHISH_URL       = "https://openphish.com/feed.txt"
+URLHAUS_API         = "https://urlhaus-api.abuse.ch/v1/urls/recent/"
 
+# ── Tracking / IO helpers ────────────────────────────────────────────────────
 def load_tracking():
     if os.path.exists(TRACKING_FILE):
         try:
             with open(TRACKING_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception: pass
+        except Exception:
+            pass
     return {}
 
-def save_tracking_atomic(tracking):
-    tmp_file = TRACKING_FILE + ".tmp"
+def save_tracking(tracking):
+    tmp = TRACKING_FILE + ".tmp"
     try:
-        with open(tmp_file, "w", encoding="utf-8") as f:
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(tracking, f, indent=4, ensure_ascii=False)
-        os.replace(tmp_file, TRACKING_FILE)
+        os.replace(tmp, TRACKING_FILE)
     except Exception as e:
         logging.error(f"Erreur tracking : {e}")
 
-def load_existing_data():
+def load_existing():
     if os.path.exists(OUTPUT_JSON):
         try:
             with open(OUTPUT_JSON, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return data if isinstance(data, list) else []
-        except Exception: pass
+                d = json.load(f)
+                return d if isinstance(d, list) else []
+        except Exception:
+            pass
     return []
 
-def save_json_atomic(data, filepath=None):
-    target_file = filepath if filepath else OUTPUT_JSON
-    tmp_file = target_file + ".tmp"
+def save_json(data, path=None):
+    target = path or OUTPUT_JSON
+    tmp = target + ".tmp"
     try:
-        with open(tmp_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4, ensure_ascii=False)
-        os.replace(tmp_file, target_file)
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, target)
     except Exception as e:
-        logging.error(f"Erreur sauvegarde JSON ({target_file}) : {e}")
+        logging.error(f"Erreur sauvegarde ({target}) : {e}")
 
-def fetch_phishtank_data():
-    logging.info(f"Downloading PhishTank data...")
-    headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
-    try:
-        response = requests.get(PHISHTANK_URL, headers=headers, timeout=120)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        logging.error(f"Error fetching PhishTank: {e}")
+# ── Source 1 : PhishTank officiel ────────────────────────────────────────────
+def fetch_phishtank_official():
+    """Nécessite une clé API (PHISHTANK_API_KEY dans .env)."""
+    if not API_KEY:
+        logging.info("[PhishTank] Pas de clé API — source officielle ignorée.")
         return []
 
-# =========================
-# Logique de synchronisation
-# =========================
+    url = PHISHTANK_URL_AUTH
+    headers = {
+        "User-Agent": f"phishtank/{API_KEY}",
+        "Accept": "application/json",
+    }
+    logging.info(f"[PhishTank] Téléchargement officiel (avec clé)...")
+    try:
+        r = requests.get(url, headers=headers, timeout=TIMEOUT)
+        r.raise_for_status()
+        raw = r.json()
+        if isinstance(raw, list):
+            logging.info(f"[PhishTank] {len(raw)} entrées récupérées.")
+            return raw
+        logging.warning(f"[PhishTank] Format inattendu : {type(raw)}")
+    except Exception as e:
+        logging.error(f"[PhishTank] Erreur : {e}")
+    return []
 
-def sync_phishtank(raw_list, existing_data, existing_ids, tracking, new_records_total, mode="AFTER"):
-    added_count = 0
-    scanned_count = 0
-    
-    earliest_seen = tracking.get("earliest_modified")
-    latest_seen = tracking.get("latest_modified")
-    
-    total_raw = len(raw_list)
-    logging.info(f"Démarrage synchronisation [{mode}] ({total_raw} items à traiter)...")
+def normalize_phishtank(item):
+    """Normalise un enregistrement PhishTank vers le schéma unifié."""
+    return {
+        "phish_id":         str(item.get("phish_id", "")),
+        "ioc":              item.get("url", ""),
+        "source":           "PhishTank",
+        "type":             "url-phishing",
+        "target":           item.get("target", ""),
+        "verified":         item.get("verified", "yes"),
+        "online":           item.get("online", "yes"),
+        "submission_time":  item.get("submission_time", ""),
+        "verification_time":item.get("verification_time", ""),
+        "phish_detail_url": item.get("phish_detail_url", ""),
+    }
 
-    for i, item in enumerate(raw_list, 1):
-        scanned_count += 1
-        phish_id = str(item.get("phish_id"))
-        sub_time = item.get("submission_time") # "2026-04-06T..."
+# ── Source 2 : OpenPhish ─────────────────────────────────────────────────────
+def fetch_openphish():
+    """
+    OpenPhish fournit un feed texte gratuit : une URL par ligne.
+    URL : https://openphish.com/feed.txt
+    """
+    logging.info("[OpenPhish] Téléchargement du feed gratuit...")
+    try:
+        r = requests.get(
+            OPENPHISH_URL,
+            headers={"User-Agent": "CTI-Pipeline/1.0 (research)"},
+            timeout=TIMEOUT,
+        )
+        r.raise_for_status()
+        lines = [l.strip() for l in r.text.splitlines() if l.strip().startswith("http")]
+        logging.info(f"[OpenPhish] {len(lines)} URLs récupérées.")
+        return lines
+    except Exception as e:
+        logging.error(f"[OpenPhish] Erreur : {e}")
+        return []
 
-        if phish_id not in existing_ids:
-            print(f"[{i}/{total_raw}] Nouveau phish : {phish_id}", end="\r")
-            sys.stdout.flush()
+def normalize_openphish(url):
+    return {
+        "phish_id":         None,
+        "ioc":              url,
+        "source":           "OpenPhish",
+        "type":             "url-phishing",
+        "target":           "",
+        "verified":         "community",
+        "online":           "yes",
+        "submission_time":  datetime.now(timezone.utc).isoformat(),
+        "verification_time":"",
+        "phish_detail_url": "",
+    }
 
-            existing_data.append(item)
-            existing_ids.add(phish_id)
-            new_records_total.append(item)
-            added_count += 1
-            
-            # Mise à jour des bornes
-            if sub_time:
-                if not earliest_seen or sub_time < earliest_seen:
-                    earliest_seen = sub_time
-                if not latest_seen or sub_time > latest_seen:
-                    latest_seen = sub_time
+# ── Source 3 : URLhaus (abuse.ch) ────────────────────────────────────────────
+def fetch_urlhaus():
+    """
+    URLhaus API — liste des URL malveillantes récentes (gratuit, sans clé).
+    POST https://urlhaus-api.abuse.ch/v1/urls/recent/
+    """
+    logging.info("[URLhaus] Téléchargement des URL récentes...")
+    try:
+        r = requests.post(
+            URLHAUS_API,
+            headers={"User-Agent": "CTI-Pipeline/1.0 (research)"},
+            timeout=TIMEOUT,
+        )
+        r.raise_for_status()
+        data = r.json()
+        if data.get("query_status") == "is_available" and isinstance(data.get("urls"), list):
+            logging.info(f"[URLhaus] {len(data['urls'])} URLs récupérées.")
+            return data["urls"]
+        logging.warning(f"[URLhaus] Réponse inattendue : {data.get('query_status')}")
+    except Exception as e:
+        logging.error(f"[URLhaus] Erreur : {e}")
+    return []
 
-        if added_count > 0 and added_count % SAVE_EVERY == 0:
-            save_json_atomic(existing_data)
-            tracking.update({
-                "earliest_modified": earliest_seen,
-                "latest_modified": latest_seen,
-                "last_sync_attempt": datetime.now(timezone.utc).isoformat()
-            })
-            save_tracking_atomic(tracking)
+def normalize_urlhaus(item):
+    return {
+        "phish_id":         item.get("id", ""),
+        "ioc":              item.get("url", ""),
+        "source":           "URLhaus",
+        "type":             item.get("threat", "url-malware"),
+        "target":           "",
+        "verified":         "yes",
+        "online":           item.get("url_status", ""),
+        "submission_time":  item.get("date_added", ""),
+        "verification_time":"",
+        "phish_detail_url": item.get("urlhaus_link", ""),
+    }
 
-    print("\n")
-    return scanned_count, added_count, earliest_seen, latest_seen
+# ── Merge logic ───────────────────────────────────────────────────────────────
+def merge_records(existing_data, new_items, tracking, new_records_out):
+    """
+    Fusionne les nouveaux items dans existing_data en évitant les doublons via l'IOC.
+    """
+    existing_iocs = {item.get("ioc", "") for item in existing_data if item.get("ioc")}
+    added = 0
+    earliest = tracking.get("earliest_modified")
+    latest   = tracking.get("latest_modified")
+    total    = len(new_items)
 
+    for i, item in enumerate(new_items, 1):
+        ioc = item.get("ioc", "")
+        if not ioc or ioc in existing_iocs:
+            continue
+
+        print(f"  [{i}/{total}] Nouveau : {ioc[:80]}", end="\r", flush=True)
+        existing_data.append(item)
+        existing_iocs.add(ioc)
+        new_records_out.append(item)
+        added += 1
+
+        sub_t = item.get("submission_time", "")
+        if sub_t:
+            if not earliest or sub_t < earliest:
+                earliest = sub_t
+            if not latest   or sub_t > latest:
+                latest   = sub_t
+
+        if added > 0 and added % SAVE_EVERY == 0:
+            save_json(existing_data)
+            tracking.update({"earliest_modified": earliest, "latest_modified": latest,
+                             "last_sync_attempt": datetime.now(timezone.utc).isoformat()})
+            save_tracking(tracking)
+
+    print()
+    return added, earliest, latest
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     if sys.platform == "win32":
-        try: sys.stdout.reconfigure(encoding='utf-8')
-        except: pass
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+        try:
+            sys.stderr.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
 
-    # 1. Charger données
-    existing_data = load_existing_data()
-    existing_ids = {str(item.get("phish_id")) for item in existing_data if item.get("phish_id")}
-    logging.info(f"Indexation : {len(existing_ids)} phishings chargés.")
+    logging.info("=" * 55)
+    logging.info("  Extraction PhishTank/OpenPhish/URLhaus")
+    logging.info("=" * 55)
 
-    tracking = load_tracking()
+    existing_data = load_existing()
+    tracking      = load_tracking()
+    logging.info(f"Indexation : {len(existing_data)} phishings chargés.")
 
-    # 2. Récupérer feed
-    raw_list = fetch_phishtank_data()
-    if not raw_list:
-        logging.warning("Aucune donnée reçue.")
+    # ── Étape 1 : PhishTank officiel (si clé disponible)
+    normalized_items = []
+    source_used = []
+
+    pt_raw = fetch_phishtank_official()
+    if pt_raw:
+        normalized_items += [normalize_phishtank(r) for r in pt_raw]
+        source_used.append("PhishTank")
+
+    # ── Étape 2 : OpenPhish (fallback / complément gratuit)
+    op_urls = fetch_openphish()
+    if op_urls:
+        normalized_items += [normalize_openphish(u) for u in op_urls]
+        source_used.append("OpenPhish")
+
+    # ── Étape 3 : URLhaus (si les deux précédents ont échoué ou pour enrichir)
+    if not normalized_items:
+        logging.warning("PhishTank et OpenPhish indisponibles — tentative URLhaus...")
+        uh_raw = fetch_urlhaus()
+        if uh_raw:
+            normalized_items += [normalize_urlhaus(r) for r in uh_raw]
+            source_used.append("URLhaus")
+
+    if not normalized_items:
+        logging.error("Aucune source disponible. Arrêt.")
+        tracking["last_run"] = datetime.now(timezone.utc).isoformat()
+        save_tracking(tracking)
         return
 
-    new_records_total = []
+    logging.info(f"Total entrées à traiter : {len(normalized_items)} ({', '.join(source_used)})")
 
-    try:
-        # Phase unique (Full Sync du flux JSON)
-        sc1, ad1, e1, l1 = sync_phishtank(raw_list, existing_data, existing_ids, tracking, new_records_total, mode="FULL_SYNC")
-        tracking["earliest_modified"] = e1
-        tracking["latest_modified"] = l1
-        logging.info(f"Bilan : {ad1} nouveaux phishings.")
+    # ── Fusion dans le fichier cumulatif
+    new_records = []
+    added, earliest, latest = merge_records(existing_data, normalized_items, tracking, new_records)
 
-    except KeyboardInterrupt:
-        logging.warning("Interruption.")
-
-    # 3. Finition
-    now_iso = datetime.now(timezone.utc).isoformat()
+    # ── Finalisation
+    now = datetime.now(timezone.utc).isoformat()
     tracking.update({
-        "last_run": now_iso,
-        "last_sync_success": now_iso
+        "last_run":          now,
+        "last_sync_success": now,
+        "earliest_modified": earliest,
+        "latest_modified":   latest,
+        "total_collected":   len(existing_data),
+        "sources_used":      source_used,
     })
-    save_tracking_atomic(tracking)
-    save_json_atomic(existing_data)
-    
-    if new_records_total:
-        logging.info(f"Export journalier : {len(new_records_total)} items")
-        save_json_atomic(new_records_total, DAILY_OUTPUT_JSON)
+    save_tracking(tracking)
+    save_json(existing_data)
+
+    if new_records:
+        logging.info(f"Export journalier : {len(new_records)} nouveaux items → {os.path.basename(DAILY_JSON)}")
+        save_json(new_records, DAILY_JSON)
+
+    logging.info("=" * 55)
+    logging.info(f"  BILAN : {added} nouveaux | Total : {len(existing_data)}")
+    logging.info(f"  Sources utilisées : {', '.join(source_used)}")
+    logging.info("=" * 55)
+
 
 if __name__ == "__main__":
     main()

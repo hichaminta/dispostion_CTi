@@ -1,142 +1,212 @@
+"""
+monitor.py — CTI Pipeline Status Monitor
+Scans Sources_data/, reads tracking.json + data files, builds status.json.
+"""
+
 import os
 import json
 import logging
 from datetime import datetime
 
-# Configuration du logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
-# Chemins
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SOURCES_DIR = os.path.join(BASE_DIR, "Sources_data")
-OUTPUT_STATUS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "status.json")
+BASE_DIR     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SOURCES_DIR  = os.path.join(BASE_DIR, "Sources_data")
+OUTPUT_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "status.json")
 
-def fast_count_records(file_path):
-    """Compte le nombre de records sans charger tout le JSON (très rapide)."""
-    if not os.path.exists(file_path):
-        return 0
-    
-    count = 0
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            for line in f:
-                # Patterns communs pour détecter un objet JSON dans une liste
-                if line.strip() == "{" or line.lstrip().startswith('{"') or (line.startswith("    {") and not line.strip() == "{"):
-                    # On cherche des clés d'identifiants
-                    if any(key in line for key in ['"id":', '"ioc":', '"cve_id":', '"id_cve":', '"impact":']):
-                         count += 1
-                elif any(key in line for key in ['"id":', '"ioc":', '"cve_id":']):
-                    count += 1
-        
-        # Fallback pour petits fichiers
-        if count == 0 and os.path.getsize(file_path) > 2:
-             try:
-                 with open(file_path, "r", encoding="utf-8") as f:
-                     data = json.load(f)
-                     return len(data) if isinstance(data, (list, dict)) else 0
-             except: return 0
-        return count
-    except Exception as e:
-        logging.error(f"Erreur comptage rapide pour {file_path}: {e}")
-        return 0
+# ── Identify source type ─────────────────────────────────────────────────────
+CVE_KEYWORDS = ["cve", "nvd", "nvd_cisa", "vuln"]
+IOC_KEYWORDS = ["abuse", "cins", "malware", "phish", "spam", "threat",
+                 "virustotal", "feodo", "otx", "pulse", "openphish",
+                 "pulsedive", "url", "threatfox"]
 
-def get_source_data_file(source_path):
-    """Trouve le fichier de données JSON principal (le plus gros JSON)."""
-    json_files = []
-    for f in os.listdir(source_path):
-        if f.endswith(".json") and f != "tracking.json" and not f.endswith(".tmp"):
-            full_path = os.path.join(source_path, f)
-            json_files.append((full_path, os.path.getsize(full_path)))
-    if not json_files: return None
-    json_files.sort(key=lambda x: x[1], reverse=True)
-    return json_files[0][0]
-
-def determine_type(source_name, data_file):
-    """Détermine si la source est CVE ou IOC basé sur le nom."""
+def determine_type(source_name: str, data_file: str | None) -> str:
     name_lower = source_name.lower()
     file_lower = os.path.basename(data_file).lower() if data_file else ""
-    if any(k in name_lower for k in ["cve", "nvd", "vuln"]) or any(k in file_lower for k in ["cve", "nvd"]):
+    combined   = name_lower + " " + file_lower
+    if any(k in combined for k in CVE_KEYWORDS):
         return "CVE"
     return "IOC"
 
-def main():
-    if not os.path.exists(SOURCES_DIR):
-        logging.error(f"Dossier Sources_data non trouvé à {SOURCES_DIR}")
-        return
+# ── Find the primary data file ───────────────────────────────────────────────
+EXCLUDED_FILES = {"tracking.json", "format_sources.json"}
 
-    sources_info = []
-    total_iocs = 0
-    total_cves = 0
-    
-    source_dirs = [s for s in os.listdir(SOURCES_DIR) if os.path.isdir(os.path.join(SOURCES_DIR, s))]
-    print(f"Analyse de {len(source_dirs)} sources en cours (Mode CVE vs IOC)...")
+def get_source_data_file(source_path: str) -> str | None:
+    candidates = []
+    for f in os.listdir(source_path):
+        if not f.endswith(".json"):
+            continue
+        if f in EXCLUDED_FILES or f.endswith(".tmp"):
+            continue
+        full = os.path.join(source_path, f)
+        candidates.append((full, os.path.getsize(full)))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    return candidates[0][0]
 
-    for i, source_name in enumerate(source_dirs):
-        source_path = os.path.join(SOURCES_DIR, source_name)
-        tracking_file = os.path.join(source_path, "tracking.json")
-        data_file = get_source_data_file(source_path)
-        
-        source_type = determine_type(source_name, data_file)
+# ── Fast record counter ───────────────────────────────────────────────────────
+def count_records(file_path: str) -> int:
+    """Count JSON array items without loading the entire file into memory."""
+    if not file_path or not os.path.exists(file_path):
+        return 0
 
-        # Tracking info
-        last_sync = "Jamais"
-        latest_modified = "Inconnu"
-        status = "Inactif"
-        if os.path.exists(tracking_file):
-            try:
-                with open(tracking_file, "r", encoding="utf-8") as f:
-                    tracking = json.load(f)
-                    
-                    # Standard keys
-                    last_sync = tracking.get("last_run", tracking.get("last_sync_success", "Jamais"))
-                    latest_modified = tracking.get("latest_modified", "Inconnu")
-                    earliest_modified = tracking.get("earliest_modified", "Inconnu")
-                    last_sync_attempt = tracking.get("last_sync_attempt", "N/A")
-                    status = "Actif"
-            except:
-                status = "Erreur Tracking"
+    # Fast heuristic: count top-level '{' at depth=1 in the outer array
+    count   = 0
+    depth   = 0
+    in_str  = False
+    escape  = False
+    try:
+        with open(file_path, "r", encoding="utf-8", errors="replace") as fh:
+            for chunk in iter(lambda: fh.read(65536), ""):
+                for ch in chunk:
+                    if escape:
+                        escape = False
+                        continue
+                    if ch == "\\" and in_str:
+                        escape = True
+                        continue
+                    if ch == '"':
+                        in_str = not in_str
+                        continue
+                    if in_str:
+                        continue
+                    if ch == "{":
+                        depth += 1
+                        if depth == 2:      # direct child of the root array
+                            count += 1
+                    elif ch == "}":
+                        depth -= 1
+        if count > 0:
+            return count
+    except Exception:
+        pass
 
-        # Fallback pour dates si manquantes
-        if latest_modified == "Inconnu" and data_file:
-            try:
-                mtime = os.path.getmtime(data_file)
-                latest_modified = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
-            except: pass
+    # Fallback: load JSON normally
+    try:
+        with open(file_path, "r", encoding="utf-8", errors="replace") as fh:
+            data = json.load(fh)
+        if isinstance(data, list):
+            return len(data)
+        if isinstance(data, dict):
+            return 1
+    except Exception:
+        pass
+    return 0
 
-        # Counting
-        print(f"[{i+1}/{len(source_dirs)}] ({source_type}) {source_name}...")
-        records = fast_count_records(data_file) if data_file else 0
-        
-        if source_type == "IOC": total_iocs += records
-        else: total_cves += records
+# ── Extract date range from tracking.json ────────────────────────────────────
+def read_tracking(tracking_file: str) -> dict:
+    defaults = {
+        "last_sync":         "Jamais",
+        "latest_modified":   "Inconnu",
+        "earliest_modified": "Inconnu",
+        "total_collected":   0,
+        "status":            "Inactif",
+    }
+    if not os.path.exists(tracking_file):
+        return defaults
 
-        sources_info.append({
-            "name": source_name,
-            "type": source_type,
-            "status": status,
-            "last_sync": last_sync,
-            "latest_modified": latest_modified,
-            "earliest_modified": earliest_modified,
-            "last_sync_attempt": last_sync_attempt,
-            "records": records,
-            "data_file": os.path.basename(data_file) if data_file else None
-        })
+    try:
+        with open(tracking_file, "r", encoding="utf-8") as fh:
+            t = json.load(fh)
+    except Exception:
+        defaults["status"] = "Erreur Tracking"
+        return defaults
 
-    # Dashboard Output
-    dashboard_data = {
-        "last_updated": datetime.now().isoformat(),
-        "total_sources": len(sources_info),
-        "total_iocs": total_iocs,
-        "total_cves": total_cves,
-        "sources": sources_info
+    # last_sync — try multiple field names
+    last_sync = (
+        t.get("last_run") or
+        t.get("last_sync_success") or
+        t.get("last_sync") or
+        t.get("last_updated") or
+        "Jamais"
+    )
+
+    latest   = t.get("latest_modified", t.get("latest_date", "Inconnu"))
+    earliest = t.get("earliest_modified", t.get("earliest_date", "Inconnu"))
+    total    = t.get("total_collected", t.get("total_entries", 0))
+
+    return {
+        "last_sync":         last_sync,
+        "latest_modified":   latest,
+        "earliest_modified": earliest,
+        "total_collected":   total,
+        "status":            "Actif",
     }
 
-    with open(OUTPUT_STATUS, "w", encoding="utf-8") as f:
-        json.dump(dashboard_data, f, indent=4, ensure_ascii=False)
+# ── Main ─────────────────────────────────────────────────────────────────────
+def main():
+    if not os.path.exists(SOURCES_DIR):
+        logging.error(f"Sources_data not found at {SOURCES_DIR}")
+        return
 
-    print("-" * 30)
-    print(f"Terminé ! Status généré dans status.json")
-    print(f"IOCs: {total_iocs} | CVEs: {total_cves}")
+    source_dirs = sorted([
+        d for d in os.listdir(SOURCES_DIR)
+        if os.path.isdir(os.path.join(SOURCES_DIR, d))
+    ])
+
+    print(f"\n{'='*50}")
+    print(f"  CTI Monitor — Analyse de {len(source_dirs)} sources")
+    print(f"{'='*50}\n")
+
+    sources_info = []
+    total_iocs   = 0
+    total_cves   = 0
+
+    for i, source_name in enumerate(source_dirs, 1):
+        source_path   = os.path.join(SOURCES_DIR, source_name)
+        tracking_file = os.path.join(source_path, "tracking.json")
+        data_file     = get_source_data_file(source_path)
+        source_type   = determine_type(source_name, data_file)
+
+        tracking = read_tracking(tracking_file)
+
+        # Date fallback from filesystem
+        if tracking["latest_modified"] == "Inconnu" and data_file:
+            try:
+                mtime = os.path.getmtime(data_file)
+                tracking["latest_modified"] = datetime.fromtimestamp(mtime).isoformat(timespec="seconds")
+            except Exception:
+                pass
+
+        records = count_records(data_file)
+
+        label = "🛡  IOC" if source_type == "IOC" else "🔴 CVE"
+        print(f"  [{i:>2}/{len(source_dirs)}] {label}  {source_name:<30} → {records:>6} enregistrements")
+
+        if source_type == "IOC":
+            total_iocs += records
+        else:
+            total_cves += records
+
+        sources_info.append({
+            "name":              source_name,
+            "type":              source_type,
+            "status":            tracking["status"],
+            "last_sync":         tracking["last_sync"],
+            "latest_modified":   tracking["latest_modified"],
+            "earliest_modified": tracking["earliest_modified"],
+            "total_collected":   tracking["total_collected"],
+            "records":           records,
+            "data_file":         os.path.basename(data_file) if data_file else None,
+        })
+
+    dashboard = {
+        "last_updated":  datetime.now().isoformat(timespec="seconds"),
+        "total_sources": len(sources_info),
+        "total_iocs":    total_iocs,
+        "total_cves":    total_cves,
+        "sources":       sources_info,
+    }
+
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as fh:
+        json.dump(dashboard, fh, indent=2, ensure_ascii=False)
+
+    print(f"\n{'='*50}")
+    print(f"  Terminé — status.json généré")
+    print(f"  IOCs : {total_iocs:,}   |   CVEs : {total_cves:,}")
+    print(f"{'='*50}\n")
+
 
 if __name__ == "__main__":
     main()

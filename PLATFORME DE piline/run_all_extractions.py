@@ -5,8 +5,8 @@ import time
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SOURCES_DIR = os.path.join(BASE_DIR, "Sources_data")
-MONITOR_SCRIPT = os.path.join(BASE_DIR, "PLATFORME DE piline", "monitor.py")
+SOURCES_DIR = os.path.join(os.path.dirname(BASE_DIR), "Sources_data")
+MONITOR_SCRIPT = os.path.join(BASE_DIR, "monitor.py")
 
 def run_script(source_name, script_path):
     """Exécute un script d'extraction individuel."""
