@@ -31,6 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupTypeFilters();
     setupNavTabs();
     setupConsoleControls(); // Initialize only once!
+    setupPipelineStages();  // NEW: Handle per-stage logic
+    selectPipelineStage('collecte', 1); // Default selection
 
     // Auto-refresh every 30 s
     setInterval(fetchDashboard, 30_000);
@@ -133,9 +135,9 @@ function renderDashboard(data) {
     if (barIocVal) barIocVal.textContent = (data.total_iocs || 0).toLocaleString('fr-FR');
     if (barCveVal) barCveVal.textContent = (data.total_cves || 0).toLocaleString('fr-FR');
 
-    // Extraction stage label
-    const descEl = document.getElementById('stage-extraction-desc');
-    if (descEl) descEl.textContent = `Collecte depuis ${total} sources CTI`;
+    // Extraction stage label (Now Collecte)
+    const descEl = document.getElementById('stage-collecte-desc');
+    if (descEl) descEl.textContent = `Récupération brute depuis ${total} sources`;
 
     // Sources table
     renderSourcesTable(sources);
@@ -319,14 +321,14 @@ let _stageResetTimer = null;
  * @param {number}      durationMs  — how long to keep the running state visible
  */
 function setExtractionRunning(sourceName, durationMs = 20_000) {
-    const stage   = el('stage-extraction');
-    const descEl  = el('stage-extraction-desc');
+    const stage   = el('stage-collecte');
+    const descEl  = el('stage-collecte-desc');
     const badgeEl = stage ? stage.querySelector('.stage-status-badge') : null;
 
     if (stage)   stage.classList.add('running');
     if (descEl)  descEl.textContent = sourceName
-        ? `⚡ Extraction : ${sourceName}`
-        : `⚡ Pipeline complet en cours...`;
+        ? `⚡ Collecte : ${sourceName}`
+        : `⚡ Collecte globale en cours...`;
     if (badgeEl) {
         badgeEl.className = 'stage-status-badge badge-active';
         badgeEl.innerHTML = '<span class="pulse-dot"></span> En cours';
@@ -344,15 +346,15 @@ function setExtractionRunning(sourceName, durationMs = 20_000) {
 }
 
 function setExtractionIdle(totalSources) {
-    const stage   = el('stage-extraction');
-    const descEl  = el('stage-extraction-desc');
+    const stage   = el('stage-collecte');
+    const descEl  = el('stage-collecte-desc');
     const badgeEl = stage ? stage.querySelector('.stage-status-badge') : null;
 
     const isAnyRunning = state.lastData?.sources?.some(s => s.run_state === 'running');
     if (isAnyRunning) return; // Wait until all really finish
 
     if (stage)   stage.classList.remove('running');
-    if (descEl)  descEl.textContent = `Collecte depuis ${totalSources || 13} sources CTI`;
+    if (descEl)  descEl.textContent = `Récupération brute depuis ${totalSources || 13} sources`;
     if (badgeEl) {
         badgeEl.className = 'stage-status-badge badge-active';
         badgeEl.innerHTML = '<span class="pulse-dot"></span> Opérationnel';
@@ -466,7 +468,7 @@ function setupRunBtn() {
         const btn  = this;
         btn._origHTML = btn.innerHTML;
         btn.disabled  = true;
-        btn.innerHTML = '<i data-lucide="loader-2" class="spin"></i><span>Extraction en cours...</span>';
+        btn.innerHTML = '<i data-lucide="loader-2" class="spin"></i><span>Collecte en cours...</span>';
         lucide.createIcons();
 
         state.runningPipeline = true;
@@ -486,6 +488,99 @@ function setupRunBtn() {
             setExtractionIdle(state.lastData?.total_sources);
         }
     });
+}
+
+// ── Per-Stage Control ────────────────────────────────────────────────────────
+
+function setupPipelineStages() {
+    // 1. Selector: Clicking a stage card
+    document.querySelectorAll('.pipeline-stage').forEach((card, idx) => {
+        card.addEventListener('click', (e) => {
+            // If user clicked the child run-btn, don't trigger selection here
+            if (e.target.closest('.stage-run-btn')) return;
+
+            const stageId = card.dataset.stage;
+            selectPipelineStage(stageId, idx + 1);
+        });
+    });
+
+    // 2. Runner: Clicking the run button ON a stage card
+    document.querySelectorAll('.stage-run-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const stageId = btn.dataset.stage;
+            await runPipelineStage(stageId);
+        });
+    });
+}
+
+function selectPipelineStage(stageId, index) {
+    // Visual toggle
+    document.querySelectorAll('.pipeline-stage').forEach(c => c.classList.remove('stage-selected'));
+    const card = document.getElementById(`stage-${stageId}`);
+    if (card) card.classList.add('stage-selected');
+
+    // Update Module text
+    const titles = {
+        'collecte': 'Module de Collecte',
+        'extraction-norm': 'Module de Normalisation',
+        'enrichissement': 'Module d\'Enrichissement',
+        'structuration': 'Module de Structuration',
+        'misp': 'Module d\'Intégration MISP'
+    };
+    const title = titles[stageId] || 'Module Pipeline';
+    el('extraction-heading').textContent = title;
+    el('active-stage-badge').textContent = `Étape ${index}/5`;
+
+    // Swap module content if needed (For now, we just update the title)
+    // In a real app, we might hide/show different grids/tables here.
+    if (stageId !== 'collecte') {
+        // Show a placeholder or different view?
+        // el('sources-card').style.opacity = '0.5'; 
+    } else {
+        // el('sources-card').style.opacity = '1';
+    }
+}
+
+async function runPipelineStage(stageId) {
+    const card = document.getElementById(`stage-${stageId}`);
+    const btn  = card?.querySelector('.stage-run-btn');
+    
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="spin"></i>';
+        lucide.createIcons();
+    }
+
+    // Visual feedback on card
+    if (card) card.classList.add('running');
+    
+    try {
+        const res = await fetch(`/api/run/stage?stage=${encodeURIComponent(stageId)}`, { method: 'POST' });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Échec');
+        }
+
+        showToast(`Étape [${stageId}] lancée`, 'success');
+        
+        // Redirect console to this stage's logs
+        const trackName = `Stage_${stageId}`;
+        showConsole(trackName); 
+        startLogPolling();
+
+    } catch (err) {
+        showToast(`Erreur : ${err.message}`, 'error');
+        if (card) card.classList.remove('running');
+    } finally {
+        if (btn) {
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="play"></i>';
+                lucide.createIcons();
+            }, 2000);
+        }
+    }
 }
 
 function setupRefreshBtn() {

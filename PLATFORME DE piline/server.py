@@ -155,6 +155,57 @@ def run_script():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/run/stage', methods=['POST'])
+def run_pipeline_stage():
+    stage_id = request.args.get('stage')
+    if not stage_id:
+        return jsonify({"error": "Stage ID manquant"}), 400
+
+    # Mapping stage IDs to scripts
+    # Note: Many scripts are in the parent directory of the platform folder
+    stage_scripts = {
+        "collecte": os.path.join(BASE_DIR, "run_all_extractions.py"),
+        "extraction-norm": os.path.join(PROJECT_ROOT, "run_adapters.py"), # We'll start with this
+        "enrichissement": os.path.join(PROJECT_ROOT, "run_enrichment.py"),
+        "structuration": os.path.join(PROJECT_ROOT, "run_structuration.py"),
+        "misp": os.path.join(PROJECT_ROOT, "run_misp.py")
+    }
+
+    if stage_id not in stage_scripts:
+        return jsonify({"error": f"Stage inconnu: {stage_id}"}), 400
+
+    script_path = stage_scripts[stage_id]
+    
+    # Check if already running
+    track_name = f"Stage_{stage_id}"
+    if track_name in active_processes:
+        return jsonify({"error": "Cette étape est déjà en cours d'exécution"}), 400
+
+    try:
+        log_path = _get_log_path(track_name)
+        log_handle = open(log_path, 'a', encoding='utf-8')
+        log_handle.write(f"\n[{datetime.now().strftime('%H:%M:%S')}] === Lancement Étape : {stage_id} ===\n")
+        log_handle.flush()
+        
+        creationflags = 0
+        if sys.platform == "win32":
+            creationflags = subprocess.CREATE_NO_WINDOW
+            
+        proc = subprocess.Popen(
+            [sys.executable, script_path],
+            stdout=log_handle,
+            stderr=log_handle,
+            cwd=PROJECT_ROOT if stage_id != "collecte" else BASE_DIR,
+            creationflags=creationflags
+        )
+        
+        active_processes[track_name] = {"proc": proc, "pid": proc.pid}
+        threading.Thread(target=_watch_process, args=(track_name, proc, log_handle), daemon=True).start()
+        
+        return jsonify({"status": "launched", "pid": proc.pid, "stage": stage_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/stop', methods=['POST'])
 def stop_script():
     source_name = request.args.get('source')

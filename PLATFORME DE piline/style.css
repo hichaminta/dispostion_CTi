@@ -390,12 +390,67 @@ body {
   position: relative;
 }
 .connector-active .connector-track { background: rgba(56,189,248,0.25); }
-.connector-particle {
-  position: absolute; top: 0; left: -20%;
-  width: 40%; height: 100%;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  animation: particle 1.8s linear infinite;
+/* Pipeline stage selection */
+.pipeline-stage {
+  cursor: pointer; /* Change to pointer as they are now selectable */
+  border: 1px solid var(--border);
+  transition: all 0.3s var(--ease);
 }
+
+.pipeline-stage.stage-selected {
+  border-color: var(--accent);
+  background: linear-gradient(145deg, rgba(56,189,248,0.1), var(--bg-row));
+  box-shadow: 0 0 20px rgba(56,189,248,0.15);
+}
+
+.pipeline-stage.stage-selected::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; width: 3px; height: 100%;
+  background: var(--accent);
+}
+
+.stage-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  opacity: 0;
+  transform: translateY(-5px);
+  transition: all 0.2s var(--ease);
+}
+
+.pipeline-stage:hover .stage-actions,
+.pipeline-stage.stage-selected .stage-actions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.stage-run-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--bg-0);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px var(--accent-glow);
+  transition: all 0.2s var(--ease);
+}
+
+.stage-run-btn:hover {
+  transform: scale(1.1);
+  background: var(--cyan);
+}
+
+.stage-run-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
 @keyframes particle { from{left:-40%} to{left:140%} }
 .connector-arrow { width: 14px; height: 14px; color: var(--text-dim); flex-shrink: 0; }
 .connector-active .connector-arrow { color: var(--accent); }

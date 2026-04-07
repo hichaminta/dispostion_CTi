@@ -111,12 +111,18 @@
 
             <div class="pipeline-flow" id="pipeline-flow" role="list">
 
-                <div class="pipeline-stage stage-active" id="stage-extraction" data-stage="extraction" role="listitem" tabindex="0">
+                <!-- ÉTAPE 1 : COLLECTE -->
+                <div class="pipeline-stage stage-active stage-selected" id="stage-collecte" data-stage="collecte" role="listitem" tabindex="0">
                     <div class="stage-glow"></div>
                     <div class="stage-icon-wrap"><i data-lucide="download-cloud"></i></div>
                     <div class="stage-info">
-                        <h3>Extraction</h3>
-                        <p class="stage-desc" id="stage-extraction-desc">Collecte depuis 13 sources CTI</p>
+                        <h3>Collecte</h3>
+                        <p class="stage-desc" id="stage-collecte-desc">Récupération brute depuis 13 sources</p>
+                    </div>
+                    <div class="stage-actions">
+                        <button class="stage-run-btn" data-stage="collecte" title="Lancer cette étape" aria-label="Lancer Collecte">
+                            <i data-lucide="play"></i>
+                        </button>
                     </div>
                     <span class="stage-status-badge badge-active">
                         <span class="pulse-dot" aria-hidden="true"></span>
@@ -131,11 +137,17 @@
                     <i data-lucide="chevron-right" class="connector-arrow"></i>
                 </div>
 
-                <div class="pipeline-stage stage-planned" id="stage-normalisation" data-stage="normalisation" role="listitem" tabindex="0">
-                    <div class="stage-icon-wrap"><i data-lucide="filter"></i></div>
+                <!-- ÉTAPE 2 : EXTRACTION + NORMALISATION -->
+                <div class="pipeline-stage stage-planned" id="stage-extraction-norm" data-stage="extraction-norm" role="listitem" tabindex="0">
+                    <div class="stage-icon-wrap"><i data-lucide="layers"></i></div>
                     <div class="stage-info">
-                        <h3>Normalisation</h3>
-                        <p class="stage-desc">Uniformisation des schémas</p>
+                        <h3>Extraction + Normalisation ⭐</h3>
+                        <p class="stage-desc">Parsing et standardisation</p>
+                    </div>
+                    <div class="stage-actions">
+                        <button class="stage-run-btn" data-stage="extraction-norm" title="Lancer cette étape" aria-label="Lancer Extraction + Normalisation">
+                            <i data-lucide="play"></i>
+                        </button>
                     </div>
                     <span class="stage-status-badge badge-planned">
                         <i data-lucide="clock" class="badge-icon" aria-hidden="true"></i>
@@ -148,28 +160,17 @@
                     <i data-lucide="chevron-right" class="connector-arrow"></i>
                 </div>
 
+                <!-- ÉTAPE 3 : ENRICHISSEMENT -->
                 <div class="pipeline-stage stage-planned" id="stage-enrichissement" data-stage="enrichissement" role="listitem" tabindex="0">
                     <div class="stage-icon-wrap"><i data-lucide="sparkles"></i></div>
                     <div class="stage-info">
                         <h3>Enrichissement</h3>
                         <p class="stage-desc">Corrélation et scoring</p>
                     </div>
-                    <span class="stage-status-badge badge-planned">
-                        <i data-lucide="clock" class="badge-icon" aria-hidden="true"></i>
-                        Planifié
-                    </span>
-                </div>
-
-                <div class="pipeline-connector" aria-hidden="true">
-                    <div class="connector-track"></div>
-                    <i data-lucide="chevron-right" class="connector-arrow"></i>
-                </div>
-
-                <div class="pipeline-stage stage-planned" id="stage-stockage" data-stage="stockage" role="listitem" tabindex="0">
-                    <div class="stage-icon-wrap"><i data-lucide="hard-drive"></i></div>
-                    <div class="stage-info">
-                        <h3>Stockage</h3>
-                        <p class="stage-desc">Persistance structurée (STIX)</p>
+                    <div class="stage-actions">
+                        <button class="stage-run-btn" data-stage="enrichissement" title="Lancer cette étape" aria-label="Lancer Enrichissement">
+                            <i data-lucide="play"></i>
+                        </button>
                     </div>
                     <span class="stage-status-badge badge-planned">
                         <i data-lucide="clock" class="badge-icon" aria-hidden="true"></i>
@@ -182,11 +183,40 @@
                     <i data-lucide="chevron-right" class="connector-arrow"></i>
                 </div>
 
-                <div class="pipeline-stage stage-planned" id="stage-visualisation" data-stage="visualisation" role="listitem" tabindex="0">
-                    <div class="stage-icon-wrap"><i data-lucide="bar-chart-3"></i></div>
+                <!-- ÉTAPE 4 : STRUCTURATION -->
+                <div class="pipeline-stage stage-planned" id="stage-structuration" data-stage="structuration" role="listitem" tabindex="0">
+                    <div class="stage-icon-wrap"><i data-lucide="file-json"></i></div>
                     <div class="stage-info">
-                        <h3>Visualisation</h3>
-                        <p class="stage-desc">Tableaux de bord analytiques</p>
+                        <h3>Structuration des événements</h3>
+                        <p class="stage-desc">Formatage STIX / JSON</p>
+                    </div>
+                    <div class="stage-actions">
+                        <button class="stage-run-btn" data-stage="structuration" title="Lancer cette étape" aria-label="Lancer Structuration">
+                            <i data-lucide="play"></i>
+                        </button>
+                    </div>
+                    <span class="stage-status-badge badge-planned">
+                        <i data-lucide="clock" class="badge-icon" aria-hidden="true"></i>
+                        Planifié
+                    </span>
+                </div>
+
+                <div class="pipeline-connector" aria-hidden="true">
+                    <div class="connector-track"></div>
+                    <i data-lucide="chevron-right" class="connector-arrow"></i>
+                </div>
+
+                <!-- ÉTAPE 5 : INTÉGRATION MISP -->
+                <div class="pipeline-stage stage-planned" id="stage-misp" data-stage="misp" role="listitem" tabindex="0">
+                    <div class="stage-icon-wrap"><i data-lucide="share-2"></i></div>
+                    <div class="stage-info">
+                        <h3>Intégration MISP</h3>
+                        <p class="stage-desc">Exportation vers la plateforme</p>
+                    </div>
+                    <div class="stage-actions">
+                        <button class="stage-run-btn" data-stage="misp" title="Lancer cette étape" aria-label="Lancer Intégration MISP">
+                            <i data-lucide="play"></i>
+                        </button>
                     </div>
                     <span class="stage-status-badge badge-planned">
                         <i data-lucide="clock" class="badge-icon" aria-hidden="true"></i>
@@ -202,16 +232,16 @@
             <div class="extraction-header">
                 <div class="section-title-left">
                     <i data-lucide="download-cloud" aria-hidden="true"></i>
-                    <h2 id="extraction-heading">Module d'Extraction</h2>
-                    <span class="section-badge section-badge-active">Actif</span>
+                    <h2 id="extraction-heading">Module de Collecte</h2>
+                    <span class="section-badge section-badge-active" id="active-stage-badge">Étape 1/5</span>
                 </div>
                 <div class="extraction-controls">
                     <button id="refresh-btn" class="icon-btn" title="Actualiser les statistiques" aria-label="Actualiser">
                         <i data-lucide="refresh-cw"></i>
                     </button>
-                    <button id="run-pipeline-btn" class="run-btn" aria-label="Lancer toutes les extractions">
+                    <button id="run-pipeline-btn" class="run-btn" aria-label="Lancer la collecte">
                         <i data-lucide="play"></i>
-                        <span>Lancer toutes les extractions</span>
+                        <span>Lancer la collecte</span>
                     </button>
                 </div>
             </div>
