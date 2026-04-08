@@ -20,6 +20,21 @@ let G_filteredCves    = []; // after search
 let G_cvePage         = 0;    // current page index for CVEs
 let G_activeCveSource = null; // e.g. "nvd"
 
+const SOURCES_CONFIG = {
+    abuseipdb:     { label: 'AbuseIPDB',      icon: 'shield-alert',    theme: 'src-abuseipdb' },
+    alienvault:    { label: 'AlienVault OTX',  icon: 'radio',           theme: 'src-alienvault' },
+    cins_army:     { label: 'CINS Army',       icon: 'swords',          theme: 'src-cins_army' },
+    feodotracker:  { label: 'FeodoTracker',    icon: 'bug',             theme: 'src-feodotracker' },
+    malwarebazaar: { label: 'MalwareBazaar',   icon: 'package-x',       theme: 'src-malwarebazaar' },
+    nvd:           { label: 'NVD (CVE)',        icon: 'database-zap',    theme: 'src-nvd' },
+    openphish:     { label: 'OpenPhish',       icon: 'fish',            theme: 'src-openphish' },
+    phishtank:     { label: 'PhishTank',       icon: 'anchor',          theme: 'src-phishtank' },
+    pulsedive:     { label: 'Pulsedive',       icon: 'activity',        theme: 'src-pulsedive' },
+    threatfox:     { label: 'ThreatFox',       icon: 'biohazard',       theme: 'src-threatfox' },
+    urlhaus:       { label: 'URLhaus',         icon: 'link',            theme: 'src-urlhaus' },
+    virustotal:    { label: 'VirusTotal',      icon: 'scan-eye',        theme: 'src-virustotal' },
+};
+
 // Colour palettes
 const TYPE_COLORS = {
     ip:      { bg: 'rgba(139, 92, 246, 0.18)', col: '#a78bfa' }, // Violet
@@ -59,29 +74,138 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (barEl) barEl.style.width = pct + '%';
     };
 
+    const parseRaw = (entry, s) => {
+        let ctx = {};
+        if (entry.raw_text) {
+            try {
+                const raw = JSON.parse(entry.raw_text);
+                if (s === 'abuseipdb') {
+                    if (raw.abuseConfidenceScore != null) ctx.abuseConfidenceScore = raw.abuseConfidenceScore;
+                    if (raw.lastReportedAt) ctx.lastReported = raw.lastReportedAt;
+                    if (raw.countryCode) ctx.countryCode = raw.countryCode;
+                    if (raw.isp) ctx.isp = raw.isp;
+                } else if (s === 'alienvault') {
+                    if (raw.name) ctx.pulseName = raw.name;
+                    if (raw.description) ctx.description = raw.description;
+                    if (raw.tags) ctx.tags = raw.tags;
+                } else if (s === 'malwarebazaar') {
+                    if (raw.signature) ctx.signature = raw.signature;
+                    if (raw.tags) ctx.tags = raw.tags;
+                    if (raw.file_type) ctx.fileType = raw.file_type;
+                } else if (s === 'threatfox' || s === 'urlhaus') {
+                    if (raw.tags) ctx.tags = raw.tags;
+                    if (raw.threat_type) ctx.threatType = raw.threat_type;
+                    if (raw.reporter) ctx.reporter = raw.reporter;
+                }
+            } catch (e) { console.debug(`Failed to parse raw text for ${s}`); }
+        }
+        return Object.keys(ctx).length ? ctx : null;
+    };
+
     try {
-        setLoad('Authenticating to Central Threat Intelligence...', 10);
-        await new Promise(r => setTimeout(r, 400)); // aesthetic delay
+        setLoad('Scanning and Authenticating Source Nodes...', 5);
+        
+        const SOURCES = [
+            'abuseipdb', 'alienvault', 'cins_army', 'feodotracker', 
+            'malwarebazaar', 'nvd', 'openphish', 'phishtank', 
+            'pulsedive', 'threatfox', 'urlhaus', 'virustotal'
+        ];
 
-        setLoad('Streaming IOC repository (320 MB)...', 25);
-        const iocRes = await fetch('/output_regex/iocs_extracted.json');
-        if (!iocRes.ok) throw new Error('IOCs fetch failed');
-        const iocs = await iocRes.json();
-        setLoad('IOC repository synchronized.', 45);
+        let loadedIocs = [];
+        let loadedCves = [];
+        let syncData = {};
 
-        setLoad('Fetching CVE vulnerability signatures (230 MB)...', 55);
-        const cveRes = await fetch('/output_regex/cves_extracted.json');
-        if (!cveRes.ok) throw new Error('CVEs fetch failed');
-        const cves = await cveRes.json();
-        setLoad('Vulnerability signatures synchronized.', 75);
+        for (let i = 0; i < SOURCES.length; i++) {
+            const s = SOURCES[i];
+            const pct = Math.floor(10 + (i / SOURCES.length) * 80);
+            setLoad(`Synchronizing source: ${s} (${i + 1}/${SOURCES.length})...`, pct);
 
-        setLoad('Mapping global threat vectors...', 85);
+            // 1. Fetch Tracking Info
+            try {
+                const trRes = await fetch(`/extraction_ioc_cve/tracking/${s}_tracking.json`);
+                if (trRes.ok) syncData[s] = await trRes.json();
+            } catch (e) { console.debug(`No tracking for ${s}`); }
+
+            // 2. Fetch Data (Excl. massive files > 300MB to prevent browser crash)
+            try {
+                // Check size first via HEAD if possible, or just skip MalwareBazaar/Alienvault specifically if they are known huge
+                if (s === 'malwarebazaar') {
+                    console.warn(`Skipping data payload for ${s} (1.4GB) to avoid browser crash.`);
+                    continue;
+                }
+
+                const res = await fetch(`/output_cve_ioc/${s}_extracted.json`);
+                if (!res.ok) continue;
+
+                // Safety: If it's Alienvault (220MB) or Threatfox (146MB), it might be slow but safe
+                const data = await res.json();
+                
+                // Flatten entry-based structure
+                if (Array.isArray(data)) {
+                    data.forEach(entry => {
+                        const enrichedCtx = parseRaw(entry, s);
+                        if (entry.iocs) {
+                            entry.iocs.forEach(ioc => {
+                                if (!ioc.sources) ioc.sources = [s];
+                                if (enrichedCtx) {
+                                    if (!ioc.contexts) ioc.contexts = [];
+                                    ioc.contexts.push(enrichedCtx);
+                                }
+                                loadedIocs.push(ioc);
+                            });
+                        }
+                        if (entry.cves) {
+                            entry.cves.forEach(cve => {
+                                if (!cve.sources) cve.sources = [s];
+                                if (enrichedCtx) {
+                                    if (!cve.contexts) cve.contexts = [];
+                                    cve.contexts.push(enrichedCtx);
+                                    // Map NVD fields
+                                    if (s === 'nvd') {
+                                        try {
+                                            const raw = JSON.parse(entry.raw_text);
+                                            if (raw.vuln_summary) cve.summary = raw.vuln_summary;
+                                            if (raw.base_score) cve.score = raw.base_score;
+                                        } catch(e){}
+                                    }
+                                }
+                                loadedCves.push(cve);
+                            });
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error(`Failed to load data for ${s}:`, e);
+            }
+        }
+
+        const iocs = loadedIocs;
+        const cves = loadedCves;
+
+        setLoad('Mapping global threat vectors...', 90);
         window._cveIndex = Object.fromEntries(
             cves.filter(c => c.cve_id).map(c => [c.cve_id.toUpperCase(), c])
         );
 
         document.getElementById('total-iocs').innerText = iocs.length.toLocaleString();
         document.getElementById('total-cves').innerText = cves.length.toLocaleString();
+
+        // Render Sync Status Table
+        const syncTable = document.getElementById('syncStatusTableBody');
+        if (syncTable) {
+            syncTable.innerHTML = SOURCES.map(s => {
+                const tr = syncData[s] || {};
+                const last = tr.recent_extracted_at ? fmtDate(tr.recent_extracted_at) : 'Never';
+                const first = tr.oldest_extracted_at ? fmtDate(tr.oldest_extracted_at) : 'N/A';
+                const status = tr.recent_extracted_at ? '<span class="sev-pill sev-l">Active</span>' : '<span class="sev-pill sev-n">Idle</span>';
+                return `<tr>
+                    <td style="font-weight:600; color:var(--primary);">${s}</td>
+                    <td>${status}</td>
+                    <td style="font-family:monospace; font-size:0.75rem;">${last}</td>
+                    <td style="font-family:monospace; font-size:0.75rem;">${first}</td>
+                </tr>`;
+            }).join('');
+        }
 
         // Compute unique IOC sources
         const iocSourceCount = {};
@@ -153,6 +277,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         setupNavigation();
         setupModals();
+
+        // [PHASE 1 & 2] Init Per-Source Dashboards
+        initSourceDashboards(iocs, cves, syncData);
 
         setLoad('System Ready. Decrypting environment...', 100);
         
@@ -895,4 +1022,404 @@ function scoreClass(s) {
     if (n >= 7.0) return 'sc-h';
     if (n >= 4.0) return 'sc-m';
     return 'sc-l';
+}
+/* ============================================================
+   PER-SOURCE DASHBOARDS [PHASE 1 & 2]
+   ============================================================ */
+function initSourceDashboards(allIocs, allCves, syncData) {
+    const tabBar = document.getElementById('sourceTabBar');
+    const panels = document.getElementById('sourcePanels');
+    const sideList = document.getElementById('sidebarSourceList');
+
+    if (!tabBar || !panels) return;
+
+    tabBar.innerHTML = '';
+    panels.innerHTML = '';
+    if (sideList) {
+        sideList.innerHTML = '<div class="sidebar-sources-title">Sources Nodes</div>';
+    }
+
+    const sourceIds = Object.keys(SOURCES_CONFIG);
+
+    sourceIds.forEach((id, idx) => {
+        const cfg = SOURCES_CONFIG[id];
+        
+        // Count entries for this source
+        const sIocs = allIocs.filter(i => Array.isArray(i.sources) && i.sources.includes(id));
+        const sCves = allCves.filter(c => Array.isArray(c.sources) && c.sources.includes(id));
+        const total = sIocs.length + sCves.length;
+
+        // 1. Create Tab
+        const tab = document.createElement('div');
+        tab.className = `src-tab ${idx === 0 ? 'active' : ''}`;
+        tab.dataset.source = id;
+        tab.innerHTML = `
+            <i data-lucide="${cfg.icon}" style="width:14px;height:14px;"></i>
+            <span>${cfg.label}</span>
+            <span class="tab-badge">${total.toLocaleString()}</span>
+        `;
+        tab.onclick = () => switchSourceTab(id);
+        tabBar.appendChild(tab);
+
+        // 2. Create Sidebar Item (Optional but nice)
+        if (sideList) {
+            const ss = document.createElement('div');
+            ss.className = 'ss-item';
+            ss.innerHTML = `
+                <div class="ss-dot" style="background:${idx % 2 === 0 ? 'var(--primary)' : 'var(--secondary)'}"></div>
+                <span>${cfg.label}</span>
+                <span class="ss-badge">${total.toLocaleString()}</span>
+            `;
+            ss.onclick = () => {
+                // Switch to sources section then select this tab
+                document.querySelector('[data-section="sources"]').click();
+                switchSourceTab(id);
+            };
+            sideList.appendChild(ss);
+        }
+
+        // 3. Create Panel
+        const panel = document.createElement('div');
+        panel.className = `source-panel ${idx === 0 ? 'active' : ''} ${cfg.theme}`;
+        panel.id = `panel-${id}`;
+        panel.innerHTML = `
+            <div class="sp-header">
+                <div class="sp-icon" style="background:var(--sp-bg); color:var(--sp-accent)">
+                    <i data-lucide="${cfg.icon}"></i>
+                </div>
+                <div class="sp-meta">
+                    <div style="display:flex; align-items:center; gap:0.6rem;">
+                        <h2>${cfg.label} Dashboard</h2>
+                        <div class="ss-dot" id="dot-${id}" style="background:var(--txt3); width:8px; height:8px;"></div>
+                    </div>
+                    <p>Source Node: ${id}_extractor.py | Status: Active Data Stream</p>
+                </div>
+                <div class="sp-stats" style="margin-right:1rem;">
+                    <div class="sp-stat-item"><div class="sp-stat-val">${sIocs.length.toLocaleString()}</div><div class="sp-stat-lbl">IOCs</div></div>
+                    <div class="sp-stat-item"><div class="sp-stat-val">${sCves.length.toLocaleString()}</div><div class="sp-stat-lbl">CVEs</div></div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:0.4rem; align-items:flex-end;">
+                    <button class="flt-btn" onclick="runSourceScript('${id}')" id="btn-run-${id}" style="background:var(--primary); color:#fff; border:none; padding: 0.5rem 1rem; border-radius:8px; font-weight:700; display:flex; align-items:center; gap:0.5rem;">
+                        <i data-lucide="play" style="width:14px;height:14px;"></i> Lancer
+                    </button>
+                    <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.65rem; color:var(--txt2); cursor:pointer;">
+                        <input type="checkbox" id="chk-full-${id}" style="accent-color:var(--primary);"> 
+                        Extraction Complète
+                    </label>
+                </div>
+            </div>
+            
+            <div id="log-container-${id}" style="display:none; margin-bottom:1.5rem; background:#020617; border:1px solid var(--brd); border-radius:12px; overflow:hidden;">
+                <div style="padding:0.5rem 1rem; background:rgba(255,255,255,0.03); border-bottom:1px solid var(--brd); font-size:0.7rem; color:var(--txt2); display:flex; justify-content:space-between;">
+                    <span>Terminal - ${id}_extractor.py</span>
+                    <span id="log-status-${id}">INITIALIZING</span>
+                </div>
+                <div id="log-${id}" style="padding:1rem; max-height:150px; overflow-y:auto; font-family:monospace; font-size:0.75rem; color:#34d399; line-height:1.5;"></div>
+            </div>
+
+            <div class="sp-body" id="sp-body-${id}">
+                <div class="empty-state"><i data-lucide="loader-2" class="spin"></i><p>Initialisation de la vue source...</p></div>
+            </div>
+        `;
+        panels.appendChild(panel);
+    });
+
+    lucide.createIcons();
+
+    // Render first source if exists
+    if (sourceIds.length > 0) {
+        renderSourceDashboard(sourceIds[0]);
+    }
+}
+
+function switchSourceTab(id) {
+    document.querySelectorAll('.src-tab').forEach(t => t.classList.toggle('active', t.dataset.source === id));
+    document.querySelectorAll('.source-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${id}`));
+    renderSourceDashboard(id);
+}
+
+/* ============================================================
+   PER-SOURCE DASHBOARDS [PHASE 3]
+   ============================================================ */
+const G_sourceState = {}; // cache filtered lists { iocs: [], cves: [] }
+
+function renderSourceDashboard(id) {
+    console.log(`Rendering Dashboard for ${id}`);
+    const body = document.getElementById(`sp-body-${id}`);
+    if (!body) return;
+
+    // 1. Get/Cache Source Data
+    if (!G_sourceState[id]) {
+        G_sourceState[id] = {
+            iocs: G_allIocs.filter(i => Array.isArray(i.sources) && i.sources.includes(id)),
+            cves: G_allCves.filter(c => Array.isArray(c.sources) && c.sources.includes(id)),
+            query: ''
+        };
+    }
+
+    const { iocs, cves } = G_sourceState[id];
+
+    // 2. Setup Base UI (only once)
+    if (body.dataset.rendered !== 'true') {
+        body.innerHTML = `
+            <div class="charts-grid" style="grid-template-columns: 1fr; margin-bottom: 2rem; height: 180px;">
+                <div class="chart-container" style="height: 100%;">
+                    <h3>Distribution des Indicateurs / Sévérité</h3>
+                    <canvas id="sourceChart-${id}"></canvas>
+                </div>
+            </div>
+            <div class="sp-toolbar">
+                <input type="text" placeholder="Rechercher dans ${id}..." oninput="filterSourceData('${id}', this.value)">
+                <span class="results-count" id="count-${id}">${(iocs.length + cves.length).toLocaleString()} records</span>
+            </div>
+            <div class="sp-cards-grid" id="grid-${id}">
+                <div class="empty-state"><p>Génération des modules de données...</p></div>
+            </div>
+        `;
+        body.dataset.rendered = 'true';
+        
+        // Render Chart
+        renderSourceSpecificChart(id, iocs, cves);
+    }
+
+    // 3. Render Cards
+    renderSourceCards(id);
+}
+
+function renderSourceSpecificChart(id, iocs, cves) {
+    const canvas = document.getElementById(`sourceChart-${id}`);
+    if (!canvas) return;
+
+    let labels = [], data = [], colors = [];
+
+    if (iocs.length > 0) {
+        const typeMap = {};
+        iocs.forEach(i => { const t = i.ioc_type || 'unknown'; typeMap[t] = (typeMap[t]||0)+1; });
+        labels = Object.keys(typeMap);
+        data = Object.values(typeMap);
+        colors = labels.map(t => typeColor(t).col);
+    } else if (cves.length > 0) {
+        const sevMap = {};
+        cves.forEach(c => { const s = c.severity || 'UNKNOWN'; sevMap[s] = (sevMap[s]||0)+1; });
+        labels = Object.keys(sevMap);
+        data = Object.values(sevMap);
+        colors = labels.map(s => {
+            if (s === 'CRITICAL') return '#f87171';
+            if (s === 'HIGH') return '#fb923c';
+            if (s === 'MEDIUM') return '#fbbf24';
+            if (s === 'LOW') return '#34d399';
+            return '#94a3b8';
+        });
+    }
+
+    new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{ data: data, backgroundColor: colors, borderRadius: 6 }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { color: 'rgba(148,163,184,0.05)' }, ticks: { color: '#64748b', font: { size: 10 } } },
+                y: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 11, weight: '600' } } }
+            }
+        }
+    });
+}
+
+function filterSourceData(id, val) {
+    G_sourceState[id].query = val.toLowerCase().trim();
+    renderSourceCards(id);
+}
+
+function renderSourceCards(id) {
+    const grid = document.getElementById(`grid-${id}`);
+    const countEl = document.getElementById(`count-${id}`);
+    if (!grid) return;
+
+    const { iocs, cves, query } = G_sourceState[id];
+    
+    // Filter
+    const filteredIocs = iocs.filter(i => !query || (i.value||'').toLowerCase().includes(query) || (i.ioc_type||'').toLowerCase().includes(query));
+    const filteredCves = cves.filter(c => !query || (c.cve_id||'').toLowerCase().includes(query) || (c.description||'').toLowerCase().includes(query));
+    
+    const combined = [...filteredIocs, ...filteredCves].slice(0, 100); // Limit to 100 for performance
+    
+    if (countEl) countEl.innerText = `${(filteredIocs.length + filteredCves.length).toLocaleString()} records`;
+
+    if (combined.length === 0) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column: 1/-1;"><i data-lucide="search-x"></i><p>Aucun résultat pour "${esc(query)}"</p></div>`;
+        lucide.createIcons();
+        return;
+    }
+
+    grid.innerHTML = combined.map((item, idx) => {
+        if (item.cve_id) return renderCveCardTemplate(item);
+        return renderIocCardTemplate(item, id);
+    }).join('');
+
+    lucide.createIcons();
+}
+
+function renderIocCardTemplate(ioc, sourceId) {
+    const tc = typeColor(ioc.ioc_type);
+    const date = ioc.last_seen ? fmtDate(ioc.last_seen) : (ioc.first_seen ? fmtDate(ioc.first_seen) : 'N/A');
+    
+    // Specific metadata from context
+    let country = 'N/A', extra = '';
+    if (ioc.contexts && ioc.contexts[0]) {
+        const ctx = ioc.contexts[0];
+        if (ctx.countryCode || ctx.countryName) country = ctx.countryName || ctx.countryCode;
+        if (ctx.abuseConfidenceScore) extra = `<div class="sp-card-row"><span class="k">Abuse Score</span><span class="v" style="color:#f87171">${ctx.abuseConfidenceScore}%</span></div>`;
+        if (ctx.threatType) extra += `<div class="sp-card-row"><span class="k">Threat</span><span class="v">${ctx.threatType}</span></div>`;
+    }
+
+    // Determine card class based on source
+    let cardClass = 'sp-card';
+    if (sourceId === 'phishtank' || sourceId === 'openphish') cardClass += ' phish-card';
+    if (sourceId === 'malwarebazaar' || sourceId === 'threatfox') cardClass += ' hash-card';
+
+    return `
+        <div class="${cardClass}" onclick="openIOCFromSource('${esc(ioc.value)}')">
+            <div class="sp-card-value">${esc(ioc.value)}</div>
+            <div class="sp-card-row">
+                <span class="type-pill" style="background:${tc.bg}; color:${tc.col}; font-size:0.6rem; padding: 0.1rem 0.4rem;">${ioc.ioc_type}</span>
+                <span style="font-size:0.65rem; color:var(--txt2)">${date}</span>
+            </div>
+            <div class="sp-card-row"><span class="k">Pays</span><span class="v">${esc(country)}</span></div>
+            ${extra}
+            <div class="sp-card-tags">
+                ${(ioc.tags||[]).slice(0,3).map(t => `<span class="tag-pill" style="font-size:0.6rem; padding:0.1rem 0.4rem; background:rgba(255,255,255,0.05); color:var(--txt2)">${esc(t)}</span>`).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function renderCveCardTemplate(cve) {
+    const sev = cve.severity || 'N/A';
+    const sc = sevClass(sev);
+    const score = cve.score != null ? cve.score.toFixed(1) : 'N/A';
+    const scc = scoreClass(cve.score);
+    
+    return `
+        <div class="nvd-card" onclick="openCVEFromSource('${esc(cve.cve_id)}')">
+            <div class="nvd-card-id">${esc(cve.cve_id)}</div>
+            <div class="nvd-card-desc">${esc(cve.description || 'N/A')}</div>
+            <div class="nvd-card-footer">
+                <span class="sev-pill ${sc}" style="font-size:0.6rem; padding:0.1rem 0.4rem;">${sev}</span>
+                <span class="score-pill ${scc}" style="font-size:0.6rem; padding:0.1rem 0.4rem;">CVSS: ${score}</span>
+                <span style="font-size:0.65rem; color:var(--txt2); margin-left:auto;">${cve.published_date ? fmtDate(cve.published_date) : ''}</span>
+            </div>
+        </div>
+    `;
+}
+
+function openIOCFromSource(val) {
+    // Navigate back to global IOC list and find it
+    const iocIndex = G_allIocs.findIndex(i => i.value === val);
+    if (iocIndex !== -1) {
+        // We'll just open the modal directly for simplicity
+        const ioc = G_allIocs[iocIndex];
+        // Prepare G_currentPageIocs so the modal can find it
+        G_currentPageIocs = [ioc];
+        openIOCModal(0);
+    }
+}
+
+function openCVEFromSource(id) {
+    const cveIndex = G_allCves.findIndex(c => c.cve_id === id);
+    if (cveIndex !== -1) {
+        const cve = G_allCves[cveIndex];
+        G_visibleCves = [cve];
+        openCVEModal(0);
+    }
+}
+
+/* ============================================================
+   RUN SCRIPT INTEGRATION
+   ============================================================ */
+async function runSourceScript(id) {
+    const btn = document.getElementById(`btn-run-${id}`);
+    const logContainer = document.getElementById(`log-container-${id}`);
+    const logArea = document.getElementById(`log-${id}`);
+    const statusLabel = document.getElementById(`log-status-${id}`);
+    const dot = document.getElementById(`dot-${id}`);
+    const chkFull = document.getElementById(`chk-full-${id}`);
+
+    if (!btn || !logArea) return;
+
+    const isFull = chkFull ? chkFull.checked : false;
+
+    btn.disabled = true;
+    btn.innerHTML = `<i data-lucide="loader-2" class="spin" style="width:14px;height:14px;"></i> En cours...`;
+    logContainer.style.display = 'block';
+    logArea.innerHTML = `> Starting node ${id}_extractor.py (Mode: ${isFull ? 'FULL' : 'INCREMENTAL'})...\n`;
+    statusLabel.innerText = 'RUNNING';
+    statusLabel.style.color = '#fbbf24';
+    if(dot) { dot.style.background = '#fbbf24'; dot.style.boxShadow = '0 0 8px #fbbf24'; }
+    lucide.createIcons();
+
+    try {
+        const url = `/api/run-script/${id}${isFull ? '?mode=full' : ''}`;
+        const resp = await fetch(url);
+        const data = await resp.json();
+        
+        if (data.job_id) {
+            pollSourceJob(id, data.job_id);
+        } else {
+            throw new Error(data.error || 'Failed to start job');
+        }
+    } catch (e) {
+        logArea.innerHTML += `<span style="color:#f87171">! Error: ${e.message}</span>\n`;
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="play" style="width:14px;height:14px;"></i> Lancer`;
+        statusLabel.innerText = 'FAILED';
+        statusLabel.style.color = '#f87171';
+        if(dot) { dot.style.background = '#f87171'; dot.style.boxShadow = 'none'; }
+        lucide.createIcons();
+    }
+}
+
+async function pollSourceJob(id, jobId) {
+    const logArea = document.getElementById(`log-${id}`);
+    const btn = document.getElementById(`btn-run-${id}`);
+    const statusLabel = document.getElementById(`log-status-${id}`);
+    const dot = document.getElementById(`dot-${id}`);
+
+    const interval = setInterval(async () => {
+        try {
+            const res = await fetch(`/api/job-status/${jobId}`);
+            const status = await res.json();
+
+            // Render logs
+            if (status.logs && status.logs.length > 0) {
+                logArea.innerHTML = status.logs.map(line => `> ${esc(line)}`).join('\n');
+                logArea.scrollTop = logArea.scrollHeight;
+            }
+
+            if (status.status === 'completed' || status.status === 'failed') {
+                clearInterval(interval);
+                btn.disabled = false;
+                btn.innerHTML = `<i data-lucide="play" style="width:14px;height:14px;"></i> Lancer`;
+                statusLabel.innerText = status.status.toUpperCase();
+                statusLabel.style.color = status.status === 'completed' ? '#34d399' : '#f87171';
+                if(dot) { 
+                    dot.style.background = status.status === 'completed' ? '#34d399' : '#f87171'; 
+                    dot.style.boxShadow = status.status === 'completed' ? '0 0 8px #34d399' : 'none';
+                }
+                lucide.createIcons();
+                
+                if (status.status === 'completed') {
+                    logArea.innerHTML += `\n<span style="color:#34d399">✓ Extraction terminée avec succès.</span>`;
+                }
+            }
+        } catch (e) {
+            clearInterval(interval);
+            console.error(e);
+        }
+    }, 1500);
 }

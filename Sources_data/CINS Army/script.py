@@ -4,6 +4,7 @@ import hashlib
 import logging
 import sys
 from datetime import datetime, timezone
+import subprocess
 import requests
 
 # =========================
@@ -113,6 +114,14 @@ def sync_cins(ips, existing_data, existing_indicators, tracking, new_records_tot
         # donc on se base sur l'existence ou non.
         # Le mode "AFTER" vs "BEFORE" est ici plus structurel qu'incrémental par date API.
         
+        if ip in existing_indicators:
+            # Mise à jour du timestamp pour les données existantes
+            record = existing_indicators[ip]
+            record["collected_at"] = collected_at
+            new_records_total.append(record)
+            added_count += 1
+            continue
+
         if ip not in existing_indicators:
             record = {
                 "indicator": ip,
@@ -123,7 +132,7 @@ def sync_cins(ips, existing_data, existing_indicators, tracking, new_records_tot
                 "hash": hashlib.sha256(f"cins_army:{ip}".encode("utf-8")).hexdigest()
             }
             existing_data.append(record)
-            existing_indicators.add(ip)
+            existing_indicators[ip] = record
             new_records_total.append(record)
             added_count += 1
             
@@ -151,7 +160,7 @@ def main():
 
     # 1. Charger données
     existing_data = load_existing_data()
-    existing_indicators = {item["indicator"] for item in existing_data if "indicator" in item}
+    existing_indicators = {item["indicator"]: item for item in existing_data if "indicator" in item}
     logging.info(f"Indexation : {len(existing_indicators)} records chargés.")
 
     tracking = load_tracking()
@@ -191,6 +200,15 @@ def main():
 
     if os.path.exists(OLD_TRACK_FILE := os.path.join(SCRIPT_DIR, "last_run.csv")):
         os.remove(OLD_TRACK_FILE)
+
+    # [AUTOMATION] Extraction directe des IOCs/CVEs après collecte
+    extraction_dir = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..', 'extraction_ioc_cve'))
+    extractor_script = os.path.join(extraction_dir, "cins_army_extractor.py")
+    if os.path.exists(extractor_script):
+        logging.info(">>> AUTOMATION : Lancement de l'extraction (cins_army_extractor.py)...")
+        subprocess.run([sys.executable, extractor_script], cwd=extraction_dir)
+    else:
+        logging.warning(f">>> Extracteur non trouvé : {extractor_script}")
 
 if __name__ == "__main__":
     main()

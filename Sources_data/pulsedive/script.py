@@ -3,6 +3,7 @@ import json
 import os
 import time
 import sys
+import subprocess
 import threading
 import logging
 from dotenv import load_dotenv, find_dotenv
@@ -107,13 +108,23 @@ def sync_pulsedive(raw_list, existing_data, existing_ids, tracking, new_records_
         # Pulsedive stamp_added format: "2026-04-06 10:00:00"
         first_seen = item.get("stamp_added")
 
+        if indicator in existing_ids:
+            # Mise à jour des données existantes
+            old_item = existing_ids[indicator]
+            old_item.update(item)
+            old_item["collected_at"] = collected_at
+            
+            new_records_total.append(old_item)
+            added_count += 1
+            continue
+
         if indicator not in existing_ids:
             print(f"[{i}/{total_raw}] Nouveau IOC : {indicator}", end="\r")
             sys.stdout.flush()
 
             item["collected_at"] = collected_at
             existing_data.append(item)
-            existing_ids.add(indicator)
+            existing_ids[indicator] = item
             new_records_total.append(item)
             added_count += 1
             
@@ -141,9 +152,9 @@ def main():
         try: sys.stdout.reconfigure(encoding='utf-8')
         except: pass
 
-    # 1. Charger données
+    # 1. Charger données et indexer
     existing_data = load_existing_data()
-    existing_ids = {str(item.get("indicator")) for item in existing_data if item.get("indicator")}
+    existing_ids = {str(item.get("indicator")): item for item in existing_data if item.get("indicator")}
     logging.info(f"Indexation : {len(existing_ids)} items chargés.")
 
     tracking = load_tracking()
@@ -180,6 +191,15 @@ def main():
     if os.path.exists(OLD_TRACKING_CSV):
         try: os.remove(OLD_TRACKING_CSV)
         except: pass
+
+    # [AUTOMATION] Extraction directe des IOCs/CVEs après collecte
+    extraction_dir = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..', 'extraction_ioc_cve'))
+    extractor_script = os.path.join(extraction_dir, "pulsedive_extractor.py")
+    if os.path.exists(extractor_script):
+        logging.info(">>> AUTOMATION : Lancement de l'extraction (pulsedive_extractor.py)...")
+        subprocess.run([sys.executable, extractor_script], cwd=extraction_dir)
+    else:
+        logging.warning(f">>> Extracteur non trouvé : {extractor_script}")
 
 if __name__ == "__main__":
     main()

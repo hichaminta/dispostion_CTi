@@ -3,6 +3,7 @@ import json
 import ipaddress
 import logging
 import sys
+import subprocess
 import threading
 from datetime import datetime, timezone
 import requests
@@ -120,6 +121,14 @@ def sync_spamhaus(feed_name, raw_text, url, existing_data, existing_keys, tracki
         if ioc_type == "unknown": continue
 
         key = (network, feed_name)
+        if key in existing_keys:
+            # Mise à jour du timestamp
+            item = existing_keys[key]
+            item["collected_at"] = collected_at
+            new_records_total.append(item)
+            added_count += 1
+            continue
+
         if key not in existing_keys:
             print(f"[{idx}/{total_lines}] Nouveau range: {network}", end="\r")
             sys.stdout.flush()
@@ -134,7 +143,7 @@ def sync_spamhaus(feed_name, raw_text, url, existing_data, existing_keys, tracki
                 "collected_at": collected_at
             }
             existing_data.append(item)
-            existing_keys.add(key)
+            existing_keys[key] = item
             new_records_total.append(item)
             added_count += 1
             
@@ -161,9 +170,9 @@ def main():
         try: sys.stdout.reconfigure(encoding='utf-8')
         except: pass
 
-    # 1. Charger données
+    # 1. Charger données et indexer
     existing_data = load_existing_data()
-    existing_keys = {(item.get("ioc_value"), item.get("feed_name")) for item in existing_data}
+    existing_keys = {(item.get("ioc_value"), item.get("feed_name")): item for item in existing_data}
     logging.info(f"Indexation : {len(existing_keys)} ranges chargés.")
 
     tracking = load_tracking()
@@ -198,6 +207,15 @@ def main():
 
     if os.path.exists(OLD_TRACK_FILE := os.path.join(SCRIPT_DIR, "last_run.csv")):
         os.remove(OLD_TRACK_FILE)
+
+    # [AUTOMATION] Extraction directe des IOCs/CVEs après collecte
+    extraction_dir = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..', 'extraction_ioc_cve'))
+    extractor_script = os.path.join(extraction_dir, "spamhaus_extractor.py")
+    if os.path.exists(extractor_script):
+        logging.info(">>> AUTOMATION : Lancement de l'extraction (spamhaus_extractor.py)...")
+        subprocess.run([sys.executable, extractor_script], cwd=extraction_dir)
+    else:
+        logging.warning(f">>> Extracteur non trouvé : {extractor_script}")
 
 if __name__ == "__main__":
     main()

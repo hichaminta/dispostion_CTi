@@ -3,6 +3,8 @@ import os
 import threading
 import logging
 from datetime import datetime, timezone
+import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 
 try:
@@ -141,6 +143,12 @@ def sync_pulses(otx, modified_since, existing_data, existing_ids, tracking, new_
             if mode == "BEFORE" and earliest_seen and p_mod >= earliest_seen:
                 continue
 
+            if p_id and p_id in existing_ids:
+                # Mise à jour des pulses existants
+                future = executor.submit(fetch_pulse_indicators, otx, pulse)
+                futures[future] = pulse
+                continue
+
             if p_id and p_id not in existing_ids:
                 future = executor.submit(fetch_pulse_indicators, otx, pulse)
                 futures[future] = pulse
@@ -151,9 +159,18 @@ def sync_pulses(otx, modified_since, existing_data, existing_ids, tracking, new_
                 try:
                     result = f.result()
                     with write_lock:
-                        existing_data.append(result)
+                        if result["id"] in existing_ids:
+                            # On remplace l'ancienne version par la nouvelle
+                            # Note: On doit retrouver l'index dans existing_data pour une mise à jour propre
+                            # ou on peut simplement mettre à jour l'objet dictionary s'il est partagé.
+                            # Puisque existing_ids contient les objets de existing_data, la modif est directe.
+                            old_item = existing_ids[result["id"]]
+                            old_item.update(result)
+                        else:
+                            existing_data.append(result)
+                            existing_ids[result["id"]] = result
+                        
                         new_pulses_list.append(result)
-                        existing_ids.add(result["id"])
                         added_count += 1
                         
                         # Mise à jour des bornes dynamiques
@@ -185,9 +202,14 @@ def sync_pulses(otx, modified_since, existing_data, existing_ids, tracking, new_
         for f in as_completed(futures):
             try:
                 result = f.result()
-                existing_data.append(result)
+                if result["id"] in existing_ids:
+                    old_item = existing_ids[result["id"]]
+                    old_item.update(result)
+                else:
+                    existing_data.append(result)
+                    existing_ids[result["id"]] = result
+                
                 new_pulses_list.append(result)
-                existing_ids.add(result["id"])
                 added_count += 1
                 mod_date = result["modified"]
                 if not earliest_seen or mod_date < earliest_seen:
@@ -225,7 +247,7 @@ def main():
     
     # 1. Charger les pulses existants
     existing_data = load_existing_data()
-    existing_ids = {p["id"] for p in existing_data if "id" in p}
+    existing_ids = {p["id"]: p for p in existing_data if "id" in p}
     logging.info(f"Indexation : {len(existing_ids)} pulses chargés localement.")
 
     # 2. Charger le tracking ou calculer l'intervalle depuis le JSON
@@ -261,6 +283,15 @@ def main():
         logging.warning("\nInterruption détectée. Les données et le tracking ont été sauvés.")
     except Exception as e:
         logging.error(f"Erreur critique : {e}")
+
+    # [AUTOMATION] Extraction directe des IOCs/CVEs après collecte
+    extraction_dir = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..', 'extraction_ioc_cve'))
+    extractor_script = os.path.join(extraction_dir, "alienvault_extractor.py")
+    if os.path.exists(extractor_script):
+        logging.info(">>> AUTOMATION : Lancement de l'extraction (alienvault_extractor.py)...")
+        subprocess.run([sys.executable, extractor_script], cwd=extraction_dir)
+    else:
+        logging.warning(f">>> Extracteur non trouvé : {extractor_script}")
 
 if __name__ == "__main__":
     main()

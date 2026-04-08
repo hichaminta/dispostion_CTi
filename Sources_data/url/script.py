@@ -5,6 +5,7 @@ import os
 import io
 import sys
 import zipfile
+import subprocess
 import threading
 import logging
 from datetime import datetime, timezone
@@ -159,6 +160,16 @@ def sync_urlhaus(raw_list, existing_data, existing_ids, tracking, new_records_to
         url_id = str(item.get("id"))
         date_added = item.get("date_added") or item.get("dateadded")
 
+        if url_id in existing_ids:
+            # Mise à jour des données existantes
+            old_item = existing_ids[url_id]
+            old_item.update(item)
+            old_item["collected_at"] = collected_at
+            
+            new_records_total.append(old_item)
+            added_count += 1
+            continue
+
         if url_id not in existing_ids:
             if total_raw > 1000 and i % 500 == 0:
                 print(f"[{i}/{total_raw}] Nouveau URL : {url_id}", end="\r")
@@ -167,7 +178,7 @@ def sync_urlhaus(raw_list, existing_data, existing_ids, tracking, new_records_to
             item["id"] = url_id # Harmonisation
             item["collected_at"] = collected_at
             existing_data.append(item)
-            existing_ids.add(url_id)
+            existing_ids[url_id] = item
             new_records_total.append(item)
             added_count += 1
             
@@ -195,9 +206,9 @@ def main():
         try: sys.stdout.reconfigure(encoding='utf-8')
         except: pass
 
-    # 1. Charger données
+    # 1. Charger données et indexer
     existing_data = load_existing_data()
-    existing_ids = {str(item.get("id")) for item in existing_data if item.get("id")}
+    existing_ids = {str(item.get("id")): item for item in existing_data if item.get("id")}
     logging.info(f"Indexation : {len(existing_ids)} items chargés.")
 
     tracking = load_tracking()
@@ -251,6 +262,15 @@ def main():
     if new_records_total:
         logging.info(f"Export journalier : {len(new_records_total)} items")
         save_json_atomic(new_records_total, DAILY_OUTPUT_JSON)
+
+    # [AUTOMATION] Extraction directe des IOCs/CVEs après collecte
+    extraction_dir = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..', 'extraction_ioc_cve'))
+    extractor_script = os.path.join(extraction_dir, "urlhaus_extractor.py")
+    if os.path.exists(extractor_script):
+        logging.info(">>> AUTOMATION : Lancement de l'extraction (urlhaus_extractor.py)...")
+        subprocess.run([sys.executable, extractor_script], cwd=extraction_dir)
+    else:
+        logging.warning(f">>> Extracteur non trouvé : {extractor_script}")
 
 if __name__ == "__main__":
     main()

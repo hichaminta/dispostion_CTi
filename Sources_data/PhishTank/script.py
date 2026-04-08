@@ -12,6 +12,7 @@ import os
 import sys
 import io
 import csv
+import subprocess
 import logging
 import threading
 from datetime import datetime, timezone
@@ -86,17 +87,22 @@ def save_json(data, path=None):
 
 # ── Source 1 : PhishTank officiel ────────────────────────────────────────────
 def fetch_phishtank_official():
-    """Nécessite une clé API (PHISHTANK_API_KEY dans .env)."""
+    """Utilise la clé API si disponible, sinon tente l'accès anonyme."""
     if not API_KEY:
-        logging.info("[PhishTank] Pas de clé API — source officielle ignorée.")
-        return []
-
-    url = PHISHTANK_URL_AUTH
-    headers = {
-        "User-Agent": f"phishtank/{API_KEY}",
-        "Accept": "application/json",
-    }
-    logging.info(f"[PhishTank] Téléchargement officiel (avec clé)...")
+        url = PHISHTANK_URL_ANON
+        headers = {
+            "User-Agent": "CTI-Pipeline/1.0 (research)",
+            "Accept": "application/json",
+        }
+        logging.info("[PhishTank] Pas de clé API — tentative par l'accès anonyme (rate limit possible)...")
+    else:
+        url = PHISHTANK_URL_AUTH
+        headers = {
+            "User-Agent": f"phishtank/{API_KEY}",
+            "Accept": "application/json",
+        }
+        logging.info("[PhishTank] Téléchargement officiel (avec clé)...")
+        
     try:
         r = requests.get(url, headers=headers, timeout=TIMEOUT)
         r.raise_for_status()
@@ -111,6 +117,9 @@ def fetch_phishtank_official():
 
 def normalize_phishtank(item):
     """Normalise un enregistrement PhishTank vers le schéma unifié."""
+    collected_at = datetime.now(timezone.utc).isoformat()
+    submission_time = item.get("submission_time", "")
+    
     return {
         "phish_id":         str(item.get("phish_id", "")),
         "ioc":              item.get("url", ""),
@@ -119,9 +128,13 @@ def normalize_phishtank(item):
         "target":           item.get("target", ""),
         "verified":         item.get("verified", "yes"),
         "online":           item.get("online", "yes"),
-        "submission_time":  item.get("submission_time", ""),
+        "submission_time":  submission_time,
         "verification_time":item.get("verification_time", ""),
         "phish_detail_url": item.get("phish_detail_url", ""),
+        "collected_at":     collected_at,
+        "date":             submission_time if submission_time else collected_at,
+        # Inclure tous les champs supplémentaires éventuels (EXTRAIT TOUT)
+        **{k: v for k, v in item.items() if k not in ["url", "submission_time"]}
     }
 
 # ── Source 2 : OpenPhish ─────────────────────────────────────────────────────
@@ -146,6 +159,7 @@ def fetch_openphish():
         return []
 
 def normalize_openphish(url):
+    collected_at = datetime.now(timezone.utc).isoformat()
     return {
         "phish_id":         None,
         "ioc":              url,
@@ -154,9 +168,11 @@ def normalize_openphish(url):
         "target":           "",
         "verified":         "community",
         "online":           "yes",
-        "submission_time":  datetime.now(timezone.utc).isoformat(),
+        "submission_time":  None,
         "verification_time":"",
         "phish_detail_url": "",
+        "collected_at":     collected_at,
+        "date":             collected_at, # Fallback date de collection
     }
 
 # ── Source 3 : URLhaus (abuse.ch) ────────────────────────────────────────────
@@ -183,6 +199,9 @@ def fetch_urlhaus():
     return []
 
 def normalize_urlhaus(item):
+    collected_at = datetime.now(timezone.utc).isoformat()
+    date_added = item.get("date_added", "")
+    
     return {
         "phish_id":         item.get("id", ""),
         "ioc":              item.get("url", ""),
@@ -191,9 +210,17 @@ def normalize_urlhaus(item):
         "target":           "",
         "verified":         "yes",
         "online":           item.get("url_status", ""),
-        "submission_time":  item.get("date_added", ""),
+        "submission_time":  date_added,
         "verification_time":"",
         "phish_detail_url": item.get("urlhaus_link", ""),
+        "collected_at":     collected_at,
+        "date":             date_added if date_added else collected_at,
+        # Extractions additionnelles URLhaus
+        "reporter":         item.get("reporter", ""),
+        "threat":           item.get("threat", ""),
+        "tags":             item.get("tags", []),
+        "last_online":      item.get("last_online", ""),
+        **{k: v for k, v in item.items() if k not in ["url", "id", "date_added", "urlhaus_link", "url_status", "threat"]}
     }
 
 # ── Merge logic ───────────────────────────────────────────────────────────────
@@ -201,7 +228,7 @@ def merge_records(existing_data, new_items, tracking, new_records_out):
     """
     Fusionne les nouveaux items dans existing_data en évitant les doublons via l'IOC.
     """
-    existing_iocs = {item.get("ioc", "") for item in existing_data if item.get("ioc")}
+    existing_iocs = {item.get("ioc", ""): item for item in existing_data if item.get("ioc")}
     added = 0
     earliest = tracking.get("earliest_modified")
     latest   = tracking.get("latest_modified")
@@ -209,7 +236,24 @@ def merge_records(existing_data, new_items, tracking, new_records_out):
 
     for i, item in enumerate(new_items, 1):
         ioc = item.get("ioc", "")
-        if not ioc or ioc in existing_iocs:
+        if not ioc:
+            continue
+        
+        if ioc in existing_iocs:
+            # Mise à jour des données existantes
+            old_item = existing_iocs[ioc]
+            old_item.update({
+                "online": item.get("online"),
+                "verified": item.get("verified"),
+                "collected_at": item.get("collected_at"),
+            })
+            # On peut aussi mettre à jour d'autres champs si présents
+            for k, v in item.items():
+                if k not in old_item or old_item[k] is None:
+                    old_item[k] = v
+                    
+            new_records_out.append(old_item)
+            added += 1
             continue
 
         print(f"  [{i}/{total}] Nouveau : {ioc[:80]}", end="\r", flush=True)
@@ -218,12 +262,13 @@ def merge_records(existing_data, new_items, tracking, new_records_out):
         new_records_out.append(item)
         added += 1
 
-        sub_t = item.get("submission_time", "")
-        if sub_t:
-            if not earliest or sub_t < earliest:
-                earliest = sub_t
-            if not latest   or sub_t > latest:
-                latest   = sub_t
+        # Utiliser le champ 'date' unifié pour le tracking
+        item_date = item.get("date", "")
+        if item_date:
+            if not earliest or item_date < earliest:
+                earliest = item_date
+            if not latest   or item_date > latest:
+                latest   = item_date
 
         if added > 0 and added % SAVE_EVERY == 0:
             save_json(existing_data)
@@ -291,25 +336,39 @@ def main():
 
     # ── Finalisation
     now = datetime.now(timezone.utc).isoformat()
-    tracking.update({
-        "last_run":          now,
-        "last_sync_success": now,
-        "earliest_modified": earliest,
-        "latest_modified":   latest,
-        "total_collected":   len(existing_data),
-        "sources_used":      source_used,
-    })
+    
+    tracking["last_run"] = now
+
+    if added > 0:
+        tracking.update({
+            "last_sync_success": now,
+            "earliest_modified": earliest,
+            "latest_modified":   latest,
+            "total_collected":   len(existing_data),
+            "sources_used":      source_used,
+        })
+        save_json(existing_data)
+    else:
+        logging.info("Aucune nouvelle URL, les dates de synchronisation et les données existantes ne sont pas modifiées.")
+
     save_tracking(tracking)
-    save_json(existing_data)
 
     if new_records:
         logging.info(f"Export journalier : {len(new_records)} nouveaux items → {os.path.basename(DAILY_JSON)}")
         save_json(new_records, DAILY_JSON)
 
     logging.info("=" * 55)
-    logging.info(f"  BILAN : {added} nouveaux | Total : {len(existing_data)}")
     logging.info(f"  Sources utilisées : {', '.join(source_used)}")
     logging.info("=" * 55)
+
+    # [AUTOMATION] Extraction directe des IOCs/CVEs après collecte
+    extraction_dir = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..', 'extraction_ioc_cve'))
+    extractor_script = os.path.join(extraction_dir, "phishtank_extractor.py")
+    if os.path.exists(extractor_script):
+        logging.info(">>> AUTOMATION : Lancement de l'extraction (phishtank_extractor.py)...")
+        subprocess.run([sys.executable, extractor_script], cwd=extraction_dir)
+    else:
+        logging.warning(f">>> Extracteur non trouvé : {extractor_script}")
 
 
 if __name__ == "__main__":

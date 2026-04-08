@@ -4,6 +4,7 @@ import requests
 import logging
 import sys
 from datetime import datetime, timezone
+import subprocess
 from dotenv import load_dotenv, find_dotenv
 
 # ── Configuration du logging ──────────────────────────────────────────────────
@@ -170,13 +171,16 @@ def sync_data(blacklist_data, existing_data, tracking):
         sys.stdout.flush()
 
         if ip_addr in existing_ips:
-            # Simple mise à jour du score et de la date
-            item = existing_ips[ip_addr]
-            if last_reported_str != item.get("lastReportedAt"):
-                item["abuseConfidenceScore"] = score
-                item["lastReportedAt"] = last_reported_str
-                item["updated_at"] = datetime.now(timezone.utc).isoformat()
-                updated_count += 1
+            # Mise à jour des données existantes (scores, dates)
+            old_item = existing_ips[ip_addr]
+            old_item["abuseConfidenceScore"] = score
+            old_item["lastReportedAt"] = last_reported_str
+            old_item["extracted_at"] = datetime.now(timezone.utc).isoformat()
+            
+            # On considère aussi les mises à jour comme pertinentes pour l'export journalier
+            new_entries_daily.append(old_item)
+            updated_count += 1
+            continue
         else:
             # Nouveauté : Création d'une nouvelle entrée
             new_item = {
@@ -252,6 +256,15 @@ def main():
         sys.exit(0)
     except Exception as e:
         logging.error(f"Une erreur inattendue est survenue : {e}")
+
+    # [AUTOMATION] Extraction directe des IOCs/CVEs après collecte
+    extraction_dir = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..', 'extraction_ioc_cve'))
+    extractor_script = os.path.join(extraction_dir, "abuseipdb_extractor.py")
+    if os.path.exists(extractor_script):
+        logging.info(">>> AUTOMATION : Lancement de l'extraction (abuseipdb_extractor.py)...")
+        subprocess.run([sys.executable, extractor_script], cwd=extraction_dir)
+    else:
+        logging.warning(f">>> Extracteur non trouvé : {extractor_script}")
 
 if __name__ == "__main__":
     main()

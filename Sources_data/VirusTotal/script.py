@@ -4,6 +4,7 @@ import logging
 import requests
 import sys
 import time
+import subprocess
 import threading
 from datetime import datetime, timezone
 from dotenv import load_dotenv, find_dotenv
@@ -109,6 +110,33 @@ def sync_virustotal(targets, existing_data, existing_ids, tracking, new_records_
         target = targets[tid]
         ttype = target.get("type")
 
+        if tid in existing_ids:
+            if IS_PUBLIC_KEY and i > 1:
+                time.sleep(THROTTLE_DELAY)
+
+            print(f"[{i}/{total_targets}] Refresh VT : {tid} ({ttype})", end="\r")
+            sys.stdout.flush()
+
+            try:
+                report = vt_get(f"/{ttype}s/{tid}").get("data", {})
+                if not report: continue
+                
+                attr = report.get("attributes", {})
+                record = existing_ids[tid]
+                record.update({
+                    "reputation": attr.get("reputation"),
+                    "tags": attr.get("tags", []),
+                    "malicious_votes": attr.get("last_analysis_stats", {}).get("malicious", 0),
+                    "collected_at": collected_at
+                })
+                
+                new_records_total.append(record)
+                added_count += 1
+                continue
+            except Exception as e:
+                logging.error(f"Erreur refresh {tid}: {e}")
+                continue
+
         if tid not in existing_ids:
             if IS_PUBLIC_KEY and i > 1:
                 time.sleep(THROTTLE_DELAY)
@@ -131,7 +159,7 @@ def sync_virustotal(targets, existing_data, existing_ids, tracking, new_records_
                     "collected_at": collected_at
                 }
                 existing_data.append(record)
-                existing_ids.add(tid)
+                existing_ids[tid] = record
                 new_records_total.append(record)
                 added_count += 1
                 
@@ -161,9 +189,9 @@ def main():
         logging.error("VIRUSTOTAL_API_KEY manquante.")
         return
 
-    # 1. Charger données
+    # 1. Charger données et indexer
     existing_data = load_existing_data()
-    existing_ids = {str(item.get("id")) for item in existing_data if item.get("id")}
+    existing_ids = {str(item.get("id")): item for item in existing_data if item.get("id")}
     logging.info(f"Indexation : {len(existing_ids)} items chargés.")
 
     tracking = load_tracking()
@@ -222,6 +250,15 @@ def main():
     if new_records_total:
         logging.info(f"Export journalier : {len(new_records_total)} items")
         save_json_atomic(new_records_total, DAILY_OUTPUT_JSON)
+
+    # [AUTOMATION] Extraction directe des IOCs/CVEs après collecte
+    extraction_dir = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..', 'extraction_ioc_cve'))
+    extractor_script = os.path.join(extraction_dir, "virustotal_extractor.py")
+    if os.path.exists(extractor_script):
+        logging.info(">>> AUTOMATION : Lancement de l'extraction (virustotal_extractor.py)...")
+        subprocess.run([sys.executable, extractor_script], cwd=extraction_dir)
+    else:
+        logging.warning(f">>> Extracteur non trouvé : {extractor_script}")
 
 if __name__ == "__main__":
     main()

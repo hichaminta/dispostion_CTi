@@ -4,6 +4,7 @@ import ipaddress
 import logging
 import sys
 import threading
+import subprocess
 from datetime import datetime, timezone
 import requests
 
@@ -176,6 +177,15 @@ def main():
 
     if os.path.exists(OLD_TRACK_FILE := os.path.join(SCRIPT_DIR, "last_run.csv")):
         os.remove(OLD_TRACK_FILE)
+
+    # [AUTOMATION] Extraction directe des IOCs/CVEs
+    extraction_dir = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..', 'extraction_ioc_cve'))
+    extractor_script = os.path.join(extraction_dir, "feodotracker_extractor.py")
+    if os.path.exists(extractor_script):
+        logging.info(">>> AUTOMATION : Lancement de l'extraction...")
+        subprocess.run([sys.executable, extractor_script], cwd=extraction_dir)
+    else:
+        logging.warning(f">>> Extracteur non trouvé : {extractor_script}")
 
 if __name__ == "__main__":
     main()

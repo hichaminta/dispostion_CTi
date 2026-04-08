@@ -6,6 +6,7 @@ import logging
 import argparse
 import threading
 import sys
+import subprocess
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv, find_dotenv
 
@@ -156,6 +157,24 @@ def sync_nvd(start_date_str, end_date_str, existing_data, existing_ids, tracking
             cve_id = cve.get("id")
             mod_date = cve.get("lastModified")
 
+            if cve_id in existing_ids:
+                # Mise à jour des CVE existantes
+                cve_item = existing_ids[cve_id]
+                cve_item["last_modified"] = mod_date
+                
+                description = "N/A"
+                for desc in cve.get("descriptions", []):
+                    if desc.get("lang") == "en":
+                        description = desc.get("value", "N/A")
+                        break
+                cve_item["description"] = description
+                cve_item["cvss"] = extract_cvss_list(vuln)
+                cve_item["collected_at"] = datetime.now(timezone.utc).isoformat()
+                
+                new_records_total.append(cve_item)
+                added_count += 1
+                continue
+
             if cve_id not in existing_ids:
                 description = "N/A"
                 for desc in cve.get("descriptions", []):
@@ -172,7 +191,7 @@ def sync_nvd(start_date_str, end_date_str, existing_data, existing_ids, tracking
                     "collected_at": datetime.now(timezone.utc).isoformat()
                 }
                 existing_data.append(cve_item)
-                existing_ids.add(cve_id)
+                existing_ids[cve_id] = cve_item
                 new_records_total.append(cve_item)
                 added_count += 1
                 
@@ -192,9 +211,10 @@ def sync_nvd(start_date_str, end_date_str, existing_data, existing_ids, tracking
     return scanned_count, added_count, earliest_seen, latest_seen
 
 def main():
+    # 1. Charger données et indexer
     tracking = load_tracking()
     existing_data = load_existing_data()
-    existing_ids = {item["cve_id"] for item in existing_data if "cve_id" in item}
+    existing_ids = {item["cve_id"]: item for item in existing_data if "cve_id" in item}
     logging.info(f"Indexation : {len(existing_ids)} CVEs chargées.")
 
     now = datetime.now(timezone.utc)
@@ -235,6 +255,15 @@ def main():
     if new_records_total:
         logging.info(f"Export journalier : {len(new_records_total)} items")
         save_json_atomic(new_records_total, DAILY_OUTPUT_JSON)
+
+    # [AUTOMATION] Extraction directe des IOCs/CVEs après collecte
+    extraction_dir = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..', 'extraction_ioc_cve'))
+    extractor_script = os.path.join(extraction_dir, "nvd_extractor.py")
+    if os.path.exists(extractor_script):
+        logging.info(">>> AUTOMATION : Lancement de l'extraction (nvd_extractor.py)...")
+        subprocess.run([sys.executable, extractor_script], cwd=extraction_dir)
+    else:
+        logging.warning(f">>> Extracteur non trouvé : {extractor_script}")
 
 if __name__ == "__main__":
     main()
