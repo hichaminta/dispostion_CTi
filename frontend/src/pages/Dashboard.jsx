@@ -7,10 +7,11 @@ import {
 import { format } from 'date-fns';
 
 const API_BASE = "http://localhost:8000";
+const WS_BASE  = "ws://localhost:8000/ws";
 
 const SOURCES = [
   { id: 'abuseipdb',    name: 'AbuseIPDB',       type: 'IP Reputation',    color: 'blue'   },
-  { id: 'alienvault',   name: 'AlienVault OTX',  type: 'Threat Feeds',     color: 'purple' },
+//   { id: 'alienvault',   name: 'AlienVault OTX',  type: 'Threat Feeds',     color: 'purple' },
   { id: 'cins_army',    name: 'CINS Army',        type: 'IP Blocking',      color: 'red'    },
   { id: 'feodotracker', name: 'FeodoTracker',     type: 'Botnet C2',        color: 'orange' },
   { id: 'malwarebazaar',name: 'MalwareBazaar',    type: 'Malware Samples',  color: 'pink'   },
@@ -49,7 +50,29 @@ const Dashboard = ({ onSelectRun }) => {
   useEffect(() => {
     fetchAll();
     const interval = setInterval(fetchAll, 5000);
-    return () => clearInterval(interval);
+
+    // WebSocket pour mises à jour temps réel des sources
+    const ws = new WebSocket(WS_BASE);
+    ws.onmessage = (evt) => {
+      try {
+        const data = JSON.parse(evt.data);
+        if (data.type === "source_activity") {
+          setRunningSources(prev => {
+            const next = new Set(prev);
+            if (data.active) next.add(data.source_id);
+            else next.delete(data.source_id);
+            return next;
+          });
+        }
+      } catch (e) {
+        console.error("WS parse error:", e);
+      }
+    };
+
+    return () => {
+      clearInterval(interval);
+      ws.close();
+    };
   }, []);
 
   const fetchAll = async () => {
@@ -90,12 +113,6 @@ const Dashboard = ({ onSelectRun }) => {
       fetchAll();
     } catch (e) {
       console.error("Error starting run:", e);
-    } finally {
-      if (source) {
-        setTimeout(() => {
-          setRunningSources(prev => { const n = new Set(prev); n.delete(source.id); return n; });
-        }, 3000);
-      }
     }
   };
 

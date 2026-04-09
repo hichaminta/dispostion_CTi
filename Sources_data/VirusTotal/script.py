@@ -118,7 +118,8 @@ def sync_virustotal(targets, existing_data, existing_ids, tracking, new_records_
             sys.stdout.flush()
 
             try:
-                report = vt_get(f"/{ttype}s/{tid}").get("data", {})
+                endpoint_type = f"{ttype}es" if ttype == "ip_address" else f"{ttype}s"
+                report = vt_get(f"/{endpoint_type}/{tid}").get("data", {})
                 if not report: continue
                 
                 attr = report.get("attributes", {})
@@ -145,7 +146,8 @@ def sync_virustotal(targets, existing_data, existing_ids, tracking, new_records_
             sys.stdout.flush()
 
             try:
-                report = vt_get(f"/{ttype}s/{tid}").get("data", {})
+                endpoint_type = f"{ttype}es" if ttype == "ip_address" else f"{ttype}s"
+                report = vt_get(f"/{endpoint_type}/{tid}").get("data", {})
                 if not report: continue
                 
                 attr = report.get("attributes", {})

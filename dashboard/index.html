@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CTI Extraction Dashboard | Premium Intelligence</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="dark-theme">
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar glass">
+            <div class="logo-section">
+                <div class="logo-icon"></div>
+                <h1>CTI<span>Results</span></h1>
+            </div>
+            
+            <nav class="source-nav">
+                <div class="nav-label">Data Sources</div>
+                <div id="source-list" class="nav-links">
+                    <!-- Loaded dynamically -->
+                    <div class="loading-shimmer"></div>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <p>Status: <span id="api-status" class="status-indicator online">Online</span></p>
+                <a href="/" class="back-link"><i data-lucide="arrow-left"></i> Back to Monitor</a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="search-container glass">
+                    <i data-lucide="search"></i>
+                    <input type="text" id="global-search" placeholder="Search by ID, Indicator or Tags...">
+                </div>
+                <div class="user-actions">
+                    <button id="refresh-btn" class="icon-btn glass"><i data-lucide="refresh-cw"></i></button>
+                    <div class="stats-badge glass">
+                        <span id="total-count">0</span> Items
+                    </div>
+                </div>
+            </header>
+
+            <section class="viewport">
+                <!-- Dashboard Overview -->
+                <div class="view-header">
+                    <div class="header-content">
+                        <h2 id="current-source-name">Global Overview</h2>
+                        <p id="current-source-info">Select a source to view detailed extractions</p>
+                    </div>
+                    <div class="header-actions">
+                        <div class="file-info glass" id="file-meta">
+                            <i data-lucide="file-text"></i> <span id="file-size">0.0 MB</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card glass ioc-card">
+                        <div class="stat-icon"><i data-lucide="shield"></i></div>
+                        <div class="stat-value" id="ioc-count-stat">0</div>
+                        <div class="stat-label">IOCs Extracted</div>
+                    </div>
+                    <div class="stat-card glass cve-card">
+                        <div class="stat-icon"><i data-lucide="alert-triangle"></i></div>
+                        <div class="stat-value" id="cve-count-stat">0</div>
+                        <div class="stat-label">CVEs Extracted</div>
+                    </div>
+                    <div class="stat-card glass date-card">
+                        <div class="stat-icon"><i data-lucide="clock"></i></div>
+                        <div class="stat-value" id="last-update-stat">-</div>
+                        <div class="stat-label">Last Updated</div>
+                    </div>
+                </div>
+
+                <!-- Data Table Container -->
+                <div class="table-workspace glass">
+                    <div class="table-header">
+                        <h3>Extraction Records</h3>
+                        <div class="pagination-controls">
+                            <button id="prev-page" class="page-btn"><i data-lucide="chevron-left"></i></button>
+                            <span id="page-info">Page 1</span>
+                            <button id="next-page" class="page-btn"><i data-lucide="chevron-right"></i></button>
+                        </div>
+                    </div>
+                    
+                    <div class="data-table-wrapper">
+                        <table id="results-table">
+                            <thead>
+                                <tr>
+                                    <th>ID / Record</th>
+                                    <th>Type</th>
+                                    <th>Indicator</th>
+                                    <th>Tags</th>
+                                    <th>Collected At</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body">
+                                <!-- Records loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal for JSON Inspection -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <div class="modal-content glass">
+            <header class="modal-header">
+                <h3>Record Raw Details</h3>
+                <button id="close-modal" class="close-btn">&times;</button>
+            </header>
+            <div class="modal-body">
+                <pre id="raw-json-viewer"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>lucide.createIcons();</script>
+</body>
+</html>

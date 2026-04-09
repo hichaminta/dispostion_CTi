@@ -20,19 +20,19 @@ CVE_ONLY_SOURCES = {"NVD", "NVd"}
 
 # Mapping nom affiché → dossier Sources_data + fichier extracteur
 SOURCE_MAP = {
-    "AbuseIPDB":       {"folder": "AbuseIPDB",                    "extractor": "abuseipdb_extractor.py",      "output": "abuseipdb_extracted.json"},
-    "AlienVault OTX":  {"folder": "Otx alienvault",               "extractor": "alienvault_extractor.py",     "output": "alienvault_extracted.json"},
-    "CINS Army":       {"folder": "CINS Army",                    "extractor": "cins_army_extractor.py",      "output": "cins_army_extracted.json"},
-    "FeodoTracker":    {"folder": "feodotracker",                  "extractor": "feodotracker_extractor.py",   "output": "feodotracker_extracted.json"},
-    "MalwareBazaar":   {"folder": "MalwareBazaar Community API",  "extractor": "malwarebazaar_extractor.py",  "output": "malwarebazaar_extracted.json"},
-    "NVD":             {"folder": "NVd",                           "extractor": "nvd_extractor.py",            "output": "nvd_extracted.json"},
-    "OpenPhish":       {"folder": "OpenPhish",                    "extractor": "openphish_extractor.py",      "output": "openphish_extracted.json"},
-    "PhishTank":       {"folder": "PhishTank",                    "extractor": "phishtank_extractor.py",      "output": "phishtank_extracted.json"},
-    "PulseDive":       {"folder": "pulsedive",                    "extractor": "pulsedive_extractor.py",      "output": "pulsedive_extracted.json"},
-    "Spamhaus":        {"folder": "Spamhaus",                     "extractor": "spamhaus_extractor.py",       "output": "spamhaus_extracted.json"},
-    "ThreatFox":       {"folder": "ThreatFox",                    "extractor": "threatfox_extractor.py",      "output": "threatfox_extracted.json"},
-    "URLhaus":         {"folder": "url",                          "extractor": "urlhaus_extractor.py",        "output": "urlhaus_extracted.json"},
-    "VirusTotal":      {"folder": "VirusTotal",                   "extractor": "virustotal_extractor.py",     "output": "virustotal_extracted.json"},
+    "AbuseIPDB":       {"id": "abuseipdb",     "folder": "AbuseIPDB",                    "extractor": "abuseipdb_extractor.py",      "output": "abuseipdb_extracted.json"},
+#    "AlienVault OTX":  {"id": "alienvault",    "folder": "Otx alienvault",               "extractor": "alienvault_extractor.py",     "output": "alienvault_extracted.json"},
+    "CINS Army":       {"id": "cins_army",     "folder": "CINS Army",                    "extractor": "cins_army_extractor.py",      "output": "cins_army_extracted.json"},
+    "FeodoTracker":    {"id": "feodotracker",  "folder": "feodotracker",                  "extractor": "feodotracker_extractor.py",   "output": "feodotracker_extracted.json"},
+    "MalwareBazaar":   {"id": "malwarebazaar", "folder": "MalwareBazaar Community API",  "extractor": "malwarebazaar_extractor.py",  "output": "malwarebazaar_extracted.json"},
+    "NVD":             {"id": "nvd",           "folder": "NVd",                           "extractor": "nvd_extractor.py",            "output": "nvd_extracted.json"},
+    "OpenPhish":       {"id": "openphish",     "folder": "OpenPhish",                    "extractor": "openphish_extractor.py",      "output": "openphish_extracted.json"},
+    "PhishTank":       {"id": "phishtank",     "folder": "PhishTank",                    "extractor": "phishtank_extractor.py",      "output": "phishtank_extracted.json"},
+    "PulseDive":       {"id": "pulsedive",     "folder": "pulsedive",                    "extractor": "pulsedive_extractor.py",      "output": "pulsedive_extracted.json"},
+    "Spamhaus":        {"id": "spamhaus",      "folder": "Spamhaus",                     "extractor": "spamhaus_extractor.py",       "output": "spamhaus_extracted.json"},
+    "ThreatFox":       {"id": "threatfox",     "folder": "ThreatFox",                    "extractor": "threatfox_extractor.py",      "output": "threatfox_extracted.json"},
+    "URLhaus":         {"id": "urlhaus",       "folder": "url",                          "extractor": "urlhaus_extractor.py",        "output": "urlhaus_extracted.json"},
+    "VirusTotal":      {"id": "virustotal",    "folder": "VirusTotal",                   "extractor": "virustotal_extractor.py",     "output": "virustotal_extracted.json"},
 }
 
 
@@ -248,6 +248,7 @@ async def execute_pipeline_task(run_id: str, source_name: str):
                 continue
 
             await _ws_log(run_id, "Collecte", f"[{ts()}] ── Collecte : {src} ──")
+            await manager.broadcast({"type": "source_activity", "source_id": info["id"], "active": True})
             ok = await _run_proc(
                 run_id, "Collecte",
                 [sys.executable, script_path],
@@ -282,6 +283,10 @@ async def execute_pipeline_task(run_id: str, source_name: str):
                 [sys.executable, extractor_path],
                 PROJECT_ROOT
             )
+            
+            # BROADCAST END for this source
+            await manager.broadcast({"type": "source_activity", "source_id": info["id"], "active": False})
+
             if not ok:
                 extraction_ok = False
                 await _ws_log(run_id, "Extraction CVE / IOC", f"[{ts()}] ⚠ {src} extraction échouée — on continue.")

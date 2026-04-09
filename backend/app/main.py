@@ -4,6 +4,7 @@ import os
 import sys
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from typing import List
 import uuid
 
@@ -22,8 +23,11 @@ from . import schemas, database, websockets, worker
 from .database import db
 
 OUTPUT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_cve_ioc"))
+DASHBOARD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "dashboard"))
 
 app = FastAPI(title="CTI Pipeline Tracker API")
+
+app.mount("/results", StaticFiles(directory=DASHBOARD_DIR, html=True), name="results")
 
 app.add_middleware(
     CORSMiddleware,
@@ -114,6 +118,63 @@ def get_stats():
         "avg_duration_sec": round(sum(durations) / len(durations)) if durations else 0,
     }
     return res
+
+@app.get("/api/extracted/sources")
+def get_extracted_sources():
+    sources = []
+    if os.path.exists(OUTPUT_DIR):
+        for src_name, info in worker.SOURCE_MAP.items():
+            filepath = os.path.join(OUTPUT_DIR, info["output"])
+            if os.path.exists(filepath):
+                stats = os.stat(filepath)
+                sources.append({
+                    "id": info["id"],
+                    "name": src_name,
+                    "file": info["output"],
+                    "size": stats.st_size,
+                    "last_modified": stats.st_mtime
+                })
+    return sources
+
+@app.get("/api/extracted/data/{source_id}")
+def get_extracted_data(source_id: str, page: int = 1, limit: int = 50, search: str = None):
+    info = None
+    for src_name, src_info in worker.SOURCE_MAP.items():
+        if src_info["id"] == source_id:
+            info = src_info
+            break
+    
+    if not info:
+        raise HTTPException(status_code=404, detail="Source not found")
+        
+    filepath = os.path.join(OUTPUT_DIR, info["output"])
+    if not os.path.exists(filepath):
+        return {"data": [], "total": 0, "page": page, "limit": limit}
+
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            all_data = json.load(f)
+            
+        if search:
+            search_low = search.lower()
+            all_data = [
+                d for d in all_data 
+                if search_low in str(d.get("record_id", "")).lower() or 
+                   any(search_low in str(t).lower() for t in d.get("tags", [])) or
+                   search_low in str(d.get("raw_text", "")).lower()
+            ]
+            
+        total = len(all_data)
+        start = (page - 1) * limit
+        end = start + limit
+        return {
+            "data": all_data[start:end],
+            "total": total,
+            "page": page,
+            "limit": limit
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/runs")
 def clear_runs():
