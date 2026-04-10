@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
+import logo from '../assets/logo.png';
 import {
   ChevronLeft, Terminal, BarChart3, CheckCircle2,
-  XCircle, Loader2, Circle, Shield, Cpu, Database, Zap
+  XCircle, Loader2, Circle, Shield, Cpu, Database, Zap, Square
 } from 'lucide-react';
 
 const API_BASE = "http://localhost:8000";
@@ -10,15 +11,17 @@ const WS_BASE  = "ws://localhost:8000/ws";
 
 // ─── Config étapes ────────────────────────────────────────────────────────────
 const PIPELINE_STEPS = [
-  { name: "Collecte",           icon: Database, color: "blue"   },
+  { name: "Collecte",             icon: Database, color: "blue"   },
   { name: "Extraction CVE / IOC", icon: Cpu,      color: "violet" },
-  { name: "Normalisation",      icon: Shield,   color: "emerald"},
-  { name: "Intégration MISP",   icon: Zap,      color: "orange" },
+  { name: "Enrichissement",       icon: Zap,      color: "amber"  },
+  { name: "Normalisation",        icon: Shield,   color: "emerald"},
+  { name: "Intégration MISP",     icon: Zap,      color: "orange" },
 ];
 
 const COLOR_MAP = {
   blue:    { bg: "bg-blue-500/10",    border: "border-blue-500/30",    text: "text-blue-400",    ring: "ring-blue-500",    dot: "bg-blue-500"    },
   violet:  { bg: "bg-violet-500/10",  border: "border-violet-500/30",  text: "text-violet-400",  ring: "ring-violet-500",  dot: "bg-violet-500"  },
+  amber:   { bg: "bg-amber-500/10",   border: "border-amber-500/30",   text: "text-amber-400",   ring: "ring-amber-500",   dot: "bg-amber-500"   },
   emerald: { bg: "bg-emerald-500/10", border: "border-emerald-500/30", text: "text-emerald-400", ring: "ring-emerald-500", dot: "bg-emerald-500" },
   orange:  { bg: "bg-orange-500/10",  border: "border-orange-500/30",  text: "text-orange-400",  ring: "ring-orange-500",  dot: "bg-orange-500"  },
 };
@@ -47,6 +50,7 @@ const colorLine = (line) => {
 const RunDetail = ({ runId, onBack }) => {
   const [run,        setRun]        = useState(null);
   const [loading,    setLoading]    = useState(true);
+  const [stopping,   setStopping]   = useState(false);
   const [activeStep, setActiveStep] = useState(null);
   const [allLogs,    setAllLogs]    = useState([]); // [{step, line}]
   const logEndRef      = useRef(null);
@@ -59,7 +63,23 @@ const RunDetail = ({ runId, onBack }) => {
 
   useEffect(() => { scrollToBottom(); }, [allLogs, scrollToBottom]);
 
-  // Charger run initial
+  const handleStop = async () => {
+    if (!run) return;
+    setStopping(true);
+    try {
+      await axios.post(`${API_BASE}/runs/${runId}/stop`);
+      // Update local state immediately for better UX
+      setRun(prev => prev ? { ...prev, status_global: "failed" } : prev);
+    } catch (e) {
+      console.error("Error stopping run:", e);
+    } finally {
+      setStopping(false);
+    }
+  };
+
+  // ... (fetchRun and WebSocket effect remain unchanged)
+
+  // 1. Charger run initial
   const fetchRun = useCallback(async () => {
     try {
       const { data } = await axios.get(`${API_BASE}/runs/${runId}`);
@@ -152,24 +172,39 @@ const RunDetail = ({ runId, onBack }) => {
 
         {/* Run title */}
         <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-              <Terminal className="w-7 h-7 text-brand-400" />
-              {run.source_name}
-              <span className="text-sm font-mono text-slate-500 ml-2">#{run.run_id.split('-')[0].toUpperCase()}</span>
-            </h1>
-            <p className="text-slate-500 text-sm mt-1">{run.source_type}</p>
+          <div className="flex flex-col items-start gap-2">
+            <img src={logo} alt="BlueSec Logo" className="h-6 w-auto object-contain" />
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-mono text-slate-500">#{run.run_id.split('-')[0].toUpperCase()}</span>
+              <span className="w-1 h-1 bg-slate-700 rounded-full" />
+              <p className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">{run.source_name} • {run.source_type}</p>
+            </div>
           </div>
-          <StatusBadge status={run.status_global} />
+          <div className="flex items-center gap-3">
+            {run.status_global === "running" && (
+              <button
+                onClick={handleStop}
+                disabled={stopping}
+                className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 px-4 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 disabled:opacity-50"
+              >
+                {stopping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-4 h-4 fill-current" />}
+                <span>{stopping ? "Arrêt..." : "Arrêter"}</span>
+              </button>
+            )}
+            <StatusBadge status={run.status_global} />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-6">
           {/* ── Colonne gauche : Steps + Terminal ───────────────────────── */}
           <div className="space-y-4">
-            {/* Steps horizontaux */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {PIPELINE_STEPS.map((step, idx) => {
-                const stepData = stepMap[step.name] || { status: 'pending', ioc_count: 0, cve_count: 0 };
+            <div className={`grid gap-3 ${
+              PIPELINE_STEPS.filter(s => stepMap[s.name]).length > 2 
+                ? 'grid-cols-2 md:grid-cols-4' 
+                : 'grid-cols-1 md:grid-cols-2'
+            }`}>
+              {PIPELINE_STEPS.filter(s => stepMap[s.name]).map((step, idx) => {
+                const stepData = stepMap[step.name];
                 const c = COLOR_MAP[step.color];
                 const isActive = stepData.status === 'running';
                 const isActiveFilter = activeStep === step.name;
@@ -336,8 +371,8 @@ const RunDetail = ({ runId, onBack }) => {
             <div className="bg-slate-900/50 rounded-2xl border border-slate-800 p-5">
               <h3 className="text-sm font-bold text-white mb-4">Détail des étapes</h3>
               <div className="space-y-2">
-                {PIPELINE_STEPS.map((step, idx) => {
-                  const stepData = stepMap[step.name] || { status: 'pending', ioc_count: 0, cve_count: 0 };
+                {PIPELINE_STEPS.filter(s => stepMap[s.name]).map((step, idx) => {
+                  const stepData = stepMap[step.name];
                   const c = COLOR_MAP[step.color];
                   const duration = stepData.started_at && stepData.finished_at
                     ? Math.round((new Date(stepData.finished_at) - new Date(stepData.started_at)) / 1000)

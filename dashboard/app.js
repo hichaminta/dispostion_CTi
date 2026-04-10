@@ -2,7 +2,10 @@
  * CTI Extraction Dashboard Logic
  */
 
-const API_BASE = "http://localhost:8000/api/extracted";
+const API_BASE_EXTRACTED = "http://localhost:8000/api/extracted";
+const API_BASE_ENRICHED = "http://localhost:8000/api/enriched";
+let viewMode = 'extracted'; // 'extracted' or 'enriched'
+
 let currentSource = null;
 let currentPage = 1;
 const PAGE_SIZE = 50;
@@ -38,10 +41,35 @@ async function init() {
     }
 }
 
+// View Mode Toggle
+window.setMode = async (mode) => {
+    if (viewMode === mode) return;
+    
+    viewMode = mode;
+    
+    // Update UI
+    document.getElementById('mode-extracted').classList.toggle('active', mode === 'extracted');
+    document.getElementById('mode-enriched').classList.toggle('active', mode === 'enriched');
+    
+    currentSource = null;
+    currentPage = 1;
+    
+    await loadSources();
+    
+    if (sources.length > 0) {
+        selectSource(sources[0].id);
+    } else {
+        tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 40px; color: var(--text-secondary);">No sources found for this mode</td></tr>';
+        currentSourceName.textContent = mode === 'extracted' ? "Extraction Overview" : "Enrichment Overview";
+        currentSourceInfo.textContent = "Select a source to view data";
+    }
+};
+
 // Load Sources
 async function loadSources() {
+    const api = viewMode === 'extracted' ? API_BASE_EXTRACTED : API_BASE_ENRICHED;
     try {
-        const response = await fetch(`${API_BASE}/sources`);
+        const response = await fetch(`${api}/sources`);
         sources = await response.json();
         renderSourceList();
     } catch (err) {
@@ -69,7 +97,7 @@ async function selectSource(sourceId) {
     const srcObj = sources.find(s => s.id === sourceId);
     if (srcObj) {
         currentSourceName.textContent = srcObj.name;
-        currentSourceInfo.textContent = `Extracted results from ${srcObj.file}`;
+        currentSourceInfo.textContent = `${viewMode === 'extracted' ? 'Extraction' : 'Enrichment'} results from ${srcObj.file}`;
         fileSizeEl.textContent = formatSize(srcObj.size);
         lastUpdateStat.textContent = new Date(srcObj.last_modified * 1000).toLocaleString();
     }
@@ -81,6 +109,7 @@ async function loadData() {
     
     tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 40px;">Loading records...</td></tr>';
     
+    const api = viewMode === 'extracted' ? API_BASE_EXTRACTED : API_BASE_ENRICHED;
     const query = new URLSearchParams({
         page: currentPage,
         limit: PAGE_SIZE,
@@ -88,7 +117,7 @@ async function loadData() {
     });
 
     try {
-        const response = await fetch(`${API_BASE}/data/${currentSource}?${query}`);
+        const response = await fetch(`${api}/data/${currentSource}?${query}`);
         const result = await response.json();
         
         renderTable(result.data);
@@ -111,25 +140,41 @@ function renderTable(data) {
         
         const mainIndicator = ioc ? ioc.value : (cve ? cve.id : item.record_id);
         const type = ioc ? ioc.type : (cve ? 'cve' : 'unknown');
-        const tags = (item.tags || []).slice(0, 3).map(t => `<span class="tag">${t}</span>`).join('');
+        
+        // Enrichment context
+        let enrichmentBadge = "";
+        if (viewMode === 'enriched' && item.enrichment) {
+            const nlp = item.enrichment.nlp_extracted;
+            if (nlp.malware_families?.length > 0) {
+                enrichmentBadge += `<span class="family-pill">${nlp.malware_families[0]}</span>`;
+            }
+            if (nlp.threat_categories?.length > 0) {
+                enrichmentBadge += `<span class="category-pill">${nlp.threat_categories[0]}</span>`;
+            }
+        }
+
+        const tags = (item.tags || []).slice(0, 2).map(t => `<span class="tag">${t}</span>`).join('');
         const date = item.collected_at ? new Date(item.collected_at).toLocaleDateString() : 'N/A';
 
         return `
             <tr>
-                <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-secondary)">${item.record_id.substring(0, 12)}...</td>
+                <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-secondary)">${item.record_id.substring(0, 10)}...</td>
                 <td><span class="type-pill ${type}">${type}</span></td>
-                <td><strong style="color: var(--text-primary)">${truncate(mainIndicator, 30)}</strong></td>
-                <td>${tags}${item.tags?.length > 3 ? '...' : ''}</td>
+                <td>
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <strong style="color: var(--text-primary); font-size: 0.95rem;">${truncate(mainIndicator, 32)}</strong>
+                        <div style="display: flex; gap: 4px;">${enrichmentBadge}</div>
+                    </div>
+                </td>
+                <td>${tags}${item.tags?.length > 2 ? '...' : ''}</td>
                 <td>${date}</td>
                 <td>
-                    <button class="view-btn" onclick='viewRaw(${JSON.stringify(item.record_id)})'>View</button>
+                    <button class="view-btn" onclick='viewRaw(${JSON.stringify(item.record_id)})'>View Details</button>
                 </td>
             </tr>
         `;
     }).join('');
     
-    // Add raw data back to elements for modal access
-    // Note: In a real app we'd store the full objects in memory
     window.lastLoadedData = data;
 }
 

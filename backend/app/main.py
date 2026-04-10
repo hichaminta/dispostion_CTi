@@ -23,6 +23,7 @@ from . import schemas, database, websockets, worker
 from .database import db
 
 OUTPUT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_cve_ioc"))
+ENRICHMENT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_enrichment"))
 DASHBOARD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "dashboard"))
 
 app = FastAPI(title="CTI Pipeline Tracker API")
@@ -66,7 +67,7 @@ async def create_run(run_in: schemas.RunCreate, background_tasks: BackgroundTask
         "status_global": "running"
     }
     db.create_run(new_run)
-    steps = ["Collecte", "Extraction CVE / IOC", "Normalisation", "Int\u00e9gration MISP"]
+    steps = ["Collecte", "Extraction CVE / IOC", "Enrichissement", "Normalisation", "Int\u00e9gration MISP"]
     for step_name in steps:
         db.update_step(external_id, {
             "step_name": step_name,
@@ -78,11 +79,81 @@ async def create_run(run_in: schemas.RunCreate, background_tasks: BackgroundTask
     background_tasks.add_task(worker.execute_pipeline_task, external_id, run_in.source_name)
     return db.get_run_by_external_id(external_id)
 
+@app.post("/runs/enrich", response_model=schemas.Run)
+async def create_enrichment_run(run_in: schemas.RunCreate, background_tasks: BackgroundTasks):
+    external_id = str(uuid.uuid4())
+    new_run = {
+        "run_id": external_id,
+        "source_name": run_in.source_name,
+        "source_type": run_in.source_type,
+        "status_global": "running"
+    }
+    db.create_run(new_run)
+    
+    # Single step for targeted enrichment
+    db.update_step(external_id, {
+        "step_name": "Enrichissement",
+        "status": "pending",
+        "ioc_count": 0,
+        "cve_count": 0,
+        "logs": [],
+    })
+    
+    background_tasks.add_task(worker.execute_enrichment_task, external_id, run_in.source_name)
+    return db.get_run_by_external_id(external_id)
+
+@app.post("/runs/{run_id}/stop")
+async def stop_run(run_id: int):
+    run = db.get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    
+    external_id = run["run_id"]
+    success = worker.terminate_run(external_id)
+    
+    if success:
+        # Update database status
+        db.update_run(external_id, {"status_global": "failed"})
+        # Notify via WebSocket
+        await websockets.manager.broadcast({
+            "type": "run_complete",
+            "run_id": external_id,
+            "status": "failed",
+            "message": "Arrêté par l'utilisateur"
+        })
+        return {"status": "success", "message": "Pipeline arrêté"}
+    else:
+        return {"status": "error", "message": "Aucun processus actif trouvé pour ce run"}
+
+@app.post("/runs/targeted", response_model=schemas.Run)
+async def create_targeted_run(run_in: schemas.RunCreate, step_name: str, background_tasks: BackgroundTasks):
+    external_id = str(uuid.uuid4())
+    new_run = {
+        "run_id": external_id,
+        "source_name": run_in.source_name,
+        "source_type": run_in.source_type,
+        "status_global": "running"
+    }
+    db.create_run(new_run)
+    
+    # Initialize only the specified step and get the updated run object
+    run_obj = db.update_step(external_id, {
+        "step_name": step_name,
+        "status": "pending",
+        "ioc_count": 0,
+        "cve_count": 0,
+        "logs": [],
+    })
+    
+    background_tasks.add_task(worker.execute_targeted_task, external_id, run_in.source_name, step_name)
+    return run_obj
+
 @app.get("/stats")
 def get_stats():
     from datetime import datetime as dt
     total_ioc = 0
     total_cve = 0
+    # Process both standard and enriched (standardized has correct full count)
     if os.path.exists(OUTPUT_DIR):
         for fn in os.listdir(OUTPUT_DIR):
             if not fn.endswith(".json"): continue
@@ -119,6 +190,10 @@ def get_stats():
     }
     return res
 
+# ──────────────────────────────────────────────────────────────────────────────
+# EXTRACTION ENDPOINTS
+# ──────────────────────────────────────────────────────────────────────────────
+
 @app.get("/api/extracted/sources")
 def get_extracted_sources():
     sources = []
@@ -148,6 +223,70 @@ def get_extracted_data(source_id: str, page: int = 1, limit: int = 50, search: s
         raise HTTPException(status_code=404, detail="Source not found")
         
     filepath = os.path.join(OUTPUT_DIR, info["output"])
+    if not os.path.exists(filepath):
+        return {"data": [], "total": 0, "page": page, "limit": limit}
+
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            all_data = json.load(f)
+            
+        if search:
+            search_low = search.lower()
+            all_data = [
+                d for d in all_data 
+                if search_low in str(d.get("record_id", "")).lower() or 
+                   any(search_low in str(t).lower() for t in d.get("tags", [])) or
+                   search_low in str(d.get("raw_text", "")).lower()
+            ]
+            
+        total = len(all_data)
+        start = (page - 1) * limit
+        end = start + limit
+        return {
+            "data": all_data[start:end],
+            "total": total,
+            "page": page,
+            "limit": limit
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ENRICHMENT ENDPOINTS
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/enriched/sources")
+def get_enriched_sources():
+    sources = []
+    if os.path.exists(ENRICHMENT_DIR):
+        for src_name, info in worker.SOURCE_MAP.items():
+            enriched_fn = info["output"].replace("_extracted.json", "_enriched.json")
+            filepath = os.path.join(ENRICHMENT_DIR, enriched_fn)
+            if os.path.exists(filepath):
+                stats = os.stat(filepath)
+                sources.append({
+                    "id": info["id"],
+                    "name": src_name,
+                    "file": enriched_fn,
+                    "size": stats.st_size,
+                    "last_modified": stats.st_mtime
+                })
+    return sources
+
+@app.get("/api/enriched/data/{source_id}")
+def get_enriched_data(source_id: str, page: int = 1, limit: int = 50, search: str = None):
+    info = None
+    for src_name, src_info in worker.SOURCE_MAP.items():
+        if src_info["id"] == source_id:
+            info = src_info
+            break
+    
+    if not info:
+        raise HTTPException(status_code=404, detail="Source not found")
+        
+    enriched_fn = info["output"].replace("_extracted.json", "_enriched.json")
+    filepath = os.path.join(ENRICHMENT_DIR, enriched_fn)
+    
     if not os.path.exists(filepath):
         return {"data": [], "total": 0, "page": page, "limit": limit}
 

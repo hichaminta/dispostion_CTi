@@ -24,7 +24,8 @@ class BaseExtractor:
             "PhishTank": ["phish_id", "id"],
             "NVd": ["id", "cve_id"],
             "AbuseIPDB": ["ipAddress", "id"],
-            "MalwareBazaar": ["sha256_hash", "id"],
+            "MalwareBazaar Community API": ["collect_id", "sha256_hash", "id"],
+            "MalwareBazaar": ["sha256_hash", "id"], # Backward compatibility
             "ThreatFox": ["id"],
             "URLhaus": ["id"],
             "Pulsedive": ["id"],
@@ -188,6 +189,76 @@ class BaseExtractor:
         # Absolute fallback: hash of the raw content
         return str(hash(json.dumps(item, sort_keys=True)))
 
+    def _extract_attributes(self, item):
+        """
+        Extracts extended metadata attributes from raw JSON items.
+        Standardizes field names across different sources.
+        """
+        attrs = {}
+        
+        # --- Network Info ---
+        port = item.get('port') or item.get('destination_port') or item.get('dst_port')
+        if port: attrs['port'] = port
+        
+        country = item.get('country') or item.get('countries') or item.get('countryCode') or item.get('country_code')
+        if country: attrs['country'] = country
+        
+        asn = item.get('as_number') or item.get('asn') or item.get('asn_number')
+        if asn: attrs['asn'] = asn
+        
+        as_owner = item.get('as_name') or item.get('as_owner') or item.get('as_orgname')
+        if as_owner: attrs['as_owner'] = as_owner
+        
+        hostname = item.get('hostname') or item.get('host') or item.get('domain_name')
+        if hostname: attrs['hostname'] = hostname
+
+        # --- Threat Intelligence / Scoring ---
+        confidence = item.get('confidence_level') or item.get('confidence') or item.get('abuseConfidenceScore')
+        if confidence is not None: attrs['confidence'] = confidence
+        
+        reputation = item.get('reputation') or item.get('reputation_score') or item.get('score')
+        if reputation is not None: attrs['reputation'] = reputation
+        
+        threat_type = item.get('threat_type') or item.get('threat_category') or item.get('ioc_type_desc')
+        if threat_type: attrs['threat_type'] = threat_type
+        
+        malware = item.get('malware_printable') or item.get('malware') or item.get('malware_family')
+        if malware: attrs['malware_family'] = malware
+
+        # --- Operational Status ---
+        status = item.get('status') or item.get('malware_status')
+        if status: attrs['status'] = status
+        
+        is_compromised = item.get('is_compromised')
+        if is_compromised is not None: attrs['is_compromised'] = is_compromised
+
+        # --- Technical Hashes & Fuzzy Hashes ---
+        for h_field in ['sha1_hash', 'sha1', 'sha3_384_hash', 'sha3_384', 'imphash', 'tlsh', 'ssdeep']:
+            val = item.get(h_field)
+            if val: attrs[h_field.replace('_hash', '')] = val
+
+        # --- Intelligence & Sandbox ---
+        intel = item.get('intelligence')
+        if isinstance(intel, dict):
+            for i_key, i_val in intel.items():
+                if i_val: attrs[f'intel_{i_key}'] = i_val
+
+        # --- MalwareBazaar Specifics ---
+        if item.get('collect_id'): attrs['collect_id'] = item.get('collect_id')
+        if item.get('reporter'): attrs['reporter'] = item.get('reporter')
+        if item.get('delivery_method'): attrs['delivery_method'] = item.get('delivery_method')
+        if item.get('file_size'): attrs['file_size'] = item.get('file_size')
+
+        # --- Handle Nested Attributes (e.g. VirusTotal) ---
+        if 'attributes' in item and isinstance(item['attributes'], dict):
+            vt_attrs = item['attributes']
+            if not attrs.get('reputation'): attrs['reputation'] = vt_attrs.get('reputation')
+            if not attrs.get('status'): attrs['status'] = vt_attrs.get('status')
+            if vt_attrs.get('type_description'): attrs['type_description'] = vt_attrs.get('type_description')
+            if vt_attrs.get('names'): attrs['filenames'] = vt_attrs.get('names')
+
+        return attrs
+
     def process_item(self, source_name, item):
         # Convert item to a string representation for global extraction
         raw_text = json.dumps(item, ensure_ascii=False)
@@ -197,11 +268,14 @@ class BaseExtractor:
         tags = self.extract_tags(item)
         refs = self.extract_references(item)
         
+        # New: Extract extended attributes
+        attributes = self._extract_attributes(item)
+        
         # Add source info to each IOC/CVE for traceability
         for ioc in extracted['iocs']:
             ioc['source'] = source_name
-        for cve in extracted['cves']:
-            cve['source'] = source_name
+        for ioc in extracted['cves']:
+            ioc['source'] = source_name
         
         return {
             "source": source_name,
@@ -212,6 +286,7 @@ class BaseExtractor:
             "cves": extracted['cves'],
             "tags": tags,
             "references": refs,
+            "attributes": attributes,
             "collected_at": item.get('collected_at') or item.get('extracted_at') or item.get('lastReportedAt') or item.get('last_modified') or item.get('published')
         }
 
@@ -280,6 +355,22 @@ class BaseExtractor:
                 for r in new_item.get("references", []):
                     existing_refs.add(r)
                 existing["references"] = sorted(list(existing_refs))
+                
+                # Update Attributes (New)
+                existing_attrs = existing.get("attributes", {})
+                for k, v in new_item.get("attributes", {}).items():
+                    existing_attrs[k] = v
+                existing["attributes"] = existing_attrs
+                
+                # Update collected_at if newer or missing
+                new_ts = new_item.get("collected_at")
+                old_ts = existing.get("collected_at")
+                if new_ts and (not old_ts or new_ts > old_ts):
+                    existing["collected_at"] = new_ts
+                    
+                # Update raw_text if missing
+                if not existing.get("raw_text"):
+                    existing["raw_text"] = new_item.get("raw_text")
                 
                 # Update summary
                 existing["summary"] = f"Merged data from {source_name}. Total {len(existing_iocs)} IOCs, {len(existing_cves)} CVEs, and {len(existing['tags'])} tags."

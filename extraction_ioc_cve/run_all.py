@@ -17,7 +17,9 @@ def run_all():
         print(f"\n--- Running {script} ---")
         try:
             # Use sys.executable to run with the same python environment
-            subprocess.run([sys.executable, script_path], check=True, cwd=os.path.dirname(extractors_dir))
+            # Pass any arguments received by run_all.py to the sub-scripts (e.g. --full)
+            cmd = [sys.executable, script_path] + sys.argv[1:]
+            subprocess.run(cmd, check=True, cwd=os.path.dirname(extractors_dir))
         except subprocess.CalledProcessError as e:
             print(f"Error running {script}: {e}")
         except Exception as e:

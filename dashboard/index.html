@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CTI Extraction Dashboard | Premium Intelligence</title>
+    <title>BlueSec | CTI Extraction Intelligence</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,8 +15,21 @@
         <!-- Sidebar -->
         <aside class="sidebar glass">
             <div class="logo-section">
-                <div class="logo-icon"></div>
-                <h1>CTI<span>Results</span></h1>
+                <img src="logo.png" alt="BlueSec Logo" class="logo-img">
+                <span class="logo-subtext">Results</span>
+            </div>
+
+            <!-- View Mode Toggle -->
+            <div class="view-mode-section">
+                <div class="nav-label">View Mode</div>
+                <div class="view-toggle-group glass">
+                    <button id="mode-extracted" class="mode-btn active" onclick="setMode('extracted')">
+                        <i data-lucide="database"></i> Extraction
+                    </button>
+                    <button id="mode-enriched" class="mode-btn" onclick="setMode('enriched')">
+                        <i data-lucide="zap"></i> Enrichment
+                    </button>
+                </div>
             </div>
             
             <nav class="source-nav">

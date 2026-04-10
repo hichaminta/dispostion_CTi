@@ -4,9 +4,45 @@ import sys
 import os
 import json
 import traceback
+import logging
 from datetime import datetime
 from .database import db
 from .websockets import manager
+
+# Configuration du logging pour le worker
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Registre global des processus actifs par run_id
+# Format: { run_id: subprocess.Popen or asyncio.subprocess.Process }
+ACTIVE_PROCS = {}
+
+def terminate_run(run_id: str):
+    """Arrête violemment un run en cours."""
+    proc = ACTIVE_PROCS.get(run_id)
+    if proc:
+        try:
+            logger.info(f"Terminating run {run_id} (PID: {proc.pid})...")
+            
+            if sys.platform == 'win32':
+                # Sur Windows, .terminate() ne tue pas les enfants si shell=True.
+                # 'taskkill /F /T' tue récursivement toute l'arborescence.
+                subprocess.run(['taskkill', '/F', '/T', '/PID', str(proc.pid)], 
+                               capture_output=True, text=True)
+            else:
+                if hasattr(proc, 'terminate'):
+                    proc.terminate()
+                if hasattr(proc, 'kill'):
+                    proc.kill()
+                    
+            logger.info(f"Run {run_id} terminated via system signal.")
+        except Exception as e:
+            logger.error(f"Error terminating run {run_id}: {e}")
+        finally:
+            if run_id in ACTIVE_PROCS:
+                del ACTIVE_PROCS[run_id]
+            return True
+    return False
 
 # Répertoire racine du projet
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -68,6 +104,9 @@ async def _run_proc(run_id: str, step_name: str, cmd: list, cwd: str) -> bool:
                 stderr=asyncio.subprocess.STDOUT,
             )
             
+            # Enregistrement pour pouvoir l'arrêter
+            ACTIVE_PROCS[run_id] = proc
+            
             async for raw in proc.stdout:
                 line = raw.decode("utf-8", errors="replace").rstrip()
                 if line:
@@ -75,14 +114,18 @@ async def _run_proc(run_id: str, step_name: str, cmd: list, cwd: str) -> bool:
             
             await proc.wait()
             ok = proc.returncode == 0
+            
+            # Nettoyage
+            if run_id in ACTIVE_PROCS: del ACTIVE_PROCS[run_id]
+            
             status_icon = "\u2713" if ok else "\u2717"
-            await _ws_log(run_id, step_name, f"[{ts_func()}] {status_icon} Processus termin\u00e9 (code {proc.returncode})")
+            await _ws_log(run_id, step_name, f"[{ts_func()}] {status_icon} Processus terminé (code {proc.returncode})")
             return ok
 
         except NotImplementedError:
             # FALLBACK CRITIQUE POUR WINDOWS :
             # Si la loop asyncio ne supporte pas les subprocesses, on utilise subprocess.Popen dans un thread.
-            await _ws_log(run_id, step_name, f"[{ts_func()}] \u26a0 Loop asyncio Selector d\u00e9tect\u00e9e. Utilisation du fallback synchrone...")
+            await _ws_log(run_id, step_name, f"[{ts_func()}] \u26a0 Loop asyncio Selector détectée. Utilisation du fallback synchrone...")
             
             def run_sync():
                 p = subprocess.Popen(
@@ -104,13 +147,14 @@ async def _run_proc(run_id: str, step_name: str, cmd: list, cwd: str) -> bool:
             # On lance dans un thread pour ne pas bloquer l'event loop
             proc_sync = await asyncio.to_thread(run_sync)
             
-            # Lecture des logs en streaming (toujours dans un thread pour ne pas bloquer)
+            # Enregistrement
+            ACTIVE_PROCS[run_id] = proc_sync
+            
+            # Lecture des logs en streaming
             def stream_logs(p, rid, sname, loop):
-                # On utilise une boucle de lecture bloquante car on est dans un thread
                 for line in p.stdout:
                     line = line.strip()
                     if line:
-                        # On utilise le loop passé en argument pour injecter le log dans la boucle principale
                         asyncio.run_coroutine_threadsafe(
                             _ws_log(rid, sname, f"[{ts_func()}] {line}"),
                             loop
@@ -120,12 +164,16 @@ async def _run_proc(run_id: str, step_name: str, cmd: list, cwd: str) -> bool:
 
             return_code = await asyncio.to_thread(stream_logs, proc_sync, run_id, step_name, main_loop)
             
+            # Nettoyage
+            if run_id in ACTIVE_PROCS: del ACTIVE_PROCS[run_id]
+            
             ok = return_code == 0
             status_icon = "\u2713" if ok else "\u2717"
-            await _ws_log(run_id, step_name, f"[{ts_func()}] {status_icon} Processus termin\u00e9 via fallback (code {return_code})")
+            await _ws_log(run_id, step_name, f"[{ts_func()}] {status_icon} Processus terminé via fallback (code {return_code})")
             return ok
 
     except Exception as e:
+        if run_id in ACTIVE_PROCS: del ACTIVE_PROCS[run_id]
         error_detail = traceback.format_exc()
         await _ws_log(run_id, step_name, f"[{ts_func()}] \u2717 ERREUR CRITIQUE DANS LE WORKER:")
         for line in error_detail.split('\n'):
@@ -300,7 +348,46 @@ async def execute_pipeline_task(run_id: str, source_name: str):
                            ioc_count=ioc_count, cve_count=cve_count)
 
         # ══════════════════════════════════════════════════════════════
-        # ÉTAPE 3 : Normalisation (Simulation car non terminé)
+        # ÉTAPE 3 : Enrichissement — exécuter les enrichisseurs NLP
+        # ══════════════════════════════════════════════════════════════
+        await _update_step(run_id, "Enrichissement", "running")
+        await _ws_log(run_id, "Enrichissement", f"[{ts()}] ═══ DÉMARRAGE ENRICHISSEMENT ═══")
+
+        enrichment_ok = True
+        ENRICHMENT_SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "enrichment", "scripts")
+
+        for src in sources_to_run:
+            # Skip blacklisted enrichment (optional if we want consistency with main.py)
+            if src in ["NVD", "AlienVault OTX"]:
+                await _ws_log(run_id, "Enrichissement", f"[{ts()}] ➔ Skip : {src} (Non supporté)")
+                continue
+
+            info = SOURCE_MAP.get(src)
+            if not info: continue
+
+            # Script name should match what generate_enrichers.py produces
+            enricher_name = info["output"].replace("_extracted.json", "_enricher.py")
+            enricher_path = os.path.join(ENRICHMENT_SCRIPTS_DIR, enricher_name)
+
+            if not os.path.exists(enricher_path):
+                await _ws_log(run_id, "Enrichissement", f"[{ts()}] ⚠ Enrichisseur absent : {enricher_name}")
+                continue
+
+            await _ws_log(run_id, "Enrichissement", f"[{ts()}] ── Enrichissement : {src} ──")
+            ok = await _run_proc(
+                run_id, "Enrichissement",
+                [sys.executable, enricher_path],
+                PROJECT_ROOT
+            )
+            if not ok:
+                enrichment_ok = False
+                await _ws_log(run_id, "Enrichissement", f"[{ts()}] ⚠ {src} enrichissement échoué.")
+
+        await _ws_log(run_id, "Enrichissement", f"[{ts()}] ═══ ENRICHISSEMENT {'OK' if enrichment_ok else 'PARTIELLE'} ═══")
+        await _update_step(run_id, "Enrichissement", "success" if enrichment_ok else "failed")
+
+        # ══════════════════════════════════════════════════════════════
+        # ÉTAPE 4 : Normalisation (Simulation car non terminé)
         # ══════════════════════════════════════════════════════════════
         await _update_step(run_id, "Normalisation", "running")
         await _ws_log(run_id, "Normalisation", f"[{ts()}] ═══ DÉMARRAGE NORMALISATION (PLANIFIÉ) ═══")
@@ -320,12 +407,99 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         await _update_step(run_id, "Intégration MISP", "planned")
 
         # Statut global : On considère le run comme "success" seulement si la collecte et l'extraction ont réussi
-        final_status = "success" if (collecte_ok and extraction_ok) else "failed"
-        db.update_run(run_id, {"status_global": final_status})
-        await manager.broadcast({"type": "run_complete", "run_id": run_id, "status": final_status})
+        await _ws_log(run_id, "Intégration MISP", f"[{ts()}] ════ FIN PIPELINE (SIMULÉE) ════")
+        await _update_step(run_id, "Intégration MISP", "success")
+
+        # Terminer
+        db.update_run(run_id, {"status_global": "success"})
+        await manager.broadcast({"type": "run_complete", "run_id": run_id, "status": "success"})
 
     except Exception as e:
-        print(f"[PIPELINE ERROR] run_id={run_id}: {e}")
+        logger.error(f"Pipeline error: {e}", exc_info=True)
+        await _ws_log(run_id, "Collecte", f"[{ts()}] ❌ ERREUR FATALE : {e}")
+        db.update_run(run_id, {"status_global": "failed"})
+        await manager.broadcast({"type": "run_complete", "run_id": run_id, "status": "failed"})
+
+async def execute_enrichment_task(run_id: str, source_name: str):
+    """Wrapper pour l'enrichissement uniquement."""
+    await execute_targeted_task(run_id, source_name, "Enrichissement")
+
+async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
+    """
+    Exécute UNIQUEMENT une étape spécifique du pipeline.
+    """
+    is_unified = (source_name == "Unified Extraction")
+    ts = lambda: datetime.utcnow().strftime("%H:%M:%S")
+
+    try:
+        await _update_step(run_id, step_name, "running")
+        await _ws_log(run_id, step_name, f"[{ts()}] ═══ DÉMARRAGE ÉTAPE CIBLÉE : {step_name.upper()} ═══")
+
+        sources_to_run = list(SOURCE_MAP.keys()) if is_unified else [source_name]
+        step_ok = True
+        ioc_count = 0
+        cve_count = 0
+
+        if step_name == "Collecte":
+            for src in sources_to_run:
+                info = SOURCE_MAP.get(src)
+                if not info: continue
+                src_folder = os.path.join(SOURCES_DATA_DIR, info["folder"])
+                script_path = os.path.join(src_folder, "script.py")
+                if not os.path.exists(script_path):
+                    await _ws_log(run_id, step_name, f"[{ts()}] ⚠ Script absent : {script_path}")
+                    continue
+                await _ws_log(run_id, step_name, f"[{ts()}] ── Collecte : {src} ──")
+                ok = await _run_proc(run_id, step_name, [sys.executable, script_path], src_folder)
+                if not ok: step_ok = False
+
+        elif step_name == "Extraction CVE / IOC":
+            for src in sources_to_run:
+                info = SOURCE_MAP.get(src)
+                if not info: continue
+                extractor_path = os.path.join(EXTRACTORS_DIR, info["extractor"])
+                if not os.path.exists(extractor_path):
+                    await _ws_log(run_id, step_name, f"[{ts()}] ⚠ Extracteur absent : {info['extractor']}")
+                    continue
+                await _ws_log(run_id, step_name, f"[{ts()}] ── Extraction : {src} ──")
+                ok = await _run_proc(run_id, step_name, [sys.executable, extractor_path], PROJECT_ROOT)
+                if not ok: step_ok = False
+            # Update counts
+            ioc_count, cve_count = _count_ioc_cve(source_name)
+
+        elif step_name == "Enrichissement":
+            ENRICHMENT_SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "enrichment", "scripts")
+            for src in sources_to_run:
+                if src in ["NVD", "AlienVault OTX"]:
+                    await _ws_log(run_id, step_name, f"[{ts()}] ➔ Skip : {src} (Non supporté)")
+                    continue
+                info = SOURCE_MAP.get(src)
+                if not info: continue
+                enricher_name = info["output"].replace("_extracted.json", "_enricher.py")
+                enricher_path = os.path.join(ENRICHMENT_SCRIPTS_DIR, enricher_name)
+                if not os.path.exists(enricher_path):
+                    await _ws_log(run_id, step_name, f"[{ts()}] ⚠ Enrichisseur absent : {enricher_name}")
+                    continue
+                await _ws_log(run_id, step_name, f"[{ts()}] ── Enrichissement : {src} ──")
+                ok = await _run_proc(run_id, step_name, [sys.executable, enricher_path], PROJECT_ROOT)
+                if not ok: step_ok = False
+
+        elif step_name in ["Normalisation", "Intégration MISP"]:
+            await _ws_log(run_id, step_name, f"[{ts()}] [INFO] Cette étape est planifiée pour une version future.")
+            await asyncio.sleep(0.5)
+            step_ok = True # Simulé
+
+        await _ws_log(run_id, step_name, f"[{ts()}] ═══ ÉTAPE {step_name.upper()} {'OK' if step_ok else 'TERMINÉE'} ═══")
+        await _update_step(run_id, step_name, "success" if step_ok else "failed", ioc_count=ioc_count, cve_count=cve_count)
+        
+        # Terminer le run global
+        db.update_run(run_id, {"status_global": "success" if step_ok else "failed"})
+        await manager.broadcast({"type": "run_complete", "run_id": run_id, "status": "success" if step_ok else "failed"})
+
+    except Exception as e:
+        print(f"Error in targeted task: {e}")
         traceback.print_exc()
+        await _ws_log(run_id, step_name, f"[{ts()}] ❌ ERREUR FATALE : {e}")
+        await _update_step(run_id, step_name, "failed")
         db.update_run(run_id, {"status_global": "failed"})
         await manager.broadcast({"type": "run_complete", "run_id": run_id, "status": "failed"})

@@ -212,6 +212,17 @@ def main():
         tracking = load_tracking()
         logging.info(f"Base locale : {len(existing_data)} IPs.")
 
+        # Throttling: Skip API if last run was < 24h ago
+        last_run_iso = tracking.get("last_run")
+        if last_run_iso:
+            try:
+                last_run_dt = datetime.fromisoformat(last_run_iso.replace("Z", "+00:00"))
+                delta = datetime.now(timezone.utc) - last_run_dt
+                if delta.total_seconds() < 86400: # 24 hours
+                    logging.info(f"Scan API sauté (dernière réussite il y a {delta.total_seconds()/3600:.1f}h). Utilisation de la base locale.")
+                    return
+            except Exception: pass
+
         # 2. Récupérer la Blacklist complète (configurée à 10000 par défaut)
         logging.info("Récupération de la Blacklist AbuseIPDB...")
         blacklist = get_blacklist(confidence_minimum=90, limit=10000)
@@ -251,8 +262,6 @@ def main():
 
     except KeyboardInterrupt:
         logging.warning("Interruption par l'utilisateur. Sauvegarde en cours...")
-        # Note : save_json_atomic est déjà appelé régulièrement dans certains pipelines, 
-        # ici on s'assure d'un état cohérent.
         sys.exit(0)
     except Exception as e:
         logging.error(f"Une erreur inattendue est survenue : {e}")

@@ -58,26 +58,29 @@ h1, h2, h3 {
 
 .logo-section {
     display: flex;
-    align-items: center;
-    gap: 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
     margin-bottom: 40px;
 }
 
-.logo-icon {
-    width: 32px;
-    height: 32px;
-    background: linear-gradient(135deg, var(--accent-color), #53b1fd);
-    border-radius: 8px;
-    box-shadow: 0 0 15px var(--accent-glow);
+.logo-img {
+    height: 22px !important;
+    width: auto !important;
+    max-width: 180px !important;
+    object-fit: contain !important;
+    display: block !important;
 }
 
-.logo-section h1 {
-    font-size: 1.25rem;
+.logo-subtext {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.7rem;
     font-weight: 700;
-}
-
-.logo-section span {
     color: var(--accent-color);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-left: 2px;
+    opacity: 0.6;
 }
 
 .nav-label {
@@ -87,6 +90,86 @@ h1, h2, h3 {
     letter-spacing: 1px;
     margin-bottom: 12px;
     font-weight: 600;
+}
+
+/* View Mode Section */
+.view-mode-section {
+    margin-bottom: 24px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.view-toggle-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 6px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+}
+
+.mode-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    width: 100%;
+    text-align: left;
+}
+
+.mode-btn i {
+    width: 18px;
+    height: 18px;
+    opacity: 0.7;
+}
+
+.mode-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.mode-btn.active {
+    background: rgba(46, 144, 250, 0.1);
+    border-color: rgba(46, 144, 250, 0.2);
+    color: var(--accent-color);
+}
+
+.mode-btn.active i {
+    opacity: 1;
+}
+
+/* Enrichment Specific UI */
+.family-pill {
+    background: rgba(240, 68, 56, 0.1);
+    color: var(--danger-color);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-right: 4px;
+    border: 1px solid rgba(240, 68, 56, 0.2);
+}
+
+.category-pill {
+    background: rgba(247, 144, 9, 0.1);
+    color: var(--warning-color);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-right: 4px;
+    border: 1px solid rgba(247, 144, 9, 0.2);
 }
 
 .nav-links {

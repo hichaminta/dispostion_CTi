@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import logo from '../assets/logo.png';
 import {
   Play, Shield, Activity, Clock, FileText,
-  Database, AlertTriangle, CheckCircle2, Loader2, Zap
+  Database, AlertTriangle, CheckCircle2, Loader2, Zap, Sparkles, Square
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -45,6 +46,7 @@ const Dashboard = ({ onSelectRun }) => {
   const [runs,           setRuns]           = useState([]);
   const [stats,          setStats]          = useState(null);
   const [loading,        setLoading]        = useState(true);
+  const [stopping,       setStopping]       = useState(false);
   const [runningSources, setRunningSources] = useState(new Set());
 
   useEffect(() => {
@@ -116,6 +118,55 @@ const Dashboard = ({ onSelectRun }) => {
     }
   };
 
+  const startEnrichment = async (source) => {
+    if (source.id === 'nvd' || source.id === 'alienvault') return;
+    
+    setRunningSources(prev => new Set([...prev, source.id]));
+    try {
+      const res = await axios.post(`${API_BASE}/runs/enrich`, { 
+        source_name: source.name, 
+        source_type: source.type 
+      });
+      if (res.data && res.data.id) {
+        onSelectRun(res.data.id);
+      }
+      fetchAll();
+    } catch (e) {
+      console.error("Error starting enrichment:", e);
+    }
+  };
+
+  const startTargetedRun = async (source, stepName) => {
+    setRunningSources(prev => new Set([...prev, source.id]));
+    try {
+      const res = await axios.post(`${API_BASE}/runs/targeted`, { 
+        source_name: source.name, 
+        source_type: source.type 
+      }, { params: { step_name: stepName } });
+      
+      if (res.data && res.data.id) {
+        onSelectRun(res.data.id);
+      }
+      fetchAll();
+    } catch (e) {
+      console.error("Error starting targeted run:", e);
+    }
+  };
+
+  const stopRun = async () => {
+    const activeRun = runs.find(r => r.status_global === "running");
+    if (!activeRun) return;
+    setStopping(true);
+    try {
+      await axios.post(`${API_BASE}/runs/${activeRun.id}/stop`);
+      setTimeout(fetchAll, 1000);
+    } catch (e) {
+      console.error("Error stopping run:", e);
+    } finally {
+      setStopping(false);
+    }
+  };
+
   const clearHistory = async () => {
     if (!window.confirm("\u00cates-vous s\u00fbr de vouloir vider tout l'historique ? Cette action est irr\u00e9versible.")) return;
     try {
@@ -147,27 +198,37 @@ const Dashboard = ({ onSelectRun }) => {
 
         {/* ── Header ─────────────────────────────────────────────────── */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-brand-600/20 border border-brand-500/30 flex items-center justify-center">
-              <Shield className="w-6 h-6 text-brand-400" />
-            </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
-                CTI Pipeline Platform
-              </h1>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                <p className="text-slate-400 text-sm">Threat intelligence — monitoring temps réel</p>
-              </div>
+          <div className="flex flex-col items-start gap-2">
+            <img src={logo} alt="BlueSec Logo" className="h-6 w-auto object-contain" />
+            <div className="flex items-center gap-2 mt-1">
+              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              <p className="text-slate-400 text-sm font-medium tracking-wide uppercase text-[10px]">Threat intelligence — monitoring temps réel</p>
             </div>
           </div>
-          <button
-            onClick={() => startRun()}
-            className="flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-lg shadow-brand-600/20 active:scale-95"
-          >
-            <Zap className="w-5 h-5" />
-            <span>Lancer Tout le Pipeline</span>
-          </button>
+          <div className="flex items-center gap-3">
+            {stats?.running_runs > 0 && (
+              <button
+                onClick={stopRun}
+                disabled={stopping}
+                className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 px-6 py-3 rounded-xl font-semibold transition-all shadow-lg active:scale-95 disabled:opacity-50"
+              >
+                {stopping ? <Loader2 className="w-5 h-5 animate-spin" /> : <Square className="w-5 h-5 fill-current" />}
+                <span>{stopping ? "Arrêt..." : "Arrêter le Pipeline"}</span>
+              </button>
+            )}
+            <button
+              onClick={() => startRun()}
+              disabled={stats?.running_runs > 0}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all shadow-lg active:scale-95 ${
+                stats?.running_runs > 0 
+                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed shadow-none' 
+                  : 'bg-brand-600 hover:bg-brand-500 text-white shadow-brand-600/20'
+              }`}
+            >
+              {stats?.running_runs > 0 ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
+              <span>{stats?.running_runs > 0 ? "Pipeline en cours..." : "Lancer Tout le Pipeline"}</span>
+            </button>
+          </div>
         </div>
 
         {/* ── Dashboard Menu / System ────────────────────────────────── */}
@@ -248,6 +309,8 @@ const Dashboard = ({ onSelectRun }) => {
                 key={source.id}
                 source={source}
                 onRun={() => startRun(source)}
+                onEnrich={() => startEnrichment(source)}
+                onRunStep={(step) => startTargetedRun(source, step)}
                 isRunning={runningSources.has(source.id)}
               />
             ))}
@@ -345,6 +408,7 @@ const Dashboard = ({ onSelectRun }) => {
 const PIPELINE_STEPS = [
   { name: "Collecte",             icon: Database  },
   { name: "Extraction CVE / IOC", icon: Activity  },
+  { name: "Enrichissement",       icon: Zap       },
   { name: "Normalisation",        icon: Shield    },
   { name: "Intégration MISP",     icon: Zap       },
 ];
@@ -353,12 +417,14 @@ const PipelineStepper = ({ run }) => {
   const stepMap = {};
   (run?.steps || []).forEach(s => { stepMap[s.step_name] = s; });
 
+  const activeSteps = PIPELINE_STEPS.filter(s => stepMap[s.name]);
+
   return (
     <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-2xl">
       <div className="flex items-center gap-0">
-        {PIPELINE_STEPS.map((step, idx) => {
-          const stepData = stepMap[step.name] || { status: 'pending' };
-          const isLast   = idx === PIPELINE_STEPS.length - 1;
+        {activeSteps.map((step, idx) => {
+          const stepData = stepMap[step.name];
+          const isLast   = idx === activeSteps.length - 1;
           const Icon     = step.icon;
 
           const iconClass =
@@ -406,37 +472,95 @@ const PipelineStepper = ({ run }) => {
 };
 
 // ── Source Card ───────────────────────────────────────────────────────────────
-const SourceCard = ({ source, onRun, isRunning }) => {
+const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
   const colorClass = COLOR_CLASSES[source.color] || COLOR_CLASSES.blue;
-  const isNVD = source.id === 'nvd';
+  const isNVD = source.id === 'nvd' || source.id === 'alienvault';
+
+  // Liste des étapes pour le lancement ciblé
+  const STEPS = [
+    "Collecte",
+    "Extraction CVE / IOC",
+    "Enrichissement",
+    "Normalisation",
+    "Intégration MISP"
+  ];
 
   return (
-    <div className={`p-3 rounded-xl border transition-all duration-200 ${
-      isRunning ? `${colorClass} ring-1 ring-current ring-offset-1 ring-offset-[#0a0d1a]` : 'bg-slate-900/40 border-slate-800 hover:border-slate-700'
-    }`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className={`text-[9px] uppercase tracking-wider font-bold ${isRunning ? '' : 'text-slate-600'}`}>
-          {source.type}
-        </span>
-        {isRunning && <span className="w-1.5 h-1.5 rounded-full bg-current animate-ping" />}
-      </div>
-      <p className="text-white font-semibold text-xs mb-3 leading-tight">{source.name}</p>
-      {isNVD && (
-        <p className="text-[9px] text-yellow-500/60 mb-2">CVE uniquement</p>
-      )}
-      <button
-        onClick={onRun}
-        disabled={isRunning}
-        className={`w-full py-1.5 rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 ${
-          isRunning ? 'bg-slate-800 text-slate-500 cursor-not-allowed' :
-          'bg-slate-800 hover:bg-brand-600/80 text-slate-400 hover:text-white'
-        }`}
+    <div 
+      className={`rounded-xl border transition-all duration-300 overflow-hidden ${
+        isRunning 
+          ? `${colorClass} ring-1 ring-current ring-offset-1 ring-offset-[#0a0d1a]` 
+          : `bg-slate-900/40 border-slate-800 hover:border-slate-700 ${isExpanded ? 'ring-1 ring-slate-700' : ''}`
+      }`}
+    >
+      {/* Header (cliquable pour expand) */}
+      <div 
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="p-3 cursor-pointer select-none"
       >
-        {isRunning
-          ? <><Loader2 className="w-3 h-3 animate-spin" /><span>En cours...</span></>
-          : <><Play className="w-3 h-3 fill-current" /><span>Lancer</span></>
-        }
-      </button>
+        <div className="flex items-center justify-between mb-2">
+          <span className={`text-[9px] uppercase tracking-wider font-bold ${isRunning ? '' : 'text-slate-600'}`}>
+            {source.type}
+          </span>
+          <div className="flex items-center gap-1.5">
+            {isRunning && <span className="w-1.5 h-1.5 rounded-full bg-current animate-ping" />}
+            <Play className={`w-2.5 h-2.5 transition-transform duration-300 ${isExpanded ? 'rotate-90' : 'text-slate-700'}`} />
+          </div>
+        </div>
+        <p className="text-white font-semibold text-xs leading-tight">{source.name}</p>
+      </div>
+      
+      {/* Expanded Content: Step Selection */}
+      <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[400px] opacity-100 border-t border-slate-800/50' : 'max-h-0 opacity-0'}`}>
+        <div className="p-3 space-y-2">
+          <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">Étapes du Pipeline</p>
+          
+          <div className="space-y-1.5">
+            {STEPS.map((step, idx) => {
+              const isDisabled = isRunning || (step === 'Enrichissement' && isNVD);
+              return (
+                <div key={step} className="flex items-center justify-between group/step">
+                  <span className={`text-[11px] ${isDisabled ? 'text-slate-700' : 'text-slate-400 group-hover/step:text-white transition-colors'}`}>
+                    {idx + 1}. {step}
+                  </span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRunStep(step); }}
+                    disabled={isDisabled}
+                    className={`p-1 rounded bg-slate-800 border border-slate-700 transition-all ${
+                      isDisabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-brand-600 hover:border-brand-500 text-slate-500 hover:text-white'
+                    }`}
+                  >
+                    <Play className="w-2.5 h-2.5 fill-current" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="pt-2 border-t border-slate-800/50 mt-2 space-y-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); onRun(); }}
+              disabled={isRunning}
+              className={`w-full py-2 rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1.5 ${
+                isRunning ? 'bg-slate-800 text-slate-500 cursor-not-allowed' :
+                'bg-brand-600/20 hover:bg-brand-600 border border-brand-500/30 hover:border-brand-500 text-brand-400 hover:text-white'
+              }`}
+            >
+              <Zap className="w-3 h-3" />
+              <span>Lancer Tout</span>
+            </button>
+
+            <button
+              onClick={(e) => { e.stopPropagation(); window.open(`http://localhost:8000/results/`, '_blank'); }}
+              className="w-full py-1.5 rounded-lg text-[10px] font-bold bg-slate-800/50 hover:bg-slate-700 text-slate-500 hover:text-white border border-slate-700 transition-all flex items-center justify-center gap-1.5"
+            >
+              <FileText className="w-3 h-3" />
+              <span>Explorer</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

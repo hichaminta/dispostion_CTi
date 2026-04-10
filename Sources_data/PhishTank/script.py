@@ -258,7 +258,7 @@ def merge_records(existing_data, new_items, tracking, new_records_out):
 
         print(f"  [{i}/{total}] Nouveau : {ioc[:80]}", end="\r", flush=True)
         existing_data.append(item)
-        existing_iocs.add(ioc)
+        existing_iocs[ioc] = item
         new_records_out.append(item)
         added += 1
 
@@ -298,6 +298,18 @@ def main():
     existing_data = load_existing()
     tracking      = load_tracking()
     logging.info(f"Indexation : {len(existing_data)} phishings chargés.")
+
+    # Throttling: Skip API if last successful run was < 24h ago
+    last_success_str = tracking.get("last_sync_success")
+    if last_success_str:
+        try:
+            last_success = datetime.fromisoformat(last_success_str)
+            delta = datetime.now(timezone.utc) - last_success
+            if delta.total_seconds() < 86400: # 24 hours
+                logging.info(f"Scan API sauté (dernière réussite il y a {delta.total_seconds()/3600:.1f}h). Utilisation de la base locale.")
+                # We still run automation/extraction if needed
+                return
+        except Exception: pass
 
     # ── Étape 1 : PhishTank officiel (si clé disponible)
     normalized_items = []

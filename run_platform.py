@@ -39,8 +39,21 @@ def run_platform():
                 break
     except KeyboardInterrupt:
         print("\nStopping platform...")
-        backend_process.terminate()
-        frontend_process.terminate()
+        
+        # Graceful cleanup
+        def safe_stop(proc, name):
+            if proc.poll() is None:
+                print(f"Stopping {name}...")
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    print(f"Force killing {name}...")
+                    proc.kill()
+        
+        safe_stop(backend_process, "Backend")
+        safe_stop(frontend_process, "Frontend")
+        print("Platform stopped.")
 
 if __name__ == "__main__":
     run_platform()
