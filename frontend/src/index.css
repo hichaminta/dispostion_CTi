@@ -39,3 +39,63 @@ body {
 #root {
   width: 100%;
 }
+
+/* ─── Cyber HUD Animations ─── */
+@keyframes cyber-scan {
+  0% { transform: translateY(-100%); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+
+@keyframes grid-pulse {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes segment-flow {
+  0% { background-position: 0 0; }
+  100% { background-position: 40px 0; }
+}
+
+.hud-grid {
+  background-image: 
+    linear-gradient(rgba(14, 165, 233, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14, 165, 233, 0.1) 1px, transparent 1px);
+  background-size: 15px 15px;
+  animation: grid-pulse 4s infinite ease-in-out;
+}
+
+.cyber-loading-bar {
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 2px,
+    var(--color-brand-500) 2px,
+    var(--color-brand-500) 6px
+  );
+  background-size: 8px 100%;
+}
+
+.scan-beam {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 20px;
+  background: linear-gradient(to bottom, transparent, rgba(14, 165, 233, 0.4), transparent);
+  box-shadow: 0 0 15px rgba(14, 165, 233, 0.2);
+  animation: cyber-scan 2.5s infinite linear;
+  pointer-events: none;
+}
+
+.hud-corner {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-color: rgba(14, 165, 233, 0.5);
+  pointer-events: none;
+}
+.hud-corner-tl { top: 4px; left: 4px; border-top-width: 2px; border-left-width: 2px; }
+.hud-corner-tr { top: 4px; right: 4px; border-top-width: 2px; border-right-width: 2px; }
+.hud-corner-bl { bottom: 4px; left: 4px; border-bottom-width: 2px; border-left-width: 2px; }
+.hud-corner-br { bottom: 4px; right: 4px; border-bottom-width: 2px; border-right-width: 2px; }

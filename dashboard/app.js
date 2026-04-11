@@ -107,7 +107,26 @@ async function selectSource(sourceId) {
 async function loadData() {
     if (!currentSource) return;
     
-    tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 40px;">Loading records...</td></tr>';
+    const loader = document.getElementById('global-energy-loader');
+    const statsGrid = document.querySelector('.stats-grid');
+    if (loader) loader.classList.add('active');
+    if (statsGrid) statsGrid.classList.add('loading');
+    
+    tableBody.innerHTML = Array(10).fill(0).map(() => `
+        <tr class="animate-shimmer relative overflow-hidden">
+            <td class="px-5 py-4"><div class="h-4 w-16 bg-slate-800/50 rounded"></div></td>
+            <td><div class="h-6 w-12 bg-slate-800/50 rounded-full"></div></td>
+            <td>
+                <div class="flex flex-col gap-2">
+                    <div class="h-4 w-48 bg-slate-800/50 rounded"></div>
+                    <div class="h-3 w-24 bg-slate-800/30 rounded"></div>
+                </div>
+            </td>
+            <td><div class="h-4 w-24 bg-slate-800/50 rounded"></div></td>
+            <td><div class="h-4 w-16 bg-slate-800/50 rounded"></div></td>
+            <td><div class="h-7 w-20 bg-slate-800/50 rounded"></div></td>
+        </tr>
+    `).join('');
     
     const api = viewMode === 'extracted' ? API_BASE_EXTRACTED : API_BASE_ENRICHED;
     const query = new URLSearchParams({
@@ -125,6 +144,9 @@ async function loadData() {
     } catch (err) {
         console.error("Error loading data:", err);
         tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; color: var(--danger-color);">Error loading data</td></tr>';
+    } finally {
+        if (loader) loader.classList.remove('active');
+        if (statsGrid) statsGrid.classList.remove('loading');
     }
 }
 
@@ -145,10 +167,10 @@ function renderTable(data) {
         let enrichmentBadge = "";
         if (viewMode === 'enriched' && item.enrichment) {
             const nlp = item.enrichment.nlp_extracted;
-            if (nlp.malware_families?.length > 0) {
+            if (nlp?.malware_families?.length > 0) {
                 enrichmentBadge += `<span class="family-pill">${nlp.malware_families[0]}</span>`;
             }
-            if (nlp.threat_categories?.length > 0) {
+            if (nlp?.threat_categories?.length > 0) {
                 enrichmentBadge += `<span class="category-pill">${nlp.threat_categories[0]}</span>`;
             }
         }

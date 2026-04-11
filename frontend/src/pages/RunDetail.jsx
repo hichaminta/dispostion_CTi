@@ -379,28 +379,45 @@ const RunDetail = ({ runId, onBack }) => {
                     : null;
 
                   return (
-                    <div key={step.name} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
-                      stepData.status === 'running'  ? `${c.bg} ${c.border}` :
+                    <div key={step.name} className={`flex flex-col p-3 rounded-xl border transition-all relative overflow-hidden ${
+                      stepData.status === 'running'  ? `${c.bg} ${c.border} shadow-[0_0_15px_rgba(14,165,233,0.1)]` :
                       stepData.status === 'success'  ? 'bg-emerald-500/5 border-emerald-500/20' :
                       stepData.status === 'failed'   ? 'bg-red-500/5 border-red-500/20' :
                       'bg-slate-800/30 border-slate-800'
                     }`}>
-                      <StatusIcon status={stepData.status} size="w-4 h-4" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-white truncate">{step.name}</p>
-                        {duration !== null && (
-                          <p className="text-[10px] text-slate-500">{duration}s</p>
-                        )}
-                      </div>
-                      {(stepData.ioc_count > 0 || stepData.cve_count > 0) && (
-                        <div className="text-right">
-                          {stepData.ioc_count > 0 && (
-                            <div className="text-[10px] text-blue-400 font-mono">{stepData.ioc_count} IOC</div>
-                          )}
-                          {stepData.cve_count > 0 && (
-                            <div className="text-[10px] text-purple-400 font-mono">{stepData.cve_count} CVE</div>
+                      <div className="flex items-center gap-3">
+                        <StatusIcon status={stepData.status} size="w-4 h-4" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-white truncate">{step.name}</p>
+                          {duration !== null && (
+                            <p className="text-[10px] text-slate-500">{duration}s</p>
                           )}
                         </div>
+                        {(stepData.ioc_count > 0 || stepData.cve_count > 0) && (
+                          <div className="text-right">
+                            {stepData.ioc_count > 0 && (
+                              <div className="text-[10px] text-blue-400 font-mono">{stepData.ioc_count} IOC</div>
+                            )}
+                            {stepData.cve_count > 0 && (
+                              <div className="text-[10px] text-purple-400 font-mono">{stepData.cve_count} CVE</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Premium HUD Elements for Active Step */}
+                      {stepData.status === 'running' && (
+                        <>
+                          <div className="absolute inset-0 hud-grid pointer-events-none" />
+                          <div className="scan-beam" />
+                          <div className="hud-corner-tl hud-corner" />
+                          <div className="hud-corner-tr hud-corner" />
+                          <div className="hud-corner-bl hud-corner" />
+                          <div className="hud-corner-br hud-corner" />
+                          <div className="absolute bottom-0 left-0 w-full h-[3px] bg-slate-900 border-t border-brand-500/20 overflow-hidden">
+                            <div className="absolute top-0 h-full cyber-loading-bar animate-indeterminate shadow-[0_0_10px_#0ea5e9]" />
+                          </div>
+                        </>
                       )}
                     </div>
                   );

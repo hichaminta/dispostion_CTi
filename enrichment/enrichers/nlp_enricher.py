@@ -260,7 +260,13 @@ class NLPEnricher(BaseEnricher):
         
         enriched_data["tags"] = sorted(list(existing_tags))
         
-        # Populate structured enrichment block
+        # Populate structured enrichment block (Legacy support for Dashboard)
+        enriched_data["enrichment"]["nlp_extracted"] = {
+            "malware_families": [enriched_data["enrichment"].get("malware_family")] if enriched_data["enrichment"].get("malware_family") else [],
+            "threat_categories": sorted(list(detected_categories))
+        }
+
+        # Premium structured data block
         enriched_data["enrichment"]["nlp_advanced"] = {
             "organizations": sorted(list(entities.get("organizations", []))),
             "geography": sorted(list(entities.get("locations", []))),

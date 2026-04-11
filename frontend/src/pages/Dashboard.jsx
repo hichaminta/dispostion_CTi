@@ -194,6 +194,13 @@ const Dashboard = ({ onSelectRun }) => {
 
   return (
     <div className="min-h-screen bg-[#0a0d1a] p-6 md:p-8">
+      {/* ── Top Global Cyber Loading Bar ── */}
+      {loading && (
+        <div className="fixed top-0 left-0 w-full h-1.5 z-[100] bg-[#0a0d1a] border-b border-brand-500/20">
+          <div className="absolute top-0 h-full cyber-loading-bar animate-indeterminate shadow-[0_0_15px_#0ea5e9]" />
+        </div>
+      )}
+
       <div className="max-w-[1600px] mx-auto">
 
         {/* ── Header ─────────────────────────────────────────────────── */}
@@ -488,16 +495,29 @@ const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning }) => {
 
   return (
     <div 
-      className={`rounded-xl border transition-all duration-300 overflow-hidden ${
+      className={`rounded-2xl border transition-all duration-300 relative overflow-hidden group/card ${
         isRunning 
-          ? `${colorClass} ring-1 ring-current ring-offset-1 ring-offset-[#0a0d1a]` 
+          ? `${colorClass} ring-1 ring-current ring-offset-1 ring-offset-[#0a0d1a] shadow-[0_0_20px_rgba(14,165,233,0.1)]` 
           : `bg-slate-900/40 border-slate-800 hover:border-slate-700 ${isExpanded ? 'ring-1 ring-slate-700' : ''}`
       }`}
     >
+      {/* HUD Elements for active source */}
+      {isRunning && (
+        <>
+          <div className="absolute inset-0 hud-grid opacity-20" />
+          <div className="scan-beam" />
+          <div className="hud-corner-tl hud-corner" />
+          <div className="hud-corner-tr hud-corner" />
+          <div className="hud-corner-bl hud-corner" />
+          <div className="hud-corner-br hud-corner" />
+          <div className="absolute bottom-0 left-0 w-full h-[2px] cyber-loading-bar animate-indeterminate" />
+        </>
+      )}
+
       {/* Header (cliquable pour expand) */}
       <div 
         onClick={() => setIsExpanded(!isExpanded)}
-        className="p-3 cursor-pointer select-none"
+        className="p-3 cursor-pointer select-none relative z-10"
       >
         <div className="flex items-center justify-between mb-2">
           <span className={`text-[9px] uppercase tracking-wider font-bold ${isRunning ? '' : 'text-slate-600'}`}>
@@ -508,11 +528,11 @@ const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning }) => {
             <Play className={`w-2.5 h-2.5 transition-transform duration-300 ${isExpanded ? 'rotate-90' : 'text-slate-700'}`} />
           </div>
         </div>
-        <p className="text-white font-semibold text-xs leading-tight">{source.name}</p>
+        <p className="text-white font-semibold text-xs leading-tight underline-offset-4 decoration-current group-hover/card:underline">{source.name}</p>
       </div>
       
       {/* Expanded Content: Step Selection */}
-      <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[400px] opacity-100 border-t border-slate-800/50' : 'max-h-0 opacity-0'}`}>
+      <div className={`transition-all duration-300 ease-in-out relative z-10 ${isExpanded ? 'max-h-[400px] opacity-100 border-t border-slate-800/50' : 'max-h-0 opacity-0'}`}>
         <div className="p-3 space-y-2">
           <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">Étapes du Pipeline</p>
           
@@ -574,16 +594,36 @@ const StatCard = ({ icon, label, value, sub, color, loading }) => {
     orange:  'from-orange-500/10 to-transparent border-orange-500/20',
   };
   return (
-    <div className={`bg-gradient-to-br ${colorBg[color]} border rounded-2xl p-5`}>
-      <div className="flex items-center gap-2 mb-3">
-        <div className="p-1.5 bg-slate-800/80 rounded-lg">{icon}</div>
-        <span className="text-slate-400 text-xs font-medium">{label}</span>
+    <div className={`bg-gradient-to-br ${colorBg[color]} border rounded-2xl p-5 relative overflow-hidden group transition-all duration-300 hover:shadow-lg hover:border-brand-500/40`}>
+      {loading && <div className="absolute inset-0 hud-grid" />}
+      {loading && <div className="scan-beam" />}
+      
+      {/* Corner Brackets */}
+      {loading && (
+        <>
+          <div className="hud-corner hud-corner-tl" />
+          <div className="hud-corner hud-corner-tr" />
+          <div className="hud-corner hud-corner-bl" />
+          <div className="hud-corner hud-corner-br" />
+        </>
+      )}
+
+      <div className="relative z-10">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="p-1.5 bg-slate-800/80 rounded-lg group-hover:scale-110 transition-transform">{icon}</div>
+          <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider">{label}</span>
+        </div>
+        {loading
+          ? (
+            <div className="space-y-2 py-1">
+              <div className="h-6 w-24 bg-brand-500/10 border border-brand-500/20 rounded-md" />
+              <div className="h-3 w-12 bg-slate-800/50 rounded" />
+            </div>
+          )
+          : <div className="text-2xl font-extrabold text-white tracking-tight">{value}</div>
+        }
+        {!loading && <p className="text-[10px] text-slate-600 mt-1 font-mono">{sub}</p>}
       </div>
-      {loading
-        ? <div className="h-8 w-16 bg-slate-800 rounded animate-pulse" />
-        : <div className="text-2xl font-extrabold text-white">{value}</div>
-      }
-      <p className="text-[10px] text-slate-600 mt-1">{sub}</p>
     </div>
   );
 };
