@@ -235,21 +235,139 @@ function truncate(str, len) {
     return str.length > len ? str.substring(0, len) + '...' : str;
 }
 
+window.switchTab = (tabId) => {
+    // Update tab buttons
+    const buttons = document.querySelectorAll('.tab-btn');
+    buttons.forEach(btn => {
+        const isActive = btn.getAttribute('onclick').includes(`'${tabId}'`);
+        btn.classList.toggle('active', isActive);
+    });
+
+    // Update tab panes
+    const panes = document.querySelectorAll('.tab-pane');
+    panes.forEach(pane => {
+        pane.classList.toggle('active', pane.id === `tab-${tabId}`);
+    });
+};
+
+function generateIntelligenceBrief(item) {
+    const families = item.enrichment?.nlp_extracted?.malware_families || [];
+    const iocs = item.iocs || [];
+    const cves = item.cves || [];
+    const source = (item.source || 'Threat Intel').toUpperCase();
+    
+    // 1. Try to get original summary and clean it
+    let rawSummary = item.enrichment?.nlp_advanced?.nlp_summary || item.summary || "";
+    
+    // Remove JSON-like blocks: everything from the first '{' to the end
+    let cleaned = rawSummary.split('{')[0].trim();
+    
+    // If the cleaned text is too generic or short, build a better one
+    if (cleaned.length < 15) {
+        cleaned = `Intelligence analysis of a record from **${source}** has been completed. `;
+    }
+
+    // Add specific counts if not already mentioned clearly
+    if (!cleaned.includes('IOC') && !cleaned.includes('indicator')) {
+        cleaned += `Identified **${iocs.length}** IOCs and **${cves.length}** CVEs. `;
+    }
+
+    // 2. Add intelligence insights if families are found
+    if (families.length > 0) {
+        cleaned += `<br><br><span style="color: var(--danger-color); font-weight: 700;">[THREAD INSIGHT]</span> This activity is associated with the **${families.join(', ')}** malware family.`;
+    } else if (iocs.length > 0) {
+        cleaned += `<br><br>The extracted indicators provide actionable technical data for incident response and proactive defense.`;
+    }
+
+    return cleaned;
+}
+
 window.viewRaw = (recordId) => {
     const item = window.lastLoadedData.find(d => d.record_id === recordId);
-    if (item) {
-        // Parse raw_text if stringified
-        let display = item;
-        try {
-            if (typeof item.raw_text === 'string') {
-                display = { ...item, raw_text: JSON.parse(item.raw_text) };
-            }
-        } catch(e) {}
-        
-        jsonViewer.textContent = JSON.stringify(display, null, 2);
-        modalOverlay.classList.remove('hidden');
-    }
+    if (!item) return;
+
+    // Reset tabs to overview
+    window.switchTab('overview');
+
+    // Basic Meta
+    document.getElementById('modal-record-id').textContent = `Record ID: ${item.record_id}`;
+    document.getElementById('detail-source').textContent = item.source || 'Unknown';
+    document.getElementById('detail-date').textContent = item.collected_at ? new Date(item.collected_at).toLocaleString() : 'N/A';
+
+    // NLP Summary / Brief (Cleaned)
+    const briefContent = document.getElementById('nlp-brief-content');
+    briefContent.innerHTML = generateIntelligenceBrief(item);
+
+    // Threat Level Logic
+    const threatEl = document.getElementById('detail-threat-level');
+    let level = 'low';
+    const iocCount = (item.iocs || []).length;
+    const families = item.enrichment?.nlp_extracted?.malware_families || [];
+    if (families.length > 0) level = 'high';
+    else if (iocCount > 3) level = 'medium';
+    
+    threatEl.textContent = level.toUpperCase();
+    threatEl.className = `threat-badge ${level}`;
+
+    // Intelligence Tab: IOCs, Families, Categories
+    const iocList = document.getElementById('ioc-list');
+    iocList.innerHTML = (item.iocs || []).map(ioc => `
+        <div class="intel-badge ${ioc.type}">
+            <i data-lucide="${getIconForType(ioc.type)}"></i>
+            <span>${ioc.value}</span>
+            <small style="opacity: 0.6; margin-left: 5px;">(${ioc.indicator_role?.role || 'indicator'})</small>
+        </div>
+    `).join('') || '<p class="empty-msg">No IOCs detected</p>';
+
+    const familyList = document.getElementById('family-list');
+    familyList.innerHTML = (item.enrichment?.nlp_extracted?.malware_families || []).map(f => `
+        <span class="family-pill">${f}</span>
+    `).join('') || '<p class="empty-msg">No malware families identified</p>';
+
+    const catList = document.getElementById('category-list');
+    catList.innerHTML = (item.enrichment?.nlp_extracted?.threat_categories || []).map(c => `
+        <span class="category-pill">${c}</span>
+    `).join('') || '<p class="empty-msg">No threat categories assigned</p>';
+
+    // Context Tab: Orgs, Geo, Attrs
+    const orgProdList = document.getElementById('org-prod-list');
+    const orgs = item.enrichment?.nlp_advanced?.organizations || [];
+    const prods = item.enrichment?.nlp_advanced?.affected_products || [];
+    orgProdList.innerHTML = [...orgs.map(o => ({ k: 'Org', v: o })), ...prods.map(p => ({ k: 'Prod', v: p }))]
+        .map(x => `<div class="context-item"><span class="context-key">${x.k}</span><span class="context-val">${x.v}</span></div>`).join('') 
+        || '<p class="empty-msg">No organizational context</p>';
+
+    const geoList = document.getElementById('geo-list');
+    geoList.innerHTML = (item.enrichment?.nlp_advanced?.geography || []).map(g => `
+        <div class="context-item"><span class="context-key">Location</span><span class="context-val">${g}</span></div>
+    `).join('') || '<p class="empty-msg">No geographical data</p>';
+
+    const attrList = document.getElementById('attr-list');
+    const attrs = item.attributes || {};
+    attrList.innerHTML = Object.entries(attrs).map(([k, v]) => `
+        <div class="context-item"><span class="context-key">${k}</span><span class="context-val">${v}</span></div>
+    `).join('') || '<p class="empty-msg">No additional attributes</p>';
+
+    // Raw JSON
+    jsonViewer.textContent = JSON.stringify(item, null, 2);
+
+    // Show Modal
+    modalOverlay.classList.remove('hidden');
+    
+    // Re-trigger Lucide icons for new content
+    if (window.lucide) window.lucide.createIcons();
 };
+
+function getIconForType(type) {
+    switch(type) {
+        case 'ip': return 'network';
+        case 'domain': return 'globe';
+        case 'url': return 'link';
+        case 'cve': return 'alert-triangle';
+        case 'hash': return 'file-digit';
+        default: return 'info';
+    }
+}
 
 // Event Listeners
 function setupEventListeners() {

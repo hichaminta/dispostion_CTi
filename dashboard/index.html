@@ -150,13 +150,97 @@
 
     <!-- Modal for JSON Inspection -->
     <div id="modal-overlay" class="modal-overlay hidden">
-        <div class="modal-content glass">
+        <div class="modal-content glass intelligence-panel">
+            <div class="hud-corner hud-corner-tl"></div>
+            <div class="hud-corner hud-corner-tr"></div>
+            <div class="hud-corner hud-corner-bl"></div>
+            <div class="hud-corner hud-corner-br"></div>
+            
             <header class="modal-header">
-                <h3>Record Raw Details</h3>
+                <div class="header-main">
+                    <i data-lucide="shield-alert" class="panel-icon"></i>
+                    <div>
+                        <h3 id="modal-title">Intelligence Report</h3>
+                        <p class="modal-subtitle" id="modal-record-id">Record ID: -</p>
+                    </div>
+                </div>
                 <button id="close-modal" class="close-btn">&times;</button>
             </header>
+
+            <nav class="modal-tabs">
+                <button class="tab-btn active" onclick="switchTab('overview')"><i data-lucide="layout"></i> Overview</button>
+                <button class="tab-btn" onclick="switchTab('intelligence')"><i data-lucide="zap"></i> Intelligence</button>
+                <button class="tab-btn" onclick="switchTab('context')"><i data-lucide="globe"></i> Context</button>
+                <button class="tab-btn" onclick="switchTab('raw')"><i data-lucide="code"></i> Raw Data</button>
+            </nav>
+
             <div class="modal-body">
-                <pre id="raw-json-viewer"></pre>
+                <!-- Overview Tab -->
+                <div id="tab-overview" class="tab-pane active">
+                    <div class="info-grid">
+                        <div class="main-brief glass">
+                            <div class="tab-section-label">Expert Summary</div>
+                            <div id="nlp-brief-content" class="brief-text">No summary available.</div>
+                        </div>
+                        <div class="meta-sidebar">
+                            <div class="meta-group glass">
+                                <div class="meta-item">
+                                    <label>Source Authority</label>
+                                    <span id="detail-source" class="val">-</span>
+                                </div>
+                                <div class="meta-item">
+                                    <label>Extraction Date</label>
+                                    <span id="detail-date" class="val">-</span>
+                                </div>
+                                <div class="meta-item">
+                                    <label>Threat Level</label>
+                                    <div id="detail-threat-level" class="threat-badge">Unknown</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Intelligence Tab -->
+                <div id="tab-intelligence" class="tab-pane">
+                    <div class="intel-grid">
+                        <div class="intel-section glass">
+                            <div class="tab-section-label"><i data-lucide="link"></i> Indicators of Compromise</div>
+                            <div id="ioc-list" class="badge-container"></div>
+                        </div>
+                        <div class="intel-section glass">
+                            <div class="tab-section-label"><i data-lucide="bug"></i> Malware Families</div>
+                            <div id="family-list" class="badge-container"></div>
+                        </div>
+                        <div class="intel-section glass">
+                            <div class="tab-section-label"><i data-lucide="target"></i> Threat Categories</div>
+                            <div id="category-list" class="badge-container"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Context Tab -->
+                <div id="tab-context" class="tab-pane">
+                    <div class="context-grid">
+                        <div class="context-block glass">
+                            <div class="tab-section-label"><i data-lucide="building"></i> Target Context</div>
+                            <div id="org-prod-list" class="context-list"></div>
+                        </div>
+                        <div class="context-block glass">
+                            <div class="tab-section-label"><i data-lucide="map-pin"></i> Geographical Data</div>
+                            <div id="geo-list" class="context-list"></div>
+                        </div>
+                        <div class="context-block glass">
+                            <div class="tab-section-label"><i data-lucide="list"></i> Source Attributes</div>
+                            <div id="attr-list" class="context-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Raw Tab -->
+                <div id="tab-raw" class="tab-pane">
+                    <pre id="raw-json-viewer"></pre>
+                </div>
             </div>
         </div>
     </div>
