@@ -7,9 +7,9 @@ def run_all():
     # The script is now inside the extractors directory
     extractors_dir = os.path.dirname(os.path.abspath(__file__))
     scripts = sorted([f for f in os.listdir(extractors_dir) 
-                    if f.endswith("_extractor.py") and f != "base_extractor.py"])
+                    if f.endswith("_extractor.py") and f != "base_extractor.py" and "alienvault" not in f.lower()])
     
-    print(f"Starting unified extraction for {len(scripts)} sources...")
+    print(f"Starting unified extraction for {len(scripts)} sources (AlienVault skipped)...")
     start_time = time.time()
     
     for script in scripts:

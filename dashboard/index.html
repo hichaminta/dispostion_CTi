@@ -56,6 +56,18 @@
                     <i data-lucide="search"></i>
                     <input type="text" id="global-search" placeholder="Search by ID, Indicator or Tags...">
                 </div>
+                <div class="filter-container glass">
+                    <i data-lucide="filter" class="filter-icon"></i>
+                    <select id="type-filter">
+                        <option value="">All Types</option>
+                        <option value="ip">IP Address</option>
+                        <option value="domaine">Domain</option>
+                        <option value="url">URL</option>
+                        <option value="hashe">Hashes</option>
+                        <option value="cve">CVE</option>
+                        <option value="autr">Others</option>
+                    </select>
+                </div>
                 <div class="user-actions">
                     <button id="refresh-btn" class="icon-btn glass"><i data-lucide="refresh-cw"></i></button>
                     <div class="stats-badge glass">
@@ -115,6 +127,16 @@
                     </div>
                 </div>
 
+                <!-- Country Stats Section -->
+                <div class="country-analytics glass animate-fade-in">
+                    <div class="hud-corner hud-corner-tl"></div>
+                    <div class="hud-corner hud-corner-tr"></div>
+                    <div class="tab-section-label"><i data-lucide="globe"></i> Global Threat Geography</div>
+                    <div id="country-stats-list" class="country-bars-container">
+                        <div class="loading-shimmer" style="height: 100px;"></div>
+                    </div>
+                </div>
+
                 <!-- Data Table Container -->
                 <div class="table-workspace glass">
                     <div class="table-header">
@@ -158,11 +180,16 @@
             
             <header class="modal-header">
                 <div class="header-main">
-                    <i data-lucide="shield-alert" class="panel-icon"></i>
+                    <div id="modal-source-logo-container" class="source-logo-md glass">
+                        <i data-lucide="shield-alert" class="panel-icon"></i>
+                    </div>
                     <div>
                         <h3 id="modal-title">Intelligence Report</h3>
                         <p class="modal-subtitle" id="modal-record-id">Record ID: -</p>
                     </div>
+                </div>
+                <div class="modal-branding">
+                    <img src="logo.png" alt="BlueSec" class="mini-brand-logo">
                 </div>
                 <button id="close-modal" class="close-btn">&times;</button>
             </header>

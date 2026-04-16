@@ -9,6 +9,8 @@ class BaseExtractor:
         # Regex patterns
         self.patterns = {
             'ip': r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b',
+            'ip_port': r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?):[0-9]{1,5}\b',
+            'ip_range': r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/(?:[1-2]?[0-9]|3[0-2])\b',
             'domain': r'\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}\b',
             'url': r'\bhttps?://[^\s<>"]+\b',
             'email': r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b',
@@ -34,7 +36,39 @@ class BaseExtractor:
             "OpenPhish": ["url", "id"],
             "VirusTotal": ["id"]
         }
+
+        # Whitelist of benign domains to filter out false positives
+        self.WHITELIST_DOMAINS = {
+            "google.com", "google.org", "google.net", "google.io", "google.ai",
+            "microsoft.com", "microsoft.org", "microsoft.net", "microsoft.io",
+            "amazon.com", "amazon.net", "amazon.org",
+            "cloudflare.com", "cloudflare.net", "cloudflare.io",
+            "github.com", "github.io", "github.dev",
+            "openai.com", "openai.org",
+            "apple.com", "apple.net",
+            "facebook.com", "facebook.net", "facebook.org",
+            "sinkhole.ch", "abuse.ch", "shadowserver.org",
+            "localhost", "example.com", "127.0.0.1"
+        }
+
+    def is_whitelisted(self, domain):
+        """Checks if a domain or its parent is in the whitelist."""
+        if not domain: return False
+        domain = domain.lower().strip()
         
+        # Check direct match
+        if domain in self.WHITELIST_DOMAINS:
+            return True
+            
+        # Check parent domains (e.g., api.google.com -> google.com)
+        parts = domain.split('.')
+        for i in range(len(parts) - 1):
+            parent = '.'.join(parts[i+1:])
+            if parent in self.WHITELIST_DOMAINS:
+                return True
+                
+        return False
+
     def normalize_ip(self, val):
         try:
             return str(ipaddress.ip_address(val.strip()))
@@ -65,57 +99,82 @@ class BaseExtractor:
         if not text:
             return results
 
-        # CVE extraction
+        # 1. CVE extraction
         cve_matches = re.findall(self.patterns['cve'], text, re.IGNORECASE)
         for val in set(cve_matches):
             results['cves'].append({'id': self.normalize_cve(val)})
 
-        # IOC extraction
-        # We search for hashes first (longest first) to avoid overlaps if any
+        # 2. URL extraction (High priority to avoid collision)
+        url_matches = re.findall(self.patterns['url'], text)
+        for val in set(url_matches):
+            val_norm = self.normalize_url(val)
+            # Extraire le domaine de l'URL pour vérification whitelist
+            try:
+                from urllib.parse import urlparse
+                domain = urlparse(val_norm).netloc.split(':')[0]
+                if self.is_whitelisted(domain): continue
+            except: pass
+            
+            results['iocs'].append({'type': 'url', 'value': val_norm})
+
+        # 3. Email extraction (Categorized as 'autr' as requested)
+        email_matches = re.findall(self.patterns['email'], text)
+        for val in set(email_matches):
+            results['iocs'].append({'type': 'autr', 'value': self.normalize_email(val)})
+
+        # 4. Hash extraction (MD5, SHA1, SHA256) -> 'hashe' type
         for hash_type in ['sha256', 'sha1', 'md5']:
             matches = re.findall(self.patterns[hash_type], text)
             for val in set(matches):
-                results['iocs'].append({'type': hash_type, 'value': self.normalize_hash(val)})
-                # Remove found hashes from text to avoid triple-matching with other regex if they overlap (unlikely but safe)
-                # Actually, no need for that as hashes are fixed length and don't match IPs/URLs/etc.
+                results['iocs'].append({'type': 'hashe', 'value': self.normalize_hash(val)})
 
-        # Emails
-        email_matches = re.findall(self.patterns['email'], text)
-        for val in set(email_matches):
-            results['iocs'].append({'type': 'email', 'value': self.normalize_email(val)})
+        # 5. IP extraction (Range, Port, Standard) -> 'ip' type
+        # Check ranges first
+        ip_range_matches = re.findall(self.patterns['ip_range'], text)
+        for val in set(ip_range_matches):
+            results['iocs'].append({'type': 'ip', 'value': val.strip()})
+            
+        # Check IP with ports
+        ip_port_matches = re.findall(self.patterns['ip_port'], text)
+        for val in set(ip_port_matches):
+            results['iocs'].append({'type': 'ip', 'value': val.strip()})
 
-        # URLs
-        url_matches = re.findall(self.patterns['url'], text)
-        for val in set(url_matches):
-            results['iocs'].append({'type': 'url', 'value': self.normalize_url(val)})
-
-        # IPs
+        # Check standard IPs
         ip_matches = re.findall(self.patterns['ip'], text)
         for val in set(ip_matches):
             norm_ip = self.normalize_ip(val)
             if norm_ip:
-                results['iocs'].append({'type': 'ip', 'value': norm_ip})
+                if self.is_whitelisted(norm_ip): continue
+                # Avoid adding if already part of an IP:Port or IP/Range
+                is_duplicate = False
+                for existing in results['iocs']:
+                    if existing['type'] == 'ip' and norm_ip in existing['value']:
+                        is_duplicate = True
+                        break
+                if not is_duplicate:
+                    results['iocs'].append({'type': 'ip', 'value': norm_ip})
 
-        # Domains (only if not already part of a URL/Email/IP)
-        # We'll filter domains that are substrings of URLs or Emails we already found
+        # 6. Domain extraction -> 'domaine' type
         domain_matches = re.findall(self.patterns['domain'], text, re.IGNORECASE)
         for val in set(domain_matches):
             val_lower = val.lower()
             # Simple check: is it an IP?
-            if self.normalize_ip(val):
-                continue
+            if self.normalize_ip(val): continue
             
-            # Is it part of a URL or Email?
+            # Whitelist check
+            if self.is_whitelisted(val_lower): continue
+            
+            # Is it part of a URL or Email or IP already found?
             is_part_of_other = False
             for ioc in results['iocs']:
-                if ioc['type'] in ['url', 'email'] and val_lower in ioc['value'].lower():
+                if val_lower in ioc['value'].lower():
                     is_part_of_other = True
                     break
             
             if not is_part_of_other:
-                results['iocs'].append({'type': 'domain', 'value': self.normalize_domain(val)})
+                results['iocs'].append({'type': 'domaine', 'value': self.normalize_domain(val)})
 
-        # Remove duplicates from the list of dicts
+        # Deduplication
         unique_iocs = []
         seen_iocs = set()
         for ioc in results['iocs']:
@@ -268,25 +327,40 @@ class BaseExtractor:
         tags = self.extract_tags(item)
         refs = self.extract_references(item)
         
-        # New: Extract extended attributes
+        # 1. Extract technical attributes (score, country, asn, etc.)
         attributes = self._extract_attributes(item)
         
-        # Add source info to each IOC/CVE for traceability
+        # 2. IOC-Centric Propagation: Anchor attributes to each IOC
         for ioc in extracted['iocs']:
             ioc['source'] = source_name
-        for ioc in extracted['cves']:
-            ioc['source'] = source_name
+            if 'ioc_enrichment' not in ioc:
+                ioc['ioc_enrichment'] = {}
+            
+            # Copy all technical attributes into the IOC enrichment block
+            for k, v in attributes.items():
+                if v is not None:
+                    ioc['ioc_enrichment'][k] = v
+        
+        # Add source info to each CVE
+        for cve in extracted['cves']:
+            cve['source'] = source_name
+            if 'ioc_enrichment' not in cve:
+                cve['ioc_enrichment'] = {}
+            # CVEs also benefit from knowing the source's confidence/reputation
+            for k in ['confidence', 'reputation', 'status']:
+                if k in attributes:
+                    cve['ioc_enrichment'][k] = attributes[k]
         
         return {
             "source": source_name,
             "record_id": record_id,
             "raw_text": raw_text,
-            "summary": f"Extracted {len(extracted['iocs'])} IOCs and {len(extracted['cves'])} CVEs from {source_name}",
+            "summary": f"Extracted {len(extracted['iocs'])} IOCs from {source_name}. Contextual attributes anchored to each indicator.",
             "iocs": extracted['iocs'],
             "cves": extracted['cves'],
             "tags": tags,
             "references": refs,
-            "attributes": attributes,
+            "attributes": attributes, # Kept for record-level context
             "collected_at": item.get('collected_at') or item.get('extracted_at') or item.get('lastReportedAt') or item.get('last_modified') or item.get('published')
         }
 

@@ -1,18 +1,18 @@
 import os
 
 SOURCES = {
-    "AbuseIPDB": "abuseipdb_extracted.json",
-    "CINS Army": "cins_army_extracted.json",
-    "MalwareBazaar Community API": "malwarebazaar_extracted.json",
-    "OpenPhish": "openphish_extracted.json",
-    "Otx alienvault": "alienvault_extracted.json",
-    "PhishTank": "phishtank_extracted.json",
-    "Spamhaus": "spamhaus_extracted.json",
-    "ThreatFox": "threatfox_extracted.json",
-    "VirusTotal": "virustotal_extracted.json",
-    "feodotracker": "feodotracker_extracted.json",
-    "pulsedive": "pulsedive_extracted.json",
-    "url": "urlhaus_extracted.json"
+    "AbuseIPDB": ("abuseipdb", "abuseipdb_extracted.json"),
+    "CINS Army": ("cins_army", "cins_army_extracted.json"),
+    "MalwareBazaar Community API": ("malwarebazaar", "malwarebazaar_extracted.json"),
+    "OpenPhish": ("openphish", "openphish_extracted.json"),
+    "Otx alienvault": ("alienvault", "alienvault_extracted.json"),
+    "PhishTank": ("phishtank", "phishtank_extracted.json"),
+    "Spamhaus": ("spamhaus", "spamhaus_extracted.json"),
+    "ThreatFox": ("threatfox", "threatfox_extracted.json"),
+    "VirusTotal": ("virustotal", "virustotal_extracted.json"),
+    "feodotracker": ("feodotracker", "feodotracker_extracted.json"),
+    "pulsedive": ("pulsedive", "pulsedive_extracted.json"),
+    "url": ("urlhaus", "urlhaus_extracted.json")
 }
 
 TEMPLATE = """import os
@@ -22,20 +22,20 @@ import sys
 from datetime import datetime
 
 # Parent dir logic for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from enrichers.nlp_enricher import NLPEnricher
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from nlp.nlp_enricher import NLPEnricher
 
 # Setup basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("Enrichment.{source_name}")
 
-# Paths (Relative to enrichment/scripts/source_enricher.py)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Paths (Relative to enrichment/nlp/scripts/source_enricher.py)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 EXTRACTED_DIR = os.path.join(BASE_DIR, "output_cve_ioc")
 ENRICHMENT_ROOT = os.path.join(BASE_DIR, "enrichment")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output_enrichment")
 TRACKING_DIR = os.path.join(ENRICHMENT_ROOT, "tracking")
-TRACKING_FILE = os.path.join(TRACKING_DIR, "{source_name}_tracking.json")
+TRACKING_FILE = os.path.join(TRACKING_DIR, "{short_id}_tracking.json")
 
 def ensure_dirs():
     if not os.path.exists(OUTPUT_DIR):
@@ -89,7 +89,7 @@ def merge_enriched_results(existing, new):
     for item in new:
         rid = item.get("record_id")
         if rid:
-            indexed[rid] = item # Overwrite or merge if specific logic needed
+            indexed[rid] = item
         else:
             existing.append(item)
     return list(indexed.values())
@@ -102,17 +102,19 @@ def process_source():
         logger.warning(f"Extracted file not found: {file_path}")
         return
 
-    # Load Tracking
-    oldest_extracted_at = None
-    recent_extracted_at = None
+    # Load Unified Tracking
+    tracking_data = {"nlp": {}, "geo": {}}
     if os.path.exists(TRACKING_FILE):
         try:
             with open(TRACKING_FILE, 'r', encoding='utf-8') as f:
                 tracking_data = json.load(f)
-                oldest_extracted_at = tracking_data.get("oldest_extracted_at")
-                recent_extracted_at = tracking_data.get("recent_extracted_at")
+                if "nlp" not in tracking_data: tracking_data["nlp"] = {}
+                if "geo" not in tracking_data: tracking_data["geo"] = {}
         except Exception:
             pass
+
+    oldest_extracted_at = tracking_data["nlp"].get("oldest_extracted_at")
+    recent_extracted_at = tracking_data["nlp"].get("recent_extracted_at")
 
     logger.info(f"Checking for new items in: {file_name}")
     
@@ -167,28 +169,37 @@ def process_source():
         
     logger.info(f"Saved {len(all_enriched)} enriched items to {out_file_path}")
     
-    # Save the new bounds in the tracking file
+    # Save the new bounds in the unified tracking file
+    tracking_data["nlp"]["oldest_extracted_at"] = current_oldest
+    tracking_data["nlp"]["recent_extracted_at"] = current_recent
     with open(TRACKING_FILE, 'w', encoding='utf-8') as f:
-        json.dump({
-            "oldest_extracted_at": current_oldest,
-            "recent_extracted_at": current_recent
-        }, f, indent=4)
+        json.dump(tracking_data, f, indent=4)
+        
+    # --- STAGE 2: Chain Geolocation Enrichment (Unified) ---
+    logger.info("➔ Transitioning to STAGE 2: Geolocation...")
+    import subprocess
+    geo_script = os.path.join(ENRICHMENT_ROOT, "geolocalisation", "enrichir.py")
+    if os.path.exists(geo_script):
+        subprocess.run([sys.executable, geo_script, "--source", "{short_id}"], capture_output=False)
 
 if __name__ == "__main__":
     process_source()
 """
 
 def generate_scripts():
-    scripts_dir = os.path.join(os.path.dirname(__file__), "scripts")
+    scripts_dir = os.path.join(os.path.dirname(__file__), "nlp", "scripts")
     if not os.path.exists(scripts_dir):
         os.makedirs(scripts_dir)
         
-    for source_name, file_name in SOURCES.items():
+    for source_name, config in SOURCES.items():
+        short_id, file_name = config
         script_name = file_name.replace("extracted.json", "enricher.py")
         script_path = os.path.join(scripts_dir, script_name)
         
         # Format the content
-        content = TEMPLATE.replace("{source_name}", source_name.replace(" ", "_")).replace("{file_name}", file_name)
+        content = TEMPLATE.replace("{source_name}", source_name.replace(" ", "_"))
+        content = content.replace("{file_name}", file_name)
+        content = content.replace("{short_id}", short_id)
         
         with open(script_path, "w", encoding="utf-8") as f:
             f.write(content)

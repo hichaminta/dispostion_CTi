@@ -6,7 +6,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger("EnrichmentOrchestrator")
 
 def run_all():
-    scripts_dir = os.path.join(os.path.dirname(__file__), 'scripts')
+    scripts_dir = os.path.join(os.path.dirname(__file__), 'nlp', 'scripts')
     
     if not os.path.exists(scripts_dir):
         logger.error(f"Scripts directory not found at {scripts_dir}")

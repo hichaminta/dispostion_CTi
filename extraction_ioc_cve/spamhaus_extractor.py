@@ -13,7 +13,7 @@ SOURCE_NAME = "Spamhaus"
 # BASE_DIR is one level above EXTRACTORS_DIR
 BASE_DIR = os.path.dirname(EXTRACTORS_DIR)
 SOURCE_DIR = os.path.join(BASE_DIR, "Sources_data", "Spamhaus")
-INPUT_FILE = os.path.join(SOURCE_DIR, "spamhaus_drop.json")
+INPUT_FILE = os.path.join(SOURCE_DIR, "spamhaus_data.json")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output_cve_ioc")
 TRACKING_DIR = os.path.join(EXTRACTORS_DIR, "tracking")
 TRACKING_FILE = os.path.join(TRACKING_DIR, "spamhaus_tracking.json")

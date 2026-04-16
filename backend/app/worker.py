@@ -45,11 +45,13 @@ def terminate_run(run_id: str):
     return False
 
 # Répertoire racine du projet
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+PROJECT_ROOT      = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SOURCES_DATA_DIR  = os.path.join(PROJECT_ROOT, "Sources_data")
 EXTRACTORS_DIR    = os.path.join(PROJECT_ROOT, "extraction_ioc_cve")
 SCRIPTS_DIR       = os.path.join(PROJECT_ROOT, "scripts")
 OUTPUT_DIR        = os.path.join(PROJECT_ROOT, "output_cve_ioc")
+COLLECTION_SCRIPT = os.path.join(SCRIPTS_DIR, "run_collection_all.py")
+ENRICHMENT_DIR    = os.path.join(PROJECT_ROOT, "enrichment")
 
 # Sources CVE-only (pas d'IOCs)
 CVE_ONLY_SOURCES = {"NVD", "NVd"}
@@ -280,31 +282,34 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         collecte_ok = True
         sources_to_run = list(SOURCE_MAP.keys()) if is_unified else [source_name]
 
-        for src in sources_to_run:
-            info = SOURCE_MAP.get(src)
-            if not info:
-                await _ws_log(run_id, "Collecte", f"[{ts()}] ⚠ Source inconnue '{src}', ignorée.")
-                continue
+        if is_unified:
+            await _ws_log(run_id, "Collecte", f"[{ts()}] ➔ Utilisation de l'orchestrateur global : run_collection_all.py")
+            collecte_ok = await _run_proc(run_id, "Collecte", [sys.executable, COLLECTION_SCRIPT], PROJECT_ROOT)
+        else:
+            for src in sources_to_run:
+                info = SOURCE_MAP.get(src)
+                if not info:
+                    await _ws_log(run_id, "Collecte", f"[{ts()}] ⚠ Source inconnue '{src}', ignorée.")
+                    continue
 
-            src_folder = os.path.join(SOURCES_DATA_DIR, info["folder"])
-            script_path = os.path.join(src_folder, "script.py")
+                src_folder = os.path.join(SOURCES_DATA_DIR, info["folder"])
+                script_path = os.path.join(src_folder, "script.py")
 
-            if not os.path.exists(script_path):
-                await _ws_log(run_id, "Collecte", f"[{ts()}] ⚠ Script absent : {script_path}")
-                if not is_unified:
+                if not os.path.exists(script_path):
+                    await _ws_log(run_id, "Collecte", f"[{ts()}] ⚠ Script absent : {script_path}")
                     collecte_ok = False
-                continue
+                    continue
 
-            await _ws_log(run_id, "Collecte", f"[{ts()}] ── Collecte : {src} ──")
-            await manager.broadcast({"type": "source_activity", "source_id": info["id"], "active": True})
-            ok = await _run_proc(
-                run_id, "Collecte",
-                [sys.executable, script_path],
-                src_folder  # CWD = dossier de la source (les scripts écrivent relatif à eux-mêmes)
-            )
-            if not ok:
-                collecte_ok = False
-                await _ws_log(run_id, "Collecte", f"[{ts()}] ⚠ {src} collecte échouée — on continue.")
+                await _ws_log(run_id, "Collecte", f"[{ts()}] ── Collecte : {src} ──")
+                await manager.broadcast({"type": "source_activity", "source_id": info["id"], "active": True})
+                ok = await _run_proc(
+                    run_id, "Collecte",
+                    [sys.executable, script_path],
+                    src_folder
+                )
+                if not ok:
+                    collecte_ok = False
+                    await _ws_log(run_id, "Collecte", f"[{ts()}] ⚠ {src} collecte échouée — on continue.")
 
         await _ws_log(run_id, "Collecte", f"[{ts()}] ═══ COLLECTE {'OK' if collecte_ok else 'PARTIELLE'} ═══")
         await _update_step(run_id, "Collecte", "success" if collecte_ok else "failed")
@@ -315,29 +320,24 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         await _update_step(run_id, "Extraction CVE / IOC", "running")
         await _ws_log(run_id, "Extraction CVE / IOC", f"[{ts()}] ═══ DÉMARRAGE EXTRACTION ═══")
 
-        extraction_ok = True
-        for src in sources_to_run:
-            info = SOURCE_MAP.get(src)
-            if not info:
-                continue
-            extractor_path = os.path.join(EXTRACTORS_DIR, info["extractor"])
-            if not os.path.exists(extractor_path):
-                await _ws_log(run_id, "Extraction CVE / IOC", f"[{ts()}] ⚠ Extracteur absent : {info['extractor']}")
-                continue
-
-            await _ws_log(run_id, "Extraction CVE / IOC", f"[{ts()}] ── Extraction : {src} ──")
-            ok = await _run_proc(
-                run_id, "Extraction CVE / IOC",
-                [sys.executable, extractor_path],
-                PROJECT_ROOT
-            )
-            
-            # BROADCAST END for this source
-            await manager.broadcast({"type": "source_activity", "source_id": info["id"], "active": False})
-
-            if not ok:
-                extraction_ok = False
-                await _ws_log(run_id, "Extraction CVE / IOC", f"[{ts()}] ⚠ {src} extraction échouée — on continue.")
+        if is_unified:
+            await _ws_log(run_id, "Extraction CVE / IOC", f"[{ts()}] ➔ Utilisation de l'orchestrateur global : run_extraction_all.py")
+            extraction_script = os.path.join(EXTRACTORS_DIR, "run_extraction_all.py")
+            extraction_ok = await _run_proc(run_id, "Extraction CVE / IOC", [sys.executable, extraction_script], PROJECT_ROOT)
+        else:
+            extraction_ok = True
+            for src in sources_to_run:
+                # ... loop logic summarized ...
+                info = SOURCE_MAP.get(src)
+                if not info: continue
+                extractor_path = os.path.join(EXTRACTORS_DIR, info["extractor"])
+                if not os.path.exists(extractor_path):
+                    await _ws_log(run_id, "Extraction CVE / IOC", f"[{ts()}] ⚠ Extracteur absent : {info['extractor']}")
+                    continue
+                await _ws_log(run_id, "Extraction CVE / IOC", f"[{ts()}] ── Extraction : {src} ──")
+                ok = await _run_proc(run_id, "Extraction CVE / IOC", [sys.executable, extractor_path], PROJECT_ROOT)
+                await manager.broadcast({"type": "source_activity", "source_id": info["id"], "active": False})
+                if not ok: extraction_ok = False
 
         # Compter les résultats
         ioc_count, cve_count = _count_ioc_cve(source_name)
@@ -352,36 +352,30 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         # ══════════════════════════════════════════════════════════════
         await _update_step(run_id, "Enrichissement", "running")
         await _ws_log(run_id, "Enrichissement", f"[{ts()}] ═══ DÉMARRAGE ENRICHISSEMENT ═══")
+        await _ws_log(run_id, "Enrichissement", f"[{ts()}] ➔ STAGE 1 : Enrichissement NLP Source-Specific")
 
-        enrichment_ok = True
-        ENRICHMENT_SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "enrichment", "scripts")
-
-        for src in sources_to_run:
-            # Skip blacklisted enrichment (optional if we want consistency with main.py)
-            if src in ["NVD", "AlienVault OTX"]:
-                await _ws_log(run_id, "Enrichissement", f"[{ts()}] ➔ Skip : {src} (Non supporté)")
-                continue
-
-            info = SOURCE_MAP.get(src)
-            if not info: continue
-
-            # Script name should match what generate_enrichers.py produces
-            enricher_name = info["output"].replace("_extracted.json", "_enricher.py")
-            enricher_path = os.path.join(ENRICHMENT_SCRIPTS_DIR, enricher_name)
-
-            if not os.path.exists(enricher_path):
-                await _ws_log(run_id, "Enrichissement", f"[{ts()}] ⚠ Enrichisseur absent : {enricher_name}")
-                continue
-
-            await _ws_log(run_id, "Enrichissement", f"[{ts()}] ── Enrichissement : {src} ──")
-            ok = await _run_proc(
-                run_id, "Enrichissement",
-                [sys.executable, enricher_path],
-                PROJECT_ROOT
-            )
-            if not ok:
-                enrichment_ok = False
-                await _ws_log(run_id, "Enrichissement", f"[{ts()}] ⚠ {src} enrichissement échoué.")
+        if is_unified:
+            await _ws_log(run_id, "Enrichissement", f"[{ts()}] ➔ Utilisation de l'orchestrateur global : run_enrichment_all.py")
+            enrichment_script = os.path.join(PROJECT_ROOT, "enrichment", "run_enrichment_all.py")
+            enrichment_ok = await _run_proc(run_id, "Enrichissement", [sys.executable, enrichment_script], PROJECT_ROOT)
+        else:
+            enrichment_ok = True
+            for src in sources_to_run:
+                if src in ["NVD", "AlienVault OTX"]: continue
+                info = SOURCE_MAP.get(src)
+                if not info: continue
+                enricher_name = info["output"].replace("_extracted.json", "_enricher.py")
+                enricher_path = os.path.join(os.path.join(PROJECT_ROOT, "enrichment", "nlp", "scripts"), enricher_name)
+                if not os.path.exists(enricher_path): continue
+                await _ws_log(run_id, "Enrichissement", f"[{ts()}] ── Enrichissement : {src} ──")
+                ok = await _run_proc(run_id, "Enrichissement", [sys.executable, enricher_path], PROJECT_ROOT)
+                if not ok: enrichment_ok = False
+            
+            # STAGE 2 for individual/sequential run
+            if enrichment_ok:
+                geo_script = os.path.join(PROJECT_ROOT, "enrichment", "geolocalisation", "geo_local_enricher.py")
+                if os.path.exists(geo_script):
+                    await _run_proc(run_id, "Enrichissement", [sys.executable, geo_script], PROJECT_ROOT)
 
         await _ws_log(run_id, "Enrichissement", f"[{ts()}] ═══ ENRICHISSEMENT {'OK' if enrichment_ok else 'PARTIELLE'} ═══")
         await _update_step(run_id, "Enrichissement", "success" if enrichment_ok else "failed")
@@ -441,48 +435,60 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
         cve_count = 0
 
         if step_name == "Collecte":
-            for src in sources_to_run:
-                info = SOURCE_MAP.get(src)
-                if not info: continue
-                src_folder = os.path.join(SOURCES_DATA_DIR, info["folder"])
-                script_path = os.path.join(src_folder, "script.py")
-                if not os.path.exists(script_path):
-                    await _ws_log(run_id, step_name, f"[{ts()}] ⚠ Script absent : {script_path}")
-                    continue
-                await _ws_log(run_id, step_name, f"[{ts()}] ── Collecte : {src} ──")
-                ok = await _run_proc(run_id, step_name, [sys.executable, script_path], src_folder)
-                if not ok: step_ok = False
+            if is_unified:
+                await _ws_log(run_id, step_name, f"[{ts()}] ➔ Orchestrateur Global : run_collection_all.py")
+                step_ok = await _run_proc(run_id, step_name, [sys.executable, COLLECTION_SCRIPT], PROJECT_ROOT)
+            else:
+                for src in sources_to_run:
+                    info = SOURCE_MAP.get(src)
+                    if not info: continue
+                    src_folder = os.path.join(SOURCES_DATA_DIR, info["folder"])
+                    script_path = os.path.join(src_folder, "script.py")
+                    if not os.path.exists(script_path): continue
+                    await _ws_log(run_id, step_name, f"[{ts()}] ── Collecte : {src} ──")
+                    ok = await _run_proc(run_id, step_name, [sys.executable, script_path], src_folder)
+                    if not ok: step_ok = False
 
         elif step_name == "Extraction CVE / IOC":
-            for src in sources_to_run:
-                info = SOURCE_MAP.get(src)
-                if not info: continue
-                extractor_path = os.path.join(EXTRACTORS_DIR, info["extractor"])
-                if not os.path.exists(extractor_path):
-                    await _ws_log(run_id, step_name, f"[{ts()}] ⚠ Extracteur absent : {info['extractor']}")
-                    continue
-                await _ws_log(run_id, step_name, f"[{ts()}] ── Extraction : {src} ──")
-                ok = await _run_proc(run_id, step_name, [sys.executable, extractor_path], PROJECT_ROOT)
-                if not ok: step_ok = False
+            if is_unified:
+                await _ws_log(run_id, step_name, f"[{ts()}] ➔ Orchestrateur Global : run_extraction_all.py")
+                extraction_script = os.path.join(EXTRACTORS_DIR, "run_extraction_all.py")
+                step_ok = await _run_proc(run_id, step_name, [sys.executable, extraction_script], PROJECT_ROOT)
+            else:
+                for src in sources_to_run:
+                    info = SOURCE_MAP.get(src)
+                    if not info: continue
+                    extractor_path = os.path.join(EXTRACTORS_DIR, info["extractor"])
+                    if not os.path.exists(extractor_path): continue
+                    await _ws_log(run_id, step_name, f"[{ts()}] ── Extraction : {src} ──")
+                    ok = await _run_proc(run_id, step_name, [sys.executable, extractor_path], PROJECT_ROOT)
+                    if not ok: step_ok = False
             # Update counts
             ioc_count, cve_count = _count_ioc_cve(source_name)
 
         elif step_name == "Enrichissement":
-            ENRICHMENT_SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "enrichment", "scripts")
-            for src in sources_to_run:
-                if src in ["NVD", "AlienVault OTX"]:
-                    await _ws_log(run_id, step_name, f"[{ts()}] ➔ Skip : {src} (Non supporté)")
-                    continue
-                info = SOURCE_MAP.get(src)
-                if not info: continue
-                enricher_name = info["output"].replace("_extracted.json", "_enricher.py")
-                enricher_path = os.path.join(ENRICHMENT_SCRIPTS_DIR, enricher_name)
-                if not os.path.exists(enricher_path):
-                    await _ws_log(run_id, step_name, f"[{ts()}] ⚠ Enrichisseur absent : {enricher_name}")
-                    continue
-                await _ws_log(run_id, step_name, f"[{ts()}] ── Enrichissement : {src} ──")
-                ok = await _run_proc(run_id, step_name, [sys.executable, enricher_path], PROJECT_ROOT)
-                if not ok: step_ok = False
+            if is_unified:
+                await _ws_log(run_id, step_name, f"[{ts()}] ➔ Orchestrateur Global : run_enrichment_all.py")
+                enrichment_script = os.path.join(PROJECT_ROOT, "enrichment", "run_enrichment_all.py")
+                step_ok = await _run_proc(run_id, step_name, [sys.executable, enrichment_script], PROJECT_ROOT)
+            else:
+                ENRICHMENT_SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "enrichment", "nlp", "scripts")
+                for src in sources_to_run:
+                    if src in ["NVD", "AlienVault OTX"]: continue
+                    info = SOURCE_MAP.get(src)
+                    if not info: continue
+                    enricher_name = info["output"].replace("_extracted.json", "_enricher.py")
+                    enricher_path = os.path.join(ENRICHMENT_SCRIPTS_DIR, enricher_name)
+                    if not os.path.exists(enricher_path): continue
+                    await _ws_log(run_id, step_name, f"[{ts()}] ── Enrichissement : {src} ──")
+                    ok = await _run_proc(run_id, step_name, [sys.executable, enricher_path], PROJECT_ROOT)
+                    if not ok: step_ok = False
+                
+                # Global Geo Stage for the individual target run
+                if step_ok:
+                    geo_script = os.path.join(PROJECT_ROOT, "enrichment", "geolocalisation", "geo_local_enricher.py")
+                    if os.path.exists(geo_script):
+                        await _run_proc(run_id, step_name, [sys.executable, geo_script], PROJECT_ROOT)
 
         elif step_name in ["Normalisation", "Intégration MISP"]:
             await _ws_log(run_id, step_name, f"[{ts()}] [INFO] Cette étape est planifiée pour une version future.")

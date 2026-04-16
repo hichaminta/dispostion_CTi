@@ -190,6 +190,45 @@ def get_stats():
     }
     return res
 
+@app.get("/api/stats/countries")
+def get_country_stats():
+    country_counts = {}
+    if os.path.exists(ENRICHMENT_DIR):
+        for fn in os.listdir(ENRICHMENT_DIR):
+            if not fn.endswith("_enriched.json"): continue
+            filepath = os.path.join(ENRICHMENT_DIR, fn)
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    records = json.load(f)
+                for record in records:
+                    # Get unique countries for this specific record to avoid over-counting duplicate tags
+                    record_countries = set()
+                    
+                    # 1. From IOCs (IOC-centric model)
+                    for ioc in record.get("iocs", []):
+                        geos = ioc.get("ioc_enrichment", {}).get("geography", [])
+                        for g in geos: record_countries.add(g)
+                    
+                    # 2. From NLP Advanced (Legacy/Generic extraction)
+                    geos_adv = record.get("enrichment", {}).get("nlp_advanced", {}).get("geography", [])
+                    for g in geos_adv: record_countries.add(g)
+                    
+                    # 3. From record tags (Fallback)
+                    for tag in record.get("tags", []):
+                        # Simple heuristic: if it's a known country or matches our geo list
+                        # (We'll count everything in record_countries set for now)
+                        pass
+                    
+                    for country in record_countries:
+                        if country and len(country) > 1: # Avoid junk
+                            country_counts[country] = country_counts.get(country, 0) + 1
+            except:
+                continue
+    
+    # Sort and take top 10
+    sorted_countries = sorted(country_counts.items(), key=lambda x: x[1], reverse=True)
+    return [{"country": c, "count": n} for c, n in sorted_countries[:12]]
+
 # ──────────────────────────────────────────────────────────────────────────────
 # EXTRACTION ENDPOINTS
 # ──────────────────────────────────────────────────────────────────────────────
@@ -212,7 +251,7 @@ def get_extracted_sources():
     return sources
 
 @app.get("/api/extracted/data/{source_id}")
-def get_extracted_data(source_id: str, page: int = 1, limit: int = 50, search: str = None):
+def get_extracted_data(source_id: str, page: int = 1, limit: int = 50, search: str = None, ioc_type: str = None):
     info = None
     for src_name, src_info in worker.SOURCE_MAP.items():
         if src_info["id"] == source_id:
@@ -230,6 +269,18 @@ def get_extracted_data(source_id: str, page: int = 1, limit: int = 50, search: s
         with open(filepath, "r", encoding="utf-8") as f:
             all_data = json.load(f)
             
+        # 1. Type Filtering
+        if ioc_type:
+            t_low = ioc_type.lower()
+            if t_low == "cve":
+                all_data = [d for d in all_data if d.get("cves")]
+            else:
+                all_data = [
+                    d for d in all_data 
+                    if any(i.get("type", "").lower() == t_low for i in d.get("iocs", []))
+                ]
+
+        # 2. Search Filtering
         if search:
             search_low = search.lower()
             all_data = [
@@ -274,7 +325,7 @@ def get_enriched_sources():
     return sources
 
 @app.get("/api/enriched/data/{source_id}")
-def get_enriched_data(source_id: str, page: int = 1, limit: int = 50, search: str = None):
+def get_enriched_data(source_id: str, page: int = 1, limit: int = 50, search: str = None, ioc_type: str = None):
     info = None
     for src_name, src_info in worker.SOURCE_MAP.items():
         if src_info["id"] == source_id:
@@ -294,6 +345,18 @@ def get_enriched_data(source_id: str, page: int = 1, limit: int = 50, search: st
         with open(filepath, "r", encoding="utf-8") as f:
             all_data = json.load(f)
             
+        # 1. Type Filtering
+        if ioc_type:
+            t_low = ioc_type.lower()
+            if t_low == "cve":
+                all_data = [d for d in all_data if d.get("cves")]
+            else:
+                all_data = [
+                    d for d in all_data 
+                    if any(i.get("type", "").lower() == t_low for i in d.get("iocs", []))
+                ]
+
+        # 2. Search Filtering
         if search:
             search_low = search.lower()
             all_data = [

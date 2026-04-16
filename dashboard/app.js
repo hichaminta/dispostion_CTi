@@ -4,6 +4,8 @@
 
 const API_BASE_EXTRACTED = "http://localhost:8000/api/extracted";
 const API_BASE_ENRICHED = "http://localhost:8000/api/enriched";
+const API_BASE_STATS = "http://localhost:8000/api/stats";
+
 let viewMode = 'extracted'; // 'extracted' or 'enriched'
 
 let currentSource = null;
@@ -25,14 +27,17 @@ const pageInfo = document.getElementById('page-info');
 const prevBtn = document.getElementById('prev-page');
 const nextBtn = document.getElementById('next-page');
 const searchInput = document.getElementById('global-search');
+const typeFilter = document.getElementById('type-filter');
 const refreshBtn = document.getElementById('refresh-btn');
 const modalOverlay = document.getElementById('modal-overlay');
 const jsonViewer = document.getElementById('raw-json-viewer');
 const closeModal = document.getElementById('close-modal');
+const countryStatsList = document.getElementById('country-stats-list');
 
 // Init
 async function init() {
     await loadSources();
+    await loadCountryStats(); // Load geography global overview
     setupEventListeners();
     
     // Auto-select first source if available
@@ -79,12 +84,21 @@ async function loadSources() {
 }
 
 function renderSourceList() {
-    sourceList.innerHTML = sources.map(src => `
-        <div class="source-item ${currentSource === src.id ? 'active' : ''}" onclick="selectSource('${src.id}')">
-            <span class="src-name">${src.name}</span>
-            <span class="badge">${formatSize(src.size)}</span>
-        </div>
-    `).join('');
+    sourceList.innerHTML = sources.map(src => {
+        const logoUrl = getSourceLogo(src.name);
+        const icon = logoUrl ? `<div class="source-logo-sm" style="margin-right: 12px;"><img src="${logoUrl}" alt="${src.name}"></div>` : `<i data-lucide="shield" class="source-logo-sm" style="margin-right: 12px;"></i>`;
+        
+        return `
+            <div class="source-item ${currentSource === src.id ? 'active' : ''}" onclick="selectSource('${src.id}')">
+                <div style="display: flex; align-items: center;">
+                    ${icon}
+                    <span class="src-name">${src.name}</span>
+                </div>
+                <span class="badge">${formatSize(src.size)}</span>
+            </div>
+        `;
+    }).join('');
+    if (window.lucide) window.lucide.createIcons();
 }
 
 // Select Source
@@ -132,7 +146,8 @@ async function loadData() {
     const query = new URLSearchParams({
         page: currentPage,
         limit: PAGE_SIZE,
-        search: searchInput.value || ""
+        search: searchInput.value || "",
+        ioc_type: (typeFilter && typeFilter.value) || ""
     });
 
     try {
@@ -149,6 +164,85 @@ async function loadData() {
         if (statsGrid) statsGrid.classList.remove('loading');
     }
 }
+
+const SOURCE_LOGOS = {
+    'AbuseIPDB': 'https://www.abuseipdb.com/favicon.ico',
+    'VirusTotal': 'https://www.virustotal.com/gui/images/favicon.png',
+    'OTX AlienVault': 'https://otx.alienvault.com/assets/favicon.ico',
+    'AlienVault': 'https://otx.alienvault.com/assets/favicon.ico',
+    'Spamhaus': 'https://www.spamhaus.org/favicon.ico',
+    'URLHaus': 'https://urlhaus.abuse.ch/favicon.ico',
+    'ThreatFox': 'https://threatfox.abuse.ch/favicon.ico',
+    'MalwareBazaar': 'https://malwarebazaar.abuse.ch/favicon.ico',
+    'PhishTank': 'https://www.phishtank.com/favicon_32x32.png',
+    'OpenPhish': 'https://openphish.com/favicon.ico',
+    'NVD': 'https://nvd.nist.gov/favicon.ico',
+    'PulseDive': 'https://pulsedive.com/favicon.ico',
+    'FeodoTracker': 'https://feodotracker.abuse.ch/favicon.ico'
+};
+
+const COUNTRY_NAME_TO_CODE = {
+    'afghanistan': 'af', 'albania': 'al', 'algeria': 'dz', 'andorra': 'ad', 'angola': 'ao', 'argentina': 'ar', 'armenia': 'am', 'australia': 'au', 'austria': 'at', 'azerbaijan': 'az',
+    'bahamas': 'bs', 'bahrain': 'bh', 'bangladesh': 'bd', 'barbados': 'bb', 'belarus': 'by', 'belgium': 'be', 'belize': 'bz', 'benin': 'bj', 'bhutan': 'bt', 'bolivia': 'bo',
+    'brazil': 'br', 'bulgaria': 'bg', 'burkina faso': 'bf', 'burundi': 'bi', 'cambodia': 'kh', 'cameroon': 'cm', 'canada': 'ca', 'chad': 'td', 'chile': 'cl', 'china': 'cn',
+    'colombia': 'co', 'congo': 'cg', 'costa rica': 'cr', 'croatia': 'hr', 'cuba': 'cu', 'cyprus': 'cy', 'czechia': 'cz', 'denmark': 'dk', 'djibouti': 'dj', 'dominica': 'dm',
+    'ecuador': 'ec', 'egypt': 'eg', 'estonia': 'ee', 'ethiopia': 'et', 'fiji': 'fj', 'finland': 'fi', 'france': 'fr', 'gabon': 'ga', 'gambia': 'gm', 'georgia': 'ge', 'germany': 'de',
+    'ghana': 'gh', 'greece': 'gr', 'guatemala': 'gt', 'guinea': 'gn', 'guyana': 'gy', 'haiti': 'ht', 'honduras': 'hn', 'hungary': 'hu', 'iceland': 'is', 'india': 'in', 'indonesia': 'id',
+    'iran': 'ir', 'iraq': 'iq', 'ireland': 'ie', 'israel': 'il', 'italy': 'it', 'jamaica': 'jm', 'japan': 'jp', 'jordan': 'jo', 'kazakhstan': 'kz', 'kenya': 'ke', 'kuwait': 'kw',
+    'kyrgyzstan': 'kg', 'laos': 'la', 'latvia': 'lv', 'lebanon': 'lb', 'lesotho': 'ls', 'liberia': 'lr', 'libya': 'ly', 'lithuania': 'lt', 'luxembourg': 'lu', 'madagascar': 'mg',
+    'malaysia': 'my', 'maldives': 'mv', 'mali': 'ml', 'malta': 'mt', 'mexico': 'mx', 'moldova': 'md', 'monaco': 'mc', 'mongolia': 'mn', 'montenegro': 'me', 'morocco': 'ma',
+    'myanmar': 'mm', 'namibia': 'na', 'nepal': 'np', 'netherlands': 'nl', 'new zealand': 'nz', 'nicaragua': 'ni', 'niger': 'ne', 'nigeria': 'ng', 'north korea': 'kp',
+    'norway': 'no', 'oman': 'om', 'pakistan': 'pk', 'palau': 'pw', 'panama': 'pa', 'paraguay': 'py', 'peru': 'pe', 'philippines': 'ph', 'poland': 'pl', 'portugal': 'pt', 'qatar': 'qa',
+    'romania': 'ro', 'russia': 'ru', 'rwanda': 'rw', 'saudi arabia': 'sa', 'senegal': 'sn', 'serbia': 'rs', 'seychelles': 'sc', 'sierra leone': 'sl', 'singapore': 'sg',
+    'slovakia': 'sk', 'slovenia': 'si', 'somalia': 'so', 'south africa': 'za', 'south korea': 'kr', 'spain': 'es', 'sri lanka': 'lk', 'sudan': 'sd', 'suriname': 'sr',
+    'sweden': 'se', 'switzerland': 'ch', 'syria': 'sy', 'taiwan': 'tw', 'tajikistan': 'tj', 'tanzania': 'tz', 'thailand': 'th', 'togo': 'tg', 'tonga': 'to', 'tunisia': 'tn',
+    'turkey': 'tr', 'turkmenistan': 'tm', 'uganda': 'ug', 'ukraine': 'ua', 'uae': 'ae', 'united arab emirates': 'ae', 'uk': 'gb', 'united kingdom': 'gb', 'usa': 'us',
+    'united states': 'us', 'uruguay': 'uy', 'uzbekistan': 'uz', 'vanuatu': 'vu', 'venezuela': 've', 'vietnam': 'vn', 'yemen': 'ye', 'zambia': 'zm', 'zimbabwe': 'zw'
+};
+
+const COUNTRY_CODE_TO_NAME = {
+    'af': 'Afghanistan', 'al': 'Albania', 'dz': 'Algeria', 'ad': 'Andorra', 'ao': 'Angola', 'ar': 'Argentina', 'am': 'Armenia', 'au': 'Australia', 'at': 'Austria', 'az': 'Azerbaijan',
+    'bs': 'Bahamas', 'bh': 'Bahrain', 'bd': 'Bangladesh', 'bb': 'Barbados', 'by': 'Belarus', 'be': 'Belgium', 'bz': 'Belize', 'bj': 'Benin', 'bt': 'Bhutan', 'bo': 'Bolivia',
+    'br': 'Brazil', 'bg': 'Bulgaria', 'bf': 'Burkina Faso', 'bi': 'Burundi', 'kh': 'Cambodia', 'cm': 'Cameroon', 'ca': 'Canada', 'td': 'Chad', 'cl': 'Chile', 'cn': 'China',
+    'co': 'Colombia', 'cg': 'Congo', 'cr': 'Costa Rica', 'hr': 'Croatia', 'cu': 'Cuba', 'cy': 'Cyprus', 'cz': 'Czechia', 'dk': 'Denmark', 'dj': 'Djibouti', 'dm': 'Dominica',
+    'ec': 'Ecuador', 'eg': 'Egypt', 'ee': 'Estonia', 'et': 'Ethiopia', 'fj': 'Fiji', 'fi': 'Finland', 'fr': 'France', 'ga': 'Gabon', 'gm': 'Gambia', 'ge': 'Georgia', 'de': 'Germany',
+    'gh': 'Ghana', 'gr': 'Greece', 'gt': 'Guatemala', 'gn': 'Guinea', 'gy': 'Guyana', 'ht': 'Haiti', 'hn': 'Honduras', 'hu': 'Hungary', 'is': 'Iceland', 'in': 'India', 'id': 'Indonesia',
+    'ir': 'Iran', 'iq': 'Iraq', 'ie': 'Ireland', 'il': 'Israel', 'it': 'Italy', 'jm': 'Jamaica', 'jp': 'Japan', 'jo': 'Jordan', 'kz': 'Kazakhstan', 'ke': 'Kenya', 'kw': 'Kuwait',
+    'kg': 'Kyrgyzstan', 'la': 'Laos', 'lv': 'Latvia', 'lb': 'Lebanon', 'ls': 'Lesotho', 'lr': 'Liberia', 'ly': 'Libya', 'lt': 'Lithuania', 'lu': 'Luxembourg', 'mg': 'Madagascar',
+    'my': 'Malaysia', 'mv': 'Maldives', 'ml': 'Mali', 'mt': 'Malta', 'mx': 'Mexico', 'md': 'Moldova', 'mc': 'Monaco', 'mn': 'Mongolia', 'me': 'Montenegro', 'ma': 'Morocco',
+    'mm': 'Myanmar', 'na': 'Namibia', 'np': 'Nepal', 'nl': 'Netherlands', 'nz': 'New Zealand', 'ni': 'Nicaragua', 'ne': 'Niger', 'ng': 'Nigeria', 'kp': 'North Korea',
+    'no': 'Norway', 'om': 'Oman', 'pk': 'Pakistan', 'pw': 'Palau', 'pa': 'Panama', 'py': 'Paraguay', 'pe': 'Peru', 'ph': 'Philippines', 'pl': 'Poland', 'pt': 'Portugal', 'qa': 'Qatar',
+    'ro': 'Romania', 'ru': 'Russia', 'rw': 'Rwanda', 'sa': 'Saudi Arabia', 'sn': 'Senegal', 'rs': 'Serbia', 'sc': 'Seychelles', 'sl': 'Sierra Leone', 'sg': 'Singapore',
+    'sk': 'Slovakia', 'si': 'Slovenia', 'so': 'Somalia', 'za': 'South Africa', 'kr': 'South Korea', 'es': 'Spain', 'lk': 'Sri Lanka', 'sd': 'Sudan', 'sr': 'Suriname',
+    'se': 'Sweden', 'ch': 'Switzerland', 'sy': 'Syria', 'tw': 'Taiwan', 'tj': 'Tajikistan', 'tz': 'Tanzania', 'th': 'Thailand', 'tg': 'Togo', 'to': 'Tonga', 'tn': 'Tunisia',
+    'tr': 'Turkey', 'tm': 'Turkmenistan', 'ug': 'Uganda', 'ua': 'Ukraine', 'ae': 'United Arab Emirates', 'gb': 'United Kingdom', 'us': 'United States', 'uy': 'Uruguay',
+    'uz': 'Uzbekistan', 'vu': 'Vanuatu', 've': 'Venezuela', 'vn': 'Vietnam', 'ye': 'Yemen', 'zm': 'Zambia', 'zw': 'Zimbabwe'
+};
+
+function getCountryFullName(country) {
+    if (!country) return 'Unknown';
+    const c = country.toLowerCase().trim();
+    if (c.length === 2 && COUNTRY_CODE_TO_NAME[c]) return COUNTRY_CODE_TO_NAME[c];
+    return country;
+}
+
+function getFlagUrl(country) {
+    if (!country) return null;
+    const c = country.toLowerCase().trim();
+    let code = null;
+    if (c.length === 2 && /^[a-z]+$/.test(c)) code = c;
+    else if (COUNTRY_NAME_TO_CODE[c]) code = COUNTRY_NAME_TO_CODE[c];
+    
+    return code ? `https://flagcdn.com/w40/${code}.png` : null;
+}
+
+window.setCountryFilter = (country) => {
+    searchInput.value = country;
+    currentPage = 1;
+    loadData();
+    // Scroll to table
+    document.querySelector('.table-workspace').scrollIntoView({ behavior: 'smooth' });
+};
 
 function renderTable(data) {
     if (data.length === 0) {
@@ -178,13 +272,20 @@ function renderTable(data) {
         const tags = (item.tags || []).slice(0, 2).map(t => `<span class="tag">${t}</span>`).join('');
         const date = item.collected_at ? new Date(item.collected_at).toLocaleDateString() : 'N/A';
 
+        // Source Icon
+        const logoUrl = getSourceLogo(item.source);
+        const sourceIcon = logoUrl ? `<div class="source-logo-sm"><img src="${logoUrl}" alt="${item.source}"></div>` : `<i data-lucide="shield" class="source-logo-sm"></i>`;
+
         return `
             <tr>
                 <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-secondary)">${item.record_id.substring(0, 10)}...</td>
                 <td><span class="type-pill ${type}">${type}</span></td>
                 <td>
                     <div style="display: flex; flex-direction: column; gap: 4px;">
-                        <strong style="color: var(--text-primary); font-size: 0.95rem;">${truncate(mainIndicator, 32)}</strong>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            ${sourceIcon}
+                            <strong style="color: var(--text-primary); font-size: 0.95rem;">${truncate(mainIndicator, 32)}</strong>
+                        </div>
                         <div style="display: flex; gap: 4px;">${enrichmentBadge}</div>
                     </div>
                 </td>
@@ -198,6 +299,7 @@ function renderTable(data) {
     }).join('');
     
     window.lastLoadedData = data;
+    if (window.lucide) window.lucide.createIcons();
 }
 
 function updateDashboardStats(result) {
@@ -294,6 +396,15 @@ window.viewRaw = (recordId) => {
     document.getElementById('detail-source').textContent = item.source || 'Unknown';
     document.getElementById('detail-date').textContent = item.collected_at ? new Date(item.collected_at).toLocaleString() : 'N/A';
 
+    // Update Source Logo in Modal
+    const logoContainer = document.getElementById('modal-source-logo-container');
+    const logoUrl = getSourceLogo(item.source);
+    if (logoUrl) {
+        logoContainer.innerHTML = `<img src="${logoUrl}" alt="${item.source}">`;
+    } else {
+        logoContainer.innerHTML = `<i data-lucide="shield-alert" class="panel-icon"></i>`;
+    }
+
     // NLP Summary / Brief (Cleaned)
     const briefContent = document.getElementById('nlp-brief-content');
     briefContent.innerHTML = generateIntelligenceBrief(item);
@@ -312,20 +423,51 @@ window.viewRaw = (recordId) => {
     // Intelligence Tab: IOCs, Families, Categories
     const iocList = document.getElementById('ioc-list');
     iocList.innerHTML = (item.iocs || []).map(ioc => `
-        <div class="intel-badge ${ioc.type}">
+        <div class="intel-badge ${ioc.type}" title="${ioc.indicator_role?.role || 'indicator'}">
             <i data-lucide="${getIconForType(ioc.type)}"></i>
             <span>${ioc.value}</span>
             <small style="opacity: 0.6; margin-left: 5px;">(${ioc.indicator_role?.role || 'indicator'})</small>
         </div>
     `).join('') || '<p class="empty-msg">No IOCs detected</p>';
 
+    // Aggregators for indicator-level enrichment
+    const allFamilies = new Set(item.enrichment?.nlp_extracted?.malware_families || []);
+    const allCategories = new Set(item.enrichment?.nlp_extracted?.threat_categories || []);
+    const allGeography = new Set(item.enrichment?.nlp_advanced?.geography || []);
+    const allAttributes = { ...(item.attributes || {}) };
+
+    (item.iocs || []).forEach(ioc => {
+        const enr = ioc.ioc_enrichment || {};
+        
+        // Families
+        if (enr.malware_family) allFamilies.add(enr.malware_family);
+        if (enr.malware_families) enr.malware_families.forEach(f => allFamilies.add(f));
+        
+        // Categories
+        if (enr.threat_categories) enr.threat_categories.forEach(c => allCategories.add(c));
+        
+        // Geography
+        if (enr.geography) enr.geography.forEach(g => allGeography.add(g));
+        if (enr.country) allGeography.add(enr.country);
+        if (enr.country_name) allGeography.add(enr.country_name);
+        
+        // Attributes (merge)
+        Object.entries(enr).forEach(([k, v]) => {
+            if (!['geography', 'threat_categories', 'malware_families', 'malware_family'].includes(k)) {
+                if (v !== null && v !== undefined && v !== "") {
+                    allAttributes[k] = v;
+                }
+            }
+        });
+    });
+
     const familyList = document.getElementById('family-list');
-    familyList.innerHTML = (item.enrichment?.nlp_extracted?.malware_families || []).map(f => `
+    familyList.innerHTML = Array.from(allFamilies).map(f => `
         <span class="family-pill">${f}</span>
     `).join('') || '<p class="empty-msg">No malware families identified</p>';
 
     const catList = document.getElementById('category-list');
-    catList.innerHTML = (item.enrichment?.nlp_extracted?.threat_categories || []).map(c => `
+    catList.innerHTML = Array.from(allCategories).map(c => `
         <span class="category-pill">${c}</span>
     `).join('') || '<p class="empty-msg">No threat categories assigned</p>';
 
@@ -338,13 +480,17 @@ window.viewRaw = (recordId) => {
         || '<p class="empty-msg">No organizational context</p>';
 
     const geoList = document.getElementById('geo-list');
-    geoList.innerHTML = (item.enrichment?.nlp_advanced?.geography || []).map(g => `
-        <div class="context-item"><span class="context-key">Location</span><span class="context-val">${g}</span></div>
-    `).join('') || '<p class="empty-msg">No geographical data</p>';
+    geoList.innerHTML = Array.from(allGeography).map(g => {
+        const flagUrl = getFlagUrl(g);
+        const fullName = getCountryFullName(g);
+        const flag = flagUrl ? `<img src="${flagUrl}" class="country-flag-inline" alt="${g}">` : '';
+        return `
+            <div class="context-item"><span class="context-key">Location</span><span class="context-val">${flag}${fullName}</span></div>
+        `;
+    }).join('') || '<p class="empty-msg">No geographical data</p>';
 
     const attrList = document.getElementById('attr-list');
-    const attrs = item.attributes || {};
-    attrList.innerHTML = Object.entries(attrs).map(([k, v]) => `
+    attrList.innerHTML = Object.entries(allAttributes).map(([k, v]) => `
         <div class="context-item"><span class="context-key">${k}</span><span class="context-val">${v}</span></div>
     `).join('') || '<p class="empty-msg">No additional attributes</p>';
 
@@ -383,10 +529,76 @@ function setupEventListeners() {
         }, 500);
     };
     
-    refreshBtn.onclick = () => loadData();
+    refreshBtn.onclick = () => {
+        loadData();
+        loadCountryStats();
+    };
+
+    if (typeFilter) {
+        typeFilter.onchange = () => {
+            currentPage = 1;
+            loadData();
+        };
+    }
     
     closeModal.onclick = () => modalOverlay.classList.add('hidden');
     modalOverlay.onclick = (e) => { if (e.target === modalOverlay) closeModal.onclick(); };
+}
+
+// ─── Geographical Stats Logic ───
+async function loadCountryStats() {
+    if (!countryStatsList) return;
+    
+    try {
+        const response = await fetch(`${API_BASE_STATS}/countries`);
+        const stats = await response.json();
+        renderCountryStats(stats);
+    } catch (err) {
+        console.error("Failed to load country stats:", err);
+        countryStatsList.innerHTML = '<p class="empty-msg">Error loading geography data</p>';
+    }
+}
+
+function renderCountryStats(stats) {
+    if (!stats || stats.length === 0) {
+        countryStatsList.innerHTML = '<p class="empty-msg">No geographical data available yet.</p>';
+        return;
+    }
+
+    const maxCount = Math.max(...stats.map(s => s.count));
+    
+    countryStatsList.innerHTML = stats.map(s => {
+        const percentage = (s.count / maxCount) * 100;
+        const flagUrl = getFlagUrl(s.country);
+        const flagImg = flagUrl ? `<img src="${flagUrl}" class="country-flag" alt="${s.country}">` : `<i data-lucide="globe" class="country-flag-icon"></i>`;
+        
+        return `
+            <div class="country-row" title="Show logs for ${s.country}" onclick="setCountryFilter('${s.country}')">
+                <div class="country-meta">
+                    <div class="country-info">
+                        ${flagImg}
+                        <span class="country-name">${s.country}</span>
+                    </div>
+                    <span class="country-count">${s.count}</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" style="width: 0%"></div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Re-trigger Lucide for fallback icons
+    if (window.lucide) window.lucide.createIcons();
+
+    // Animate bars after a short delay
+    setTimeout(() => {
+        const fills = countryStatsList.querySelectorAll('.progress-fill');
+        stats.forEach((s, i) => {
+            const percentage = (s.count / maxCount) * 100;
+            if (fills[i]) fills[i].style.width = `${percentage}%`;
+        });
+    }, 100);
 }
 
 // Start

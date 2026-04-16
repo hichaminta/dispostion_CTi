@@ -3,7 +3,8 @@ import axios from 'axios';
 import logo from '../assets/logo.png';
 import {
   Play, Shield, Activity, Clock, FileText,
-  Database, AlertTriangle, CheckCircle2, Loader2, Zap, Sparkles, Square
+  Database, AlertTriangle, CheckCircle2, Loader2, Zap, Sparkles, Square,
+  Download, Search, Cpu
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -136,6 +137,22 @@ const Dashboard = ({ onSelectRun }) => {
     }
   };
 
+  const startGlobalStep = async (stepName) => {
+    try {
+      const res = await axios.post(
+        `${API_BASE}/runs/targeted`,
+        { source_name: 'Unified Extraction', source_type: 'All Sources' },
+        { params: { step_name: stepName } }
+      );
+      if (res.data && res.data.id) {
+        onSelectRun(res.data.id);
+      }
+      fetchAll();
+    } catch (e) {
+      console.error('Error starting global step:', e);
+    }
+  };
+
   const startTargetedRun = async (source, stepName) => {
     setRunningSources(prev => new Set([...prev, source.id]));
     try {
@@ -212,29 +229,130 @@ const Dashboard = ({ onSelectRun }) => {
               <p className="text-slate-400 text-sm font-medium tracking-wide uppercase text-[10px]">Threat intelligence — monitoring temps réel</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            {stats?.running_runs > 0 && (
+          <div className="flex flex-col items-end gap-3">
+            {/* HUD Pipeline Control Panel */}
+            <div className="flex items-center gap-0 bg-slate-900/80 border border-slate-700/60 rounded-2xl p-1.5 shadow-xl backdrop-blur-sm">
+              {/* Stop button when running */}
+              {stats?.running_runs > 0 && (
+                <>
+                  <button
+                    onClick={stopRun}
+                    disabled={stopping}
+                    className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/40 px-4 py-2 rounded-xl font-semibold transition-all active:scale-95 disabled:opacity-50 text-xs mr-2"
+                  >
+                    {stopping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3.5 h-3.5 fill-current" />}
+                    <span>{stopping ? 'Arrêt...' : 'Arrêter'}</span>
+                  </button>
+                  <div className="w-px h-8 bg-slate-700 mx-1" />
+                </>
+              )}
+
+              {/* Step 1: Collecte */}
               <button
-                onClick={stopRun}
-                disabled={stopping}
-                className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 px-6 py-3 rounded-xl font-semibold transition-all shadow-lg active:scale-95 disabled:opacity-50"
+                onClick={() => startGlobalStep('Collecte')}
+                disabled={stats?.running_runs > 0}
+                title="Collecte — Toutes sources"
+                className={`group relative flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200 active:scale-95 ${
+                  stats?.running_runs > 0
+                    ? 'opacity-40 cursor-not-allowed'
+                    : 'hover:bg-cyan-500/10 cursor-pointer'
+                }`}
               >
-                {stopping ? <Loader2 className="w-5 h-5 animate-spin" /> : <Square className="w-5 h-5 fill-current" />}
-                <span>{stopping ? "Arrêt..." : "Arrêter le Pipeline"}</span>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all duration-200 ${
+                  stats?.running_runs > 0
+                    ? 'bg-slate-800 border-slate-700 text-slate-600'
+                    : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 group-hover:bg-cyan-500/20 group-hover:border-cyan-400 group-hover:shadow-[0_0_12px_rgba(6,182,212,0.3)]'
+                }`}>
+                  <Download className="w-3.5 h-3.5" />
+                </div>
+                <span className={`text-[9px] font-bold uppercase tracking-wider transition-colors ${
+                  stats?.running_runs > 0 ? 'text-slate-600' : 'text-slate-500 group-hover:text-cyan-400'
+                }`}>Collecte</span>
               </button>
-            )}
-            <button
-              onClick={() => startRun()}
-              disabled={stats?.running_runs > 0}
-              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all shadow-lg active:scale-95 ${
-                stats?.running_runs > 0 
-                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed shadow-none' 
-                  : 'bg-brand-600 hover:bg-brand-500 text-white shadow-brand-600/20'
-              }`}
-            >
-              {stats?.running_runs > 0 ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
-              <span>{stats?.running_runs > 0 ? "Pipeline en cours..." : "Lancer Tout le Pipeline"}</span>
-            </button>
+
+              {/* Arrow connector */}
+              <div className="flex items-center pb-4">
+                <div className="w-4 h-px bg-slate-700" />
+                <div className="w-0 h-0 border-t-[3px] border-t-transparent border-b-[3px] border-b-transparent border-l-[4px] border-l-slate-600" />
+              </div>
+
+              {/* Step 2: Extraction */}
+              <button
+                onClick={() => startGlobalStep('Extraction CVE / IOC')}
+                disabled={stats?.running_runs > 0}
+                title="Extraction IOC/CVE — Toutes sources"
+                className={`group relative flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200 active:scale-95 ${
+                  stats?.running_runs > 0
+                    ? 'opacity-40 cursor-not-allowed'
+                    : 'hover:bg-violet-500/10 cursor-pointer'
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all duration-200 ${
+                  stats?.running_runs > 0
+                    ? 'bg-slate-800 border-slate-700 text-slate-600'
+                    : 'bg-violet-500/10 border-violet-500/30 text-violet-400 group-hover:bg-violet-500/20 group-hover:border-violet-400 group-hover:shadow-[0_0_12px_rgba(139,92,246,0.3)]'
+                }`}>
+                  <Search className="w-3.5 h-3.5" />
+                </div>
+                <span className={`text-[9px] font-bold uppercase tracking-wider transition-colors ${
+                  stats?.running_runs > 0 ? 'text-slate-600' : 'text-slate-500 group-hover:text-violet-400'
+                }`}>Extraction</span>
+              </button>
+
+              {/* Arrow connector */}
+              <div className="flex items-center pb-4">
+                <div className="w-4 h-px bg-slate-700" />
+                <div className="w-0 h-0 border-t-[3px] border-t-transparent border-b-[3px] border-b-transparent border-l-[4px] border-l-slate-600" />
+              </div>
+
+              {/* Step 3: Enrichissement */}
+              <button
+                onClick={() => startGlobalStep('Enrichissement')}
+                disabled={stats?.running_runs > 0}
+                title="Enrichissement NLP + Géo — Toutes sources"
+                className={`group relative flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200 active:scale-95 ${
+                  stats?.running_runs > 0
+                    ? 'opacity-40 cursor-not-allowed'
+                    : 'hover:bg-emerald-500/10 cursor-pointer'
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all duration-200 ${
+                  stats?.running_runs > 0
+                    ? 'bg-slate-800 border-slate-700 text-slate-600'
+                    : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 group-hover:bg-emerald-500/20 group-hover:border-emerald-400 group-hover:shadow-[0_0_12px_rgba(52,211,153,0.3)]'
+                }`}>
+                  <Cpu className="w-3.5 h-3.5" />
+                </div>
+                <span className={`text-[9px] font-bold uppercase tracking-wider transition-colors ${
+                  stats?.running_runs > 0 ? 'text-slate-600' : 'text-slate-500 group-hover:text-emerald-400'
+                }`}>Enrichissement</span>
+              </button>
+
+              {/* Separator */}
+              <div className="w-px h-10 bg-slate-700 mx-2" />
+
+              {/* Full pipeline button */}
+              <button
+                onClick={() => startRun()}
+                disabled={stats?.running_runs > 0}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all duration-200 shadow-lg active:scale-95 text-sm mr-0.5 ${
+                  stats?.running_runs > 0
+                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed shadow-none'
+                    : 'bg-brand-600 hover:bg-brand-500 text-white shadow-brand-600/30 hover:shadow-brand-600/50 hover:shadow-lg'
+                }`}
+              >
+                {stats?.running_runs > 0
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <Zap className="w-4 h-4" />
+                }
+                <span>{stats?.running_runs > 0 ? 'En cours...' : 'Pipeline Complet'}</span>
+              </button>
+            </div>
+
+            {/* Subtle label below */}
+            <p className="text-[9px] text-slate-600 font-mono tracking-wider pr-2">
+              PIPELINE GLOBAL — TOUTES SOURCES
+            </p>
           </div>
         </div>
 
