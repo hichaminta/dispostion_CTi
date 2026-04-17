@@ -88,14 +88,19 @@ def enrich_all(source_filter=None):
         logger.error(f"Enrichment directory not found: {OUTPUT_DIR}")
         return
 
-    all_files = [f for f in os.listdir(OUTPUT_DIR) if f.endswith("_enriched.json")]
+    all_files = sorted([f for f in os.listdir(OUTPUT_DIR) if f.endswith("_enriched.json")])
     
     if source_filter:
-        files = [f for f in all_files if source_filter in f]
-        if not files:
-            logger.warning(f"No files found matching source filter: {source_filter}")
-            return
-        logger.info(f"### FILTERED RUN: Source '{source_filter}' ###")
+        # Special Fix: 'Unified Extraction' means process all files
+        if source_filter.lower() == "unified extraction":
+            files = all_files
+            logger.info(f"### GLOBAL RUN: Unified Extraction Mode ###")
+        else:
+            files = [f for f in all_files if source_filter in f]
+            if not files:
+                logger.warning(f"No files found matching source filter: {source_filter}")
+                return
+            logger.info(f"### FILTERED RUN: Source '{source_filter}' ###")
     else:
         files = all_files
         logger.info("### STAGE 2: GLOBAL GEOLOCATION ENRICHMENT STARTED ###")

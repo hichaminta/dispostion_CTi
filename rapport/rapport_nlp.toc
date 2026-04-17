@@ -1,0 +1,12 @@
+\babel@toc {french}{}\relax 
+\contentsline {section}{\numberline {1}Introduction et Objectifs}{2}{section.1}%
+\contentsline {section}{\numberline {2}Structure du Projet Python}{2}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Hiérarchie des Fichiers}{2}{subsection.2.1}%
+\contentsline {section}{\numberline {3}Librairies Techniques et Utilitaires}{2}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Natural Language Toolkit (NLTK)}{2}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Moteur d'Expressions Régulières (re)}{2}{subsection.3.2}%
+\contentsline {section}{\numberline {4}Processus de Traitement par Source}{3}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Analyse Avancée (Narrative)}{3}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Analyse Rapide (Technique)}{3}{subsection.4.2}%
+\contentsline {section}{\numberline {5}Innovation : L'Attribution Sémantique}{3}{section.5}%
+\contentsline {section}{\numberline {6}Conclusion}{3}{section.6}%

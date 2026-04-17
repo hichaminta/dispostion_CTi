@@ -1,0 +1,111 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[french]{babel}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+
+\geometry{margin=2.5cm}
+
+% Custom Colors
+\definecolor{primary}{RGB}{41, 128, 185}
+\definecolor{secondary}{RGB}{44, 62, 80}
+\definecolor{accent}{RGB}{231, 76, 60}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=primary,
+    filecolor=accent,      
+    urlcolor=primary
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\texttt{Disposition\_CTi}}
+\lhead{Rapport Technique : Pipeline NLP}
+\cfoot{\thepage}
+
+\title{
+    \vspace{-2cm}
+    \textbf{\huge Traitement du Langage Naturel (NLP)}\\
+    \large Analyse et Enrichissement des Cyber Menaces\\
+    \vspace{0.5cm}
+    \rule{\linewidth}{0.5mm}
+}
+\author{\textbf{Disposition\_CTi Framework Development Team}}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Ce document présente une analyse approfondie du pipeline de Traitement du Langage Naturel (NLP) intégré à la plateforme \texttt{Disposition\_CTi}. L'objectif de ce module est d'extraire des connaissances contextuelles à partir de rapports de menaces non structurés afin de qualifier les Indicateurs de Compromission (IOC) de manière sémantique. Nous détaillons ici l'architecture hybride (Regex/NLTK), la structure du code et les algorithmes de détection de rôle.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Introduction et Objectifs}
+Dans le domaine de la Cyber Threat Intelligence (CTI), les données brutes sont souvent noyées dans des descriptions textuelles (blogs, tweets, rapports d'analyse). Le pipeline NLP a pour mission de :
+\begin{itemize}
+    \item \textbf{Normaliser} les catégories de menaces à travers diverses sources.
+    \item \textbf{Attribuer} sémantiquement des tags aux IOCs spécifiques.
+    \item \textbf{Déterminer le rôle} (Attaquant vs Victime) via l'analyse du contexte grammatical.
+    \item \textbf{Résumer} les informations narratives pour une lecture rapide par l'analyste.
+\end{itemize}
+
+\section{Structure du Projet Python}
+Le module NLP est organisé de manière modulaire pour faciliter l'intégration de nouvelles sources.
+
+\subsection{Hiérarchie des Fichiers}
+\begin{enumerate}
+    \item \texttt{base\_enricher.py} : Définit l'interface abstraite (\textit{Base Class}) que tout module d'enrichissement doit suivre.
+    \item \texttt{nlp\_enricher.py} : Le cœur du système contenant la logique globale, les dictionnaires de mots-clés (Cyber Thèmes, Familles, Pays) et les moteurs de traitement.
+    \item \texttt{run\_nlp\_only.py} : Script d'orchestration permettant de lancer l'enrichissement NLP sur une source spécifique ou sur l'ensemble des fichiers extraits.
+    \item \texttt{scripts/} : Dossier contenant les "Source Enrichers" (ex: \texttt{abuseipdb\_enricher.py}). Chaque script charge ses propres données et utilise l'instance \texttt{NLPEnricher} pour l'analyse.
+\end{enumerate}
+
+\section{Librairies Techniques et Utilitaires}
+Le pipeline repose sur deux piliers technologiques majeurs.
+
+\subsection{Natural Language Toolkit (NLTK)}
+Utilisé pour les analyses profondes (Advanced Mode). Le framework télécharge automatiquement les modèles nécessaires (\texttt{bootstrap\_nltk}) :
+\begin{itemize}
+    \item \textbf{Punkt Tokenizer} : Pour un découpage intelligent du texte.
+    \item \textbf{WordNet Lemmatizer} : Pour ramener les termes techniques à leur racine.
+    \item \textbf{POS Tagging} : Crucial pour identifier si un IOC est sujet (Attaquant) ou objet (Victime).
+    \item \textbf{Named Entity Recognition (NER)} : Extraction automatique des organisations et localisations.
+\end{itemize}
+
+\subsection{Moteur d'Expressions Régulières (re)}
+Utilisé pour le \textbf{Fast Regex Mode}. Les patterns sont pré-compilés au démarrage pour une vitesse maximale :
+\begin{itemize}
+    \item \textbf{Threat Categories} : Détection de concepts comme "ransomware", "trojan", "c2".
+    \item \textbf{Malware Families} : Identification de plus de 30 familles connues (Emotet, Redline, etc.).
+    \item \textbf{Geography} : Extraction de plus de 150 pays.
+\end{itemize}
+
+\section{Processus de Traitement par Source}
+
+\subsection{Analyse Avancée (Narrative)}
+Sources : \texttt{alienvault}, \texttt{virustotal}.
+\\ Ces sources contiennent du texte libre. Le pipeline effectue une \textbf{Summarization} extractive et une analyse NER complète pour identifier les infrastructures ciblées.
+
+\subsection{Analyse Rapide (Technique)}
+Sources : \texttt{abuseipdb}, \texttt{malwarebazaar}, \texttt{threatfox}, etc.
+\\ Ces sources fournissent principalement des métadonnées. Le pipeline se concentre sur l'assignation de tags de catégories et la corrélation sémantique locale.
+
+\section{Innovation : L'Attribution Sémantique}
+La force de \texttt{Disposition\_CTi} est l'\textbf{Attribution Locale}. Au lieu de tagger globalement un rapport, le système découpe le texte en phrases. Un IOC ne reçoit que les attributs (catégories, géos) trouvés \textit{dans sa propre phrase}, réduisant ainsi drastiquement les faux positifs d'enrichissement.
+
+\section{Conclusion}
+Ce pipeline transforme le "bruit" des logs en intelligence structurée. La combinaison de Regex pour la rapidité et NLTK pour le contexte assure une base de données de menaces de haute fidélité.
+
+\end{document}

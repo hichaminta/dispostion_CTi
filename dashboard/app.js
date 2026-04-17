@@ -33,6 +33,8 @@ const modalOverlay = document.getElementById('modal-overlay');
 const jsonViewer = document.getElementById('raw-json-viewer');
 const closeModal = document.getElementById('close-modal');
 const countryStatsList = document.getElementById('country-stats-list');
+const scrollUpBtn = document.getElementById('scroll-up');
+const scrollDownBtn = document.getElementById('scroll-down');
 
 // Init
 async function init() {
@@ -114,7 +116,91 @@ async function selectSource(sourceId) {
         currentSourceInfo.textContent = `${viewMode === 'extracted' ? 'Extraction' : 'Enrichment'} results from ${srcObj.file}`;
         fileSizeEl.textContent = formatSize(srcObj.size);
         lastUpdateStat.textContent = new Date(srcObj.last_modified * 1000).toLocaleString();
+        
+        // Show enrichment panel when a source is selected
+        const enrichPanel = document.getElementById('enrichment-panel');
+        if (enrichPanel) enrichPanel.classList.remove('hidden');
     }
+}
+
+/**
+ * Trigger an enrichment phase for the current source
+ */
+window.triggerEnrichmentStep = async (stepName) => {
+    if (!currentSource) {
+        showNotification("Please select a source first", "error");
+        return;
+    }
+
+    const srcObj = sources.find(s => s.id === currentSource);
+    if (!srcObj) return;
+
+    try {
+        showNotification(`Starting ${stepName} for ${srcObj.name}...`, "info");
+        
+        const response = await fetch(`http://localhost:8000/runs/targeted?step_name=${encodeURIComponent(stepName)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                source_name: srcObj.name,
+                source_type: "manual_trigger"
+            })
+        });
+
+        if (response.ok) {
+            const run = await response.json();
+            showNotification(`${stepName} initiated successfully (ID: ${run.run_id.substring(0,8)})`, "success");
+        } else {
+            const err = await response.json();
+            showNotification(`Failed to start ${stepName}: ${err.detail || 'Unknown error'}`, "error");
+        }
+    } catch (err) {
+        console.error("Enrichment trigger error:", err);
+        showNotification("Connection error. Is the backend running?", "error");
+    }
+};
+
+/**
+ * Utility for UI notifications
+ */
+function showNotification(message, type = 'info') {
+    // Create notification element if it doesn't exist
+    let container = document.getElementById('notification-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'notification-container';
+        container.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px;';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `glass animate-fade-in toast toast-${type}`;
+    toast.style.cssText = `
+        padding: 12px 20px;
+        border-radius: 10px;
+        color: white;
+        font-size: 0.9rem;
+        border-left: 4px solid ${type === 'success' ? 'var(--success-color)' : type === 'error' ? 'var(--danger-color)' : 'var(--accent-color)'};
+        min-width: 300px;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    `;
+    
+    toast.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <i data-lucide="${type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'info'}"></i>
+            <span>${message}</span>
+        </div>
+    `;
+    
+    container.appendChild(toast);
+    if (window.lucide) window.lucide.createIcons();
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(20px)';
+        setTimeout(() => toast.remove(), 300);
+    }, 5000);
 }
 
 // Load Data
@@ -180,6 +266,12 @@ const SOURCE_LOGOS = {
     'PulseDive': 'https://pulsedive.com/favicon.ico',
     'FeodoTracker': 'https://feodotracker.abuse.ch/favicon.ico'
 };
+
+function getSourceLogo(sourceName) {
+    if (!sourceName) return null;
+    const key = Object.keys(SOURCE_LOGOS).find(k => sourceName.toLowerCase().includes(k.toLowerCase()));
+    return key ? SOURCE_LOGOS[key] : null;
+}
 
 const COUNTRY_NAME_TO_CODE = {
     'afghanistan': 'af', 'albania': 'al', 'algeria': 'dz', 'andorra': 'ad', 'angola': 'ao', 'argentina': 'ar', 'armenia': 'am', 'australia': 'au', 'austria': 'at', 'azerbaijan': 'az',
@@ -292,7 +384,7 @@ function renderTable(data) {
                 <td>${tags}${item.tags?.length > 2 ? '...' : ''}</td>
                 <td>${date}</td>
                 <td>
-                    <button class="view-btn" onclick='viewRaw(${JSON.stringify(item.record_id)})'>View Details</button>
+                    <button class="view-btn action-view-details" data-record-id="${item.record_id}">View Details</button>
                 </td>
             </tr>
         `;
@@ -385,8 +477,19 @@ function generateIntelligenceBrief(item) {
 }
 
 window.viewRaw = (recordId) => {
-    const item = window.lastLoadedData.find(d => d.record_id === recordId);
-    if (!item) return;
+    console.log("[ViewDetails] Opening record:", recordId);
+    
+    if (!window.lastLoadedData) {
+        console.error("[ViewDetails] window.lastLoadedData is missing");
+        return;
+    }
+
+    const item = window.lastLoadedData.find(d => String(d.record_id) === String(recordId));
+    
+    if (!item) {
+        console.error("[ViewDetails] Record not found in local cache:", recordId);
+        return;
+    }
 
     // Reset tabs to overview
     window.switchTab('overview');
@@ -497,6 +600,34 @@ window.viewRaw = (recordId) => {
     // Raw JSON
     jsonViewer.textContent = JSON.stringify(item, null, 2);
 
+    // Dynamic Analysis (URLScan)
+    const scanData = (item.iocs || []).find(i => i.ioc_enrichment?.url_scan)?.ioc_enrichment.url_scan;
+    const screenContainer = document.getElementById('urlscan-screenshot-container');
+    const metaContainer = document.getElementById('urlscan-metadata');
+
+    if (scanData && scanData.scanned && scanData.screenshot) {
+        screenContainer.innerHTML = `<img src="${scanData.screenshot}" class="urlscan-img" alt="Scan Screenshot">`;
+        
+        const details = [
+            { k: 'Effective URL', v: scanData.effective_url },
+            { k: 'IP Address',    v: scanData.ip },
+            { k: 'Country',       v: scanData.country },
+            { k: 'ASN',           v: `${scanData.asn} (${scanData.asnname})` },
+            { k: 'Server',        v: scanData.server },
+            { k: 'Reverse DNS',   v: scanData.ptr }
+        ];
+
+        metaContainer.innerHTML = details.map(d => d.v ? `
+            <div class="context-item">
+                <span class="context-key">${d.k}</span>
+                <span class="context-val analysis-val">${d.v}</span>
+            </div>
+        ` : '').join('') || '<p class="empty-msg">No detailed metadata</p>';
+    } else {
+        screenContainer.innerHTML = `<div class="empty-msg">No screenshot available</div>`;
+        metaContainer.innerHTML = `<p class="empty-msg">No scan data available</p>`;
+    }
+
     // Show Modal
     modalOverlay.classList.remove('hidden');
     
@@ -542,7 +673,33 @@ function setupEventListeners() {
     }
     
     closeModal.onclick = () => modalOverlay.classList.add('hidden');
-    modalOverlay.onclick = (e) => { if (e.target === modalOverlay) closeModal.onclick(); };
+    if (modalOverlay) {
+        modalOverlay.onclick = (e) => { if (e.target === modalOverlay) closeModal.onclick(); };
+    }
+
+    // Source List Scroll Controls
+    if (scrollUpBtn && sourceList) {
+        scrollUpBtn.onclick = () => {
+            sourceList.scrollBy({ top: -100, behavior: 'smooth' });
+        };
+    }
+    
+    if (scrollDownBtn && sourceList) {
+        scrollDownBtn.onclick = () => {
+            sourceList.scrollBy({ top: 100, behavior: 'smooth' });
+        };
+    }
+
+    // Event Delegation for Table Actions
+    if (tableBody) {
+        tableBody.onclick = (e) => {
+            const viewBtn = e.target.closest('.action-view-details');
+            if (viewBtn) {
+                const recordId = viewBtn.getAttribute('data-record-id');
+                window.viewRaw(recordId);
+            }
+        };
+    }
 }
 
 // ─── Geographical Stats Logic ───

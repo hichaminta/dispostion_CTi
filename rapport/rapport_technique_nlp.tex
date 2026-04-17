@@ -1,0 +1,141 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[french]{babel}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{tcolorbox}
+
+\geometry{margin=2.5cm}
+
+% --- Colors and Styles ---
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+\definecolor{primary}{RGB}{41, 128, 185}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=primary,
+    filecolor=magenta,      
+    urlcolor=blue,
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\texttt{Disposition\_CTi}}
+\lhead{Rapport Technique Avancé : Pipeline NLP}
+\cfoot{\thepage}
+
+\title{
+    \vspace{-2cm}
+    \textbf{\huge Architecture et Implémentation du Pipeline NLP}\\
+    \large Analyse Technique Profonde avec Extraits de Code\\
+    \vspace{0.5cm}
+    \rule{\linewidth}{0.5mm}
+}
+\author{\textbf{Disposition\_CTi Development Team}}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Ce rapport fournit une documentation technique complète de la phase d'enrichissement NLP (Natural Language Processing) de la plateforme \texttt{Disposition\_CTi}. Nous détaillons ici les mécanismes de bootstrap, l'analyse syntaxique pour la détection de rôles, et l'attribution sémantique locale, appuyés par des fragments du code source réel.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Phase 1 : Initialisation et Bootstrap NLTK}
+Le pipeline commence par s'assurer que l'environnement est prêt. Contrairement à une simple recherche de texte, le pipeline NLP nécessite des modèles statistiques pré-entraînés.
+
+\subsection{Gestion des Dépendances NLTK}
+Le code suivant montre comment le système télécharge silencieusement les ressources nécessaires (\texttt{punkt}, \texttt{wordnet}, etc.) et bascule en mode "Basic" (Regex uniquement) si la connexion Internet est absente.
+
+\begin{lstlisting}[language=Python, caption=Initialisation et Bootstrap]
+def _bootstrap_nltk(self):
+    self.nltk_enabled = True
+    resources = ['punkt', 'averaged_perceptron_tagger', 
+                 'maxent_ne_chunker', 'words', 'wordnet']
+    for res in resources:
+        try:
+            nltk.download(res, quiet=True, raise_on_error=True)
+        except Exception:
+            self.nltk_enabled = False
+            break
+\end{lstlisting}
+
+\section{Phase 2 : Analyse de Contexte et Détection de Rôle}
+L'un des défis majeurs de la CTI est de savoir si une adresse IP mentionnée est l'attaquant ou une victime innocente. 
+
+\subsection{Heuristique de Grammaire (POS Tagging)}
+Le pipeline utilise le \textbf{Part-of-Speech Tagging} pour analyser les verbes entourant l'IOC. Si un IOC est suivi d'un verbe d'action comme \textit{"attacks"} ou \textit{"scans"}, il est identifié comme attaquant.
+
+\begin{lstlisting}[language=Python, caption=Algorithme de Détection de Rôle]
+# Extrait de nlp_enricher.py
+for i in range(len(snippet)-1):
+    word, tag = snippet[i]
+    next_word, next_tag = snippet[i+1]
+    # Si le mot courant est l'IOC et le suivant est un Verbe (VB)
+    if entity.lower() in word.lower() and next_tag.startswith('VB'):
+        if next_word.lower() in ["attacks", "scans", "targets", "drops"]:
+            return {"role": "attacker", "confidence": 0.7}
+\end{lstlisting}
+
+\section{Phase 3 : Attribution Sémantique Locale}
+Pour éviter de "polluer" tous les IOCs d'un rapport avec les mêmes tags, le système applique une attribution par phrase.
+
+\subsection{Logique par Phrase}
+Le texte est découpé en phrases. Les découvertes (familles de malwares, pays) faites dans la phrase "X" ne sont attribuées qu'aux IOCs présents dans cette même phrase "X".
+
+\begin{lstlisting}[language=Python, caption=Attribution Sémantique Localisée]
+def _attribute_findings(self, text, iocs):
+    sentences = sent_tokenize(text)
+    for sent in sentences:
+        # 1. Identifier les IOCs presents dans CETTE phrase
+        local_iocs = [ioc for ioc in iocs if ioc["value"] in sent]
+        
+        # 2. Extraire les categories uniquement de CETTE phrase
+        categories = self._re_categories.findall(sent.lower())
+        
+        # 3. Attribuer les categories aux IOCs locaux uniquement
+        for ioc in local_iocs:
+            ioc["ioc_enrichment"]["threat_categories"] += categories
+\end{lstlisting}
+
+\section{Phase 4 : Résumé Extractif Avancé}
+Pour les rapports longs (AlienVault, VirusTotal), le pipeline génère un résumé en calculant un score pour chaque phrase basé sur la fréquence des mots-clés techniques.
+
+\section{Conclusion technique}
+La structure modulaire (\texttt{BaseEnricher} $\rightarrow$ \texttt{NLPEnricher}) permet une maintenance aisée. L'utilisation hybride de Regex pour la rapidité et NLTK pour l'intelligence contextuelle offre un équilibre optimal pour un système de CTI moderne.
+
+\end{document}

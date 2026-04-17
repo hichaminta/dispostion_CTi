@@ -348,61 +348,39 @@ async def execute_pipeline_task(run_id: str, source_name: str):
                            ioc_count=ioc_count, cve_count=cve_count)
 
         # ══════════════════════════════════════════════════════════════
-        # ÉTAPE 3 : Enrichissement — exécuter les enrichisseurs NLP
+        # ÉTAPE 3à5 : Enrichissement Granulaire (NLP -> Geo -> Scan)
         # ══════════════════════════════════════════════════════════════
-        await _update_step(run_id, "Enrichissement", "running")
-        await _ws_log(run_id, "Enrichissement", f"[{ts()}] ═══ DÉMARRAGE ENRICHISSEMENT ═══")
-        await _ws_log(run_id, "Enrichissement", f"[{ts()}] ➔ STAGE 1 : Enrichissement NLP Source-Specific")
+        source_flag = ["-s", source_name] if not is_unified else []
 
-        if is_unified:
-            await _ws_log(run_id, "Enrichissement", f"[{ts()}] ➔ Utilisation de l'orchestrateur global : run_enrichment_all.py")
-            enrichment_script = os.path.join(PROJECT_ROOT, "enrichment", "run_enrichment_all.py")
-            enrichment_ok = await _run_proc(run_id, "Enrichissement", [sys.executable, enrichment_script], PROJECT_ROOT)
-        else:
-            enrichment_ok = True
-            for src in sources_to_run:
-                if src in ["NVD", "AlienVault OTX"]: continue
-                info = SOURCE_MAP.get(src)
-                if not info: continue
-                enricher_name = info["output"].replace("_extracted.json", "_enricher.py")
-                enricher_path = os.path.join(os.path.join(PROJECT_ROOT, "enrichment", "nlp", "scripts"), enricher_name)
-                if not os.path.exists(enricher_path): continue
-                await _ws_log(run_id, "Enrichissement", f"[{ts()}] ── Enrichissement : {src} ──")
-                ok = await _run_proc(run_id, "Enrichissement", [sys.executable, enricher_path], PROJECT_ROOT)
-                if not ok: enrichment_ok = False
-            
-            # STAGE 2 for individual/sequential run
-            if enrichment_ok:
-                geo_script = os.path.join(PROJECT_ROOT, "enrichment", "geolocalisation", "geo_local_enricher.py")
-                if os.path.exists(geo_script):
-                    await _run_proc(run_id, "Enrichissement", [sys.executable, geo_script], PROJECT_ROOT)
+        # NLP
+        await _update_step(run_id, "NLP Enrichment", "running")
+        await _ws_log(run_id, "NLP Enrichment", f"[{ts()}] ➔ STAGE 1 : Analyse NLP")
+        nlp_script = os.path.join(PROJECT_ROOT, "enrichment", "nlp", "run_nlp_only.py")
+        nlp_ok = await _run_proc(run_id, "NLP Enrichment", [sys.executable, nlp_script] + source_flag, PROJECT_ROOT)
+        await _update_step(run_id, "NLP Enrichment", "success" if nlp_ok else "failed")
 
-        await _ws_log(run_id, "Enrichissement", f"[{ts()}] ═══ ENRICHISSEMENT {'OK' if enrichment_ok else 'PARTIELLE'} ═══")
-        await _update_step(run_id, "Enrichissement", "success" if enrichment_ok else "failed")
+        # Geolocation
+        await _update_step(run_id, "Geolocalisation", "running")
+        await _ws_log(run_id, "Geolocalisation", f"[{ts()}] ➔ STAGE 2 : Géolocalisation")
+        geo_script = os.path.join(PROJECT_ROOT, "enrichment", "geolocalisation", "enrichir.py")
+        geo_ok = await _run_proc(run_id, "Geolocalisation", [sys.executable, geo_script] + source_flag, PROJECT_ROOT)
+        await _update_step(run_id, "Geolocalisation", "success" if geo_ok else "failed")
+
+        # URLScan
+        await _update_step(run_id, "URLScan", "running")
+        await _ws_log(run_id, "URLScan", f"[{ts()}] ➔ STAGE 3 : URLScan Analysis")
+        url_script = os.path.join(PROJECT_ROOT, "enrichment", "urlscan_enrichment", "enrichir_exclusive_urlscan.py")
+        url_ok = await _run_proc(run_id, "URLScan", [sys.executable, url_script] + source_flag, PROJECT_ROOT)
+        await _update_step(run_id, "URLScan", "success" if url_ok else "failed")
 
         # ══════════════════════════════════════════════════════════════
-        # ÉTAPE 4 : Normalisation (Simulation car non terminé)
+        # ÉTAPE 6 : Normalisation
         # ══════════════════════════════════════════════════════════════
         await _update_step(run_id, "Normalisation", "running")
-        await _ws_log(run_id, "Normalisation", f"[{ts()}] ═══ DÉMARRAGE NORMALISATION (PLANIFIÉ) ═══")
-        await asyncio.sleep(0.5)
-        await _ws_log(run_id, "Normalisation", f"[{ts()}] [INFO] Cette étape est planifiée pour une version future.")
-        await _ws_log(run_id, "Normalisation", f"[{ts()}] ... Étape ignorée pour le moment.")
-        await _update_step(run_id, "Normalisation", "planned")
-
-        # ══════════════════════════════════════════════════════════════
-        # ÉTAPE 4 : Intégration MISP (Simulation car non terminé)
-        # ══════════════════════════════════════════════════════════════
-        await _update_step(run_id, "Intégration MISP", "running")
-        await _ws_log(run_id, "Intégration MISP", f"[{ts()}] ═══ DÉMARRAGE INTÉGRATION MISP (PLANIFIÉ) ═══")
-        await asyncio.sleep(0.5)
-        await _ws_log(run_id, "Intégration MISP", f"[{ts()}] [INFO] L'intégration MISP sera disponible prochainement.")
-        await _ws_log(run_id, "Intégration MISP", f"[{ts()}] ... Étape ignorée pour le moment.")
-        await _update_step(run_id, "Intégration MISP", "planned")
-
-        # Statut global : On considère le run comme "success" seulement si la collecte et l'extraction ont réussi
-        await _ws_log(run_id, "Intégration MISP", f"[{ts()}] ════ FIN PIPELINE (SIMULÉE) ════")
-        await _update_step(run_id, "Intégration MISP", "success")
+        await _ws_log(run_id, "Normalisation", f"[{ts()}] ➔ STAGE 4 : Normalisation des données")
+        norm_script = os.path.join(PROJECT_ROOT, "normalisation", "standardize.py")
+        norm_ok = await _run_proc(run_id, "Normalisation", [sys.executable, norm_script] + source_flag, PROJECT_ROOT)
+        await _update_step(run_id, "Normalisation", "success" if norm_ok else "failed")
 
         # Terminer
         db.update_run(run_id, {"status_global": "success"})
@@ -472,25 +450,52 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
                 enrichment_script = os.path.join(PROJECT_ROOT, "enrichment", "run_enrichment_all.py")
                 step_ok = await _run_proc(run_id, step_name, [sys.executable, enrichment_script], PROJECT_ROOT)
             else:
-                ENRICHMENT_SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "enrichment", "nlp", "scripts")
-                for src in sources_to_run:
-                    if src in ["NVD", "AlienVault OTX"]: continue
-                    info = SOURCE_MAP.get(src)
-                    if not info: continue
-                    enricher_name = info["output"].replace("_extracted.json", "_enricher.py")
-                    enricher_path = os.path.join(ENRICHMENT_SCRIPTS_DIR, enricher_name)
-                    if not os.path.exists(enricher_path): continue
-                    await _ws_log(run_id, step_name, f"[{ts()}] ── Enrichissement : {src} ──")
-                    ok = await _run_proc(run_id, step_name, [sys.executable, enricher_path], PROJECT_ROOT)
-                    if not ok: step_ok = False
+                # Single source full enrichment
+                await _ws_log(run_id, step_name, f"[{ts()}] ➔ Full Enrichment for {source_name}")
+                source_flag = ["-s", source_name]
                 
-                # Global Geo Stage for the individual target run
-                if step_ok:
-                    geo_script = os.path.join(PROJECT_ROOT, "enrichment", "geolocalisation", "geo_local_enricher.py")
-                    if os.path.exists(geo_script):
-                        await _run_proc(run_id, step_name, [sys.executable, geo_script], PROJECT_ROOT)
+                # NLP
+                await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 1 : Analyse NLP")
+                nlp_script = os.path.join(PROJECT_ROOT, "enrichment", "nlp", "run_nlp_only.py")
+                ok1 = await _run_proc(run_id, step_name, [sys.executable, nlp_script] + source_flag, PROJECT_ROOT)
+                
+                # Geo
+                await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 2 : Géolocalisation")
+                geo_script = os.path.join(PROJECT_ROOT, "enrichment", "geolocalisation", "enrichir.py")
+                ok2 = await _run_proc(run_id, step_name, [sys.executable, geo_script] + source_flag, PROJECT_ROOT)
+                
+                # URLScan
+                await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 3 : URLScan Analysis")
+                url_script = os.path.join(PROJECT_ROOT, "enrichment", "urlscan_enrichment", "enrichir_exclusive_urlscan.py")
+                ok3 = await _run_proc(run_id, step_name, [sys.executable, url_script] + source_flag, PROJECT_ROOT)
+                
+                step_ok = ok1 and ok2 and ok3
 
-        elif step_name in ["Normalisation", "Intégration MISP"]:
+        # --- New Granular Steps ---
+        # Special case: 'Unified Extraction' means process all JSON files (no filter)
+        source_flag = ["-s", source_name] if source_name and source_name != "Unified Extraction" else []
+
+        if step_name == "NLP Enrichment":
+            await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 1 : Analyse NLP (Entités & Familles)")
+            nlp_script = os.path.join(PROJECT_ROOT, "enrichment", "nlp", "run_nlp_only.py")
+            step_ok = await _run_proc(run_id, step_name, [sys.executable, nlp_script] + source_flag, PROJECT_ROOT)
+
+        elif step_name == "Geolocalisation":
+            await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 2 : Géolocalisation (Infrastructure)")
+            geo_script = os.path.join(PROJECT_ROOT, "enrichment", "geolocalisation", "enrichir.py")
+            step_ok = await _run_proc(run_id, step_name, [sys.executable, geo_script] + source_flag, PROJECT_ROOT)
+
+        elif step_name == "URLScan":
+            await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 3 : Analyse Dynamique URLScan.io")
+            urlscan_script = os.path.join(PROJECT_ROOT, "enrichment", "urlscan_enrichment", "enrichir_exclusive_urlscan.py")
+            step_ok = await _run_proc(run_id, step_name, [sys.executable, urlscan_script] + source_flag, PROJECT_ROOT)
+
+        elif step_name == "Normalisation":
+            await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 4 : Normalisation des données")
+            norm_script = os.path.join(PROJECT_ROOT, "normalisation", "standardize.py")
+            step_ok = await _run_proc(run_id, step_name, [sys.executable, norm_script] + source_flag, PROJECT_ROOT)
+
+        elif step_name in ["Intégration MISP"]:
             await _ws_log(run_id, step_name, f"[{ts()}] [INFO] Cette étape est planifiée pour une version future.")
             await asyncio.sleep(0.5)
             step_ok = True # Simulé

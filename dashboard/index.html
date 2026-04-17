@@ -37,9 +37,13 @@
             
             <nav class="source-nav">
                 <div class="nav-label">Data Sources</div>
-                <div id="source-list" class="nav-links">
-                    <!-- Loaded dynamically -->
-                    <div class="loading-shimmer"></div>
+                <div class="source-list-controls">
+                    <button id="scroll-up" class="scroll-nav-btn"><i data-lucide="chevron-up"></i></button>
+                    <div id="source-list" class="nav-links">
+                        <!-- Loaded dynamically -->
+                        <div class="loading-shimmer"></div>
+                    </div>
+                    <button id="scroll-down" class="scroll-nav-btn"><i data-lucide="chevron-down"></i></button>
                 </div>
             </nav>
 
@@ -127,6 +131,53 @@
                     </div>
                 </div>
 
+                <!-- Source Enrichment Controls -->
+                <div id="enrichment-panel" class="enrichment-control-center glass animate-fade-in hidden">
+                    <div class="hud-corner hud-corner-tl"></div>
+                    <div class="hud-corner hud-corner-tr"></div>
+                    <div class="control-header">
+                        <div class="header-main">
+                            <i data-lucide="zap" class="accent-icon"></i>
+                            <div class="header-text">
+                                <h3>Source Enrichment Center</h3>
+                                <p>Enhance raw data with advanced intelligence phases</p>
+                            </div>
+                        </div>
+                        <button class="run-all-btn" onclick="triggerEnrichmentStep('Enrichissement')">
+                            <i data-lucide="play-circle"></i> Run All Phases
+                        </button>
+                    </div>
+                    
+                    <div class="step-grid">
+                        <div class="enrich-step glass" onclick="triggerEnrichmentStep('NLP Enrichment')">
+                            <div class="step-number">3</div>
+                            <div class="step-info">
+                                <h4>NLP Enrichment</h4>
+                                <p>Extract malware families & summaries</p>
+                            </div>
+                            <div class="step-action"><i data-lucide="chevron-right"></i></div>
+                        </div>
+                        
+                        <div class="enrich-step glass" onclick="triggerEnrichmentStep('Geolocalisation')">
+                            <div class="step-number">4</div>
+                            <div class="step-info">
+                                <h4>Geolocalisation</h4>
+                                <p>Map IPs and domains to locations</p>
+                            </div>
+                            <div class="step-action"><i data-lucide="chevron-right"></i></div>
+                        </div>
+                        
+                        <div class="enrich-step glass" onclick="triggerEnrichmentStep('URLScan')">
+                            <div class="step-number">5</div>
+                            <div class="step-info">
+                                <h4>URLScan Analysis</h4>
+                                <p>Dynamic URL scanning & screenshots</p>
+                            </div>
+                            <div class="step-action"><i data-lucide="chevron-right"></i></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Country Stats Section -->
                 <div class="country-analytics glass animate-fade-in">
                     <div class="hud-corner hud-corner-tl"></div>
@@ -198,6 +249,7 @@
                 <button class="tab-btn active" onclick="switchTab('overview')"><i data-lucide="layout"></i> Overview</button>
                 <button class="tab-btn" onclick="switchTab('intelligence')"><i data-lucide="zap"></i> Intelligence</button>
                 <button class="tab-btn" onclick="switchTab('context')"><i data-lucide="globe"></i> Context</button>
+                <button class="tab-btn" onclick="switchTab('analysis')"><i data-lucide="scan-eye"></i> Analysis</button>
                 <button class="tab-btn" onclick="switchTab('raw')"><i data-lucide="code"></i> Raw Data</button>
             </nav>
 
@@ -260,6 +312,24 @@
                         <div class="context-block glass">
                             <div class="tab-section-label"><i data-lucide="list"></i> Source Attributes</div>
                             <div id="attr-list" class="context-list"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analysis Tab (URLScan) -->
+                <div id="tab-analysis" class="tab-pane">
+                    <div class="analysis-grid">
+                        <div class="screenshot-vault glass">
+                            <div class="tab-section-label"><i data-lucide="monitor"></i> Dynamic Analysis Screenshot</div>
+                            <div id="urlscan-screenshot-container" class="urlscan-container">
+                                <div class="loading-shimmer"></div>
+                            </div>
+                        </div>
+                        <div class="analysis-meta-vault glass">
+                            <div class="tab-section-label"><i data-lucide="info"></i> Scan Metadata</div>
+                            <div id="urlscan-metadata" class="analysis-list">
+                                <div class="loading-shimmer"></div>
+                            </div>
                         </div>
                     </div>
                 </div>

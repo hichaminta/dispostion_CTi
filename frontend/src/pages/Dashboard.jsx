@@ -4,7 +4,8 @@ import logo from '../assets/logo.png';
 import {
   Play, Shield, Activity, Clock, FileText,
   Database, AlertTriangle, CheckCircle2, Loader2, Zap, Sparkles, Square,
-  Download, Search, Cpu
+  Download, Search, Cpu, Globe, Languages, ScanEye, Layers, ChevronRight,
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -43,12 +44,20 @@ const COLOR_CLASSES = {
   violet: 'bg-violet-500/10 border-violet-500/30 text-violet-400 hover:bg-violet-500/20',
 };
 
+const ArrowConnector = () => (
+  <div className="flex items-center pb-4 px-1">
+    <div className="w-3 h-px bg-slate-700" />
+    <div className="w-0 h-0 border-t-[3px] border-t-transparent border-b-[3px] border-b-transparent border-l-[4px] border-l-slate-600" />
+  </div>
+);
+
 const Dashboard = ({ onSelectRun }) => {
   const [runs,           setRuns]           = useState([]);
   const [stats,          setStats]          = useState(null);
   const [loading,        setLoading]        = useState(true);
   const [stopping,       setStopping]       = useState(false);
   const [runningSources, setRunningSources] = useState(new Set());
+  const [showEnrichDetails, setShowEnrichDetails] = useState(false);
 
   useEffect(() => {
     fetchAll();
@@ -252,7 +261,7 @@ const Dashboard = ({ onSelectRun }) => {
                 onClick={() => startGlobalStep('Collecte')}
                 disabled={stats?.running_runs > 0}
                 title="Collecte — Toutes sources"
-                className={`group relative flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200 active:scale-95 ${
+                className={`group relative flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all duration-200 active:scale-95 ${
                   stats?.running_runs > 0
                     ? 'opacity-40 cursor-not-allowed'
                     : 'hover:bg-cyan-500/10 cursor-pointer'
@@ -270,18 +279,14 @@ const Dashboard = ({ onSelectRun }) => {
                 }`}>Collecte</span>
               </button>
 
-              {/* Arrow connector */}
-              <div className="flex items-center pb-4">
-                <div className="w-4 h-px bg-slate-700" />
-                <div className="w-0 h-0 border-t-[3px] border-t-transparent border-b-[3px] border-b-transparent border-l-[4px] border-l-slate-600" />
-              </div>
+              <ArrowConnector />
 
               {/* Step 2: Extraction */}
               <button
                 onClick={() => startGlobalStep('Extraction CVE / IOC')}
                 disabled={stats?.running_runs > 0}
                 title="Extraction IOC/CVE — Toutes sources"
-                className={`group relative flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200 active:scale-95 ${
+                className={`group relative flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all duration-200 active:scale-95 ${
                   stats?.running_runs > 0
                     ? 'opacity-40 cursor-not-allowed'
                     : 'hover:bg-violet-500/10 cursor-pointer'
@@ -299,37 +304,92 @@ const Dashboard = ({ onSelectRun }) => {
                 }`}>Extraction</span>
               </button>
 
-              {/* Arrow connector */}
-              <div className="flex items-center pb-4">
-                <div className="w-4 h-px bg-slate-700" />
-                <div className="w-0 h-0 border-t-[3px] border-t-transparent border-b-[3px] border-b-transparent border-l-[4px] border-l-slate-600" />
+              <ArrowConnector />
+
+              {/* Master Enrichment Control */}
+              <div className="flex items-center gap-0.5 bg-amber-500/5 rounded-2xl p-0.5 border border-amber-500/10">
+                <button
+                  onClick={() => startGlobalStep('Enrichissement')}
+                  disabled={stats?.running_runs > 0}
+                  title="Lancer l'Enrichissement Complet (NLP + G\u00e9o + Scan) - Toutes sources"
+                  className={`flex items-center gap-2 pr-4 pl-3 py-2 rounded-xl font-bold transition-all duration-200 active:scale-95 ${
+                    stats?.running_runs > 0
+                      ? 'opacity-40 cursor-not-allowed'
+                      : 'hover:bg-amber-500/20 text-amber-500 group'
+                  }`}
+                >
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all duration-200 ${
+                    stats?.running_runs > 0
+                      ? 'bg-slate-800 border-slate-700 text-slate-600'
+                      : 'bg-amber-500/10 border-amber-500/30 text-amber-500 group-hover:bg-amber-500/30 group-hover:border-amber-400'
+                  }`}>
+                    <Sparkles className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="flex flex-col items-start leading-none">
+                    <span className="text-[10px] font-black uppercase tracking-widest">Enrichir</span>
+                    <span className="text-[8px] text-amber-500/50 uppercase font-mono mt-1">Unified Stage</span>
+                  </div>
+                </button>
+                
+                <button
+                  onClick={() => setShowEnrichDetails(!showEnrichDetails)}
+                  className={`p-2 rounded-lg transition-colors ${showEnrichDetails ? 'bg-amber-500/20 text-white' : 'text-amber-500/40 hover:text-amber-400'}`}
+                  title={showEnrichDetails ? "Masquer les sous-\u00e9tapes" : "Afficher les sous-\u00e9tapes (NLP, G\u00e9o, Scan)"}
+                >
+                  {showEnrichDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
               </div>
 
-              {/* Step 3: Enrichissement */}
-              <button
-                onClick={() => startGlobalStep('Enrichissement')}
-                disabled={stats?.running_runs > 0}
-                title="Enrichissement NLP + Géo — Toutes sources"
-                className={`group relative flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200 active:scale-95 ${
-                  stats?.running_runs > 0
-                    ? 'opacity-40 cursor-not-allowed'
-                    : 'hover:bg-emerald-500/10 cursor-pointer'
-                }`}
-              >
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all duration-200 ${
-                  stats?.running_runs > 0
-                    ? 'bg-slate-800 border-slate-700 text-slate-600'
-                    : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 group-hover:bg-emerald-500/20 group-hover:border-emerald-400 group-hover:shadow-[0_0_12px_rgba(52,211,153,0.3)]'
-                }`}>
-                  <Cpu className="w-3.5 h-3.5" />
+              {/* Expandable Sub-steps Area */}
+              {showEnrichDetails && (
+                <div className="flex items-center animate-in slide-in-from-left duration-300">
+                  <ArrowConnector />
+                  
+                  {/* NLP */}
+                  <button
+                    onClick={() => startGlobalStep('NLP Enrichment')}
+                    disabled={stats?.running_runs > 0}
+                    title="Stage 1: NLP Enrichment"
+                    className="flex flex-col items-center gap-1 px-3 py-1 group/step"
+                  >
+                    <div className="w-7 h-7 rounded bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover/step:bg-indigo-500 group-hover/step:text-white transition-all">
+                      <Languages size={12} />
+                    </div>
+                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-indigo-400 uppercase">NLP</span>
+                  </button>
+
+                  {/* GEO */}
+                  <button
+                    onClick={() => startGlobalStep('Geolocalisation')}
+                    disabled={stats?.running_runs > 0}
+                    title="Stage 2: Geolocation"
+                    className="flex flex-col items-center gap-1 px-3 py-1 group/step"
+                  >
+                    <div className="w-7 h-7 rounded bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover/step:bg-emerald-500 group-hover/step:text-white transition-all">
+                      <Globe size={12} />
+                    </div>
+                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-emerald-400 uppercase">Geo</span>
+                  </button>
+
+                  {/* SCAN */}
+                  <button
+                    onClick={() => startGlobalStep('URLScan')}
+                    disabled={stats?.running_runs > 0}
+                    title="Stage 3: URLScan Analysis"
+                    className="flex flex-col items-center gap-1 px-3 py-1 group/step"
+                  >
+                    <div className="w-7 h-7 rounded bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 group-hover/step:bg-pink-500 group-hover/step:text-white transition-all">
+                      <ScanEye size={12} />
+                    </div>
+                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-pink-400 uppercase">Scan</span>
+                  </button>
                 </div>
-                <span className={`text-[9px] font-bold uppercase tracking-wider transition-colors ${
-                  stats?.running_runs > 0 ? 'text-slate-600' : 'text-slate-500 group-hover:text-emerald-400'
-                }`}>Enrichissement</span>
-              </button>
+              )}
 
               {/* Separator */}
               <div className="w-px h-10 bg-slate-700 mx-2" />
+
+
 
               {/* Full pipeline button */}
               <button
@@ -512,9 +572,10 @@ const Dashboard = ({ onSelectRun }) => {
                       <td className="px-5 py-3 text-right">
                         <button
                           onClick={() => onSelectRun(run.id)}
-                          className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-white text-xs px-3 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg transition-all"
+                          className="text-slate-400 hover:text-brand-400 text-xs px-3 py-1 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-brand-500/50 rounded-lg transition-all flex items-center gap-1.5 ml-auto active:scale-95"
                         >
-                          Voir \u2192
+                          <span>Voir</span>
+                          <ChevronRight className="w-3 h-3" />
                         </button>
                       </td>
                     </tr>
@@ -533,7 +594,10 @@ const Dashboard = ({ onSelectRun }) => {
 const PIPELINE_STEPS = [
   { name: "Collecte",             icon: Database  },
   { name: "Extraction CVE / IOC", icon: Activity  },
-  { name: "Enrichissement",       icon: Zap       },
+  { name: "Enrichissement",        icon: Sparkles  },
+  { name: "NLP Enrichment",       icon: Languages },
+  { name: "Geolocalisation",      icon: Globe     },
+  { name: "URLScan",              icon: ScanEye   },
   { name: "Normalisation",        icon: Shield    },
   { name: "Intégration MISP",     icon: Zap       },
 ];
@@ -598,25 +662,23 @@ const PipelineStepper = ({ run }) => {
 
 // ── Source Card ───────────────────────────────────────────────────────────────
 const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const colorClass = COLOR_CLASSES[source.color] || COLOR_CLASSES.blue;
-  const isNVD = source.id === 'nvd' || source.id === 'alienvault';
-
   // Liste des étapes pour le lancement ciblé
   const STEPS = [
     "Collecte",
     "Extraction CVE / IOC",
-    "Enrichissement",
-    "Normalisation",
+    "NLP Enrichment",
+    "Geolocalisation",
+    "URLScan",
     "Intégration MISP"
   ];
+  const isNVD = source.id === 'nvd' || source.id === 'alienvault';
 
   return (
     <div 
-      className={`rounded-2xl border transition-all duration-300 relative overflow-hidden group/card ${
+      className={`rounded-2xl border transition-all duration-500 relative overflow-hidden group/card shadow-2xl ${
         isRunning 
-          ? `${colorClass} ring-1 ring-current ring-offset-1 ring-offset-[#0a0d1a] shadow-[0_0_20px_rgba(14,165,233,0.1)]` 
-          : `bg-slate-900/40 border-slate-800 hover:border-slate-700 ${isExpanded ? 'ring-1 ring-slate-700' : ''}`
+          ? `bg-slate-900 border-brand-500/50 ring-1 ring-brand-500/30` 
+          : `bg-[#111827]/80 border-slate-800/60 hover:border-slate-700`
       }`}
     >
       {/* HUD Elements for active source */}
@@ -632,76 +694,109 @@ const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning }) => {
         </>
       )}
 
-      {/* Header (cliquable pour expand) */}
-      <div 
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="p-3 cursor-pointer select-none relative z-10"
-      >
-        <div className="flex items-center justify-between mb-2">
-          <span className={`text-[9px] uppercase tracking-wider font-bold ${isRunning ? '' : 'text-slate-600'}`}>
-            {source.type}
-          </span>
+      {/* Header Info */}
+      <div className="p-4 relative z-10">
+        <div className="flex items-center justify-between mb-3 text-slate-500 uppercase tracking-widest font-black text-[9px] opacity-60">
+          <span>{source.type}</span>
           <div className="flex items-center gap-1.5">
-            {isRunning && <span className="w-1.5 h-1.5 rounded-full bg-current animate-ping" />}
-            <Play className={`w-2.5 h-2.5 transition-transform duration-300 ${isExpanded ? 'rotate-90' : 'text-slate-700'}`} />
+            <div className={`p-0.5 rounded-full ${isRunning ? 'bg-brand-500 animate-pulse' : 'bg-slate-800 opacity-0'}`} />
+            <div className={`w-3 h-3 rounded bg-slate-800 border border-slate-700 flex items-center justify-center`}>
+              <ChevronRight className={`w-2 h-2 text-slate-500 transition-transform ${isRunning ? 'rotate-90 text-brand-400' : ''}`} />
+            </div>
           </div>
         </div>
-        <p className="text-white font-semibold text-xs leading-tight underline-offset-4 decoration-current group-hover/card:underline">{source.name}</p>
-      </div>
-      
-      {/* Expanded Content: Step Selection */}
-      <div className={`transition-all duration-300 ease-in-out relative z-10 ${isExpanded ? 'max-h-[400px] opacity-100 border-t border-slate-800/50' : 'max-h-0 opacity-0'}`}>
-        <div className="p-3 space-y-2">
-          <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">Étapes du Pipeline</p>
-          
-          <div className="space-y-1.5">
-            {STEPS.map((step, idx) => {
-              const isDisabled = isRunning || (step === 'Enrichissement' && isNVD);
-              return (
-                <div key={step} className="flex items-center justify-between group/step">
-                  <span className={`text-[11px] ${isDisabled ? 'text-slate-700' : 'text-slate-400 group-hover/step:text-white transition-colors'}`}>
-                    {idx + 1}. {step}
-                  </span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onRunStep(step); }}
-                    disabled={isDisabled}
-                    className={`p-1 rounded bg-slate-800 border border-slate-700 transition-all ${
-                      isDisabled ? 'opacity-30 cursor-not-allowed' : 'hover:bg-brand-600 hover:border-brand-500 text-slate-500 hover:text-white'
-                    }`}
-                  >
-                    <Play className="w-2.5 h-2.5 fill-current" />
-                  </button>
-                </div>
-              );
-            })}
+        <h3 className="text-white font-black text-sm tracking-tight mb-5 group-hover/card:text-brand-400 transition-colors uppercase">{source.name}</h3>
+        
+        {/* Extraction Section */}
+        <div className="space-y-3 mb-5">
+          <p className="text-[9px] text-slate-600 font-extrabold uppercase tracking-widest border-b border-slate-800/60 pb-1.5 mb-2">1. Extraction / Collecte</p>
+          <div className="space-y-2.5">
+            {STEPS.slice(0, 2).map((step, idx) => (
+              <StepRow key={step} idx={idx} step={step} isRunning={isRunning} onRunStep={() => onRunStep(step)} />
+            ))}
           </div>
-
-          <div className="pt-2 border-t border-slate-800/50 mt-2 space-y-2">
-            <button
-              onClick={(e) => { e.stopPropagation(); onRun(); }}
-              disabled={isRunning}
-              className={`w-full py-2 rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1.5 ${
-                isRunning ? 'bg-slate-800 text-slate-500 cursor-not-allowed' :
-                'bg-brand-600/20 hover:bg-brand-600 border border-brand-500/30 hover:border-brand-500 text-brand-400 hover:text-white'
-              }`}
-            >
-              <Zap className="w-3 h-3" />
-              <span>Lancer Tout</span>
-            </button>
-
-            <button
-              onClick={(e) => { e.stopPropagation(); window.open(`http://localhost:8000/results/`, '_blank'); }}
-              className="w-full py-1.5 rounded-lg text-[10px] font-bold bg-slate-800/50 hover:bg-slate-700 text-slate-500 hover:text-white border border-slate-700 transition-all flex items-center justify-center gap-1.5"
-            >
-              <FileText className="w-3 h-3" />
-              <span>Explorer</span>
-            </button>
+        </div>
+        
+        {/* Enrichment Section (Skip for NVD/AlienVault) */}
+        {!isNVD && (
+          <div className="bg-brand-500/5 rounded-xl p-3 border border-brand-500/10 mb-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[9px] text-brand-400 font-black uppercase tracking-widest">2. Enrichissement</p>
+              <button
+                onClick={(e) => { e.stopPropagation(); onRunStep('Enrichissement'); }}
+                disabled={isRunning}
+                title="Lancer tout l'enrichissement"
+                className={`flex items-center gap-1.5 px-2 py-1 rounded bg-brand-500/10 border border-brand-500/30 text-brand-400 text-[8px] font-black uppercase tracking-wider hover:bg-brand-500 hover:text-white transition-all ${isRunning ? 'opacity-20 cursor-not-allowed' : 'active:scale-90 shadow-md shadow-brand-500/10'}`}
+              >
+                <Sparkles size={8} />
+                <span>Tout lancer</span>
+              </button>
+            </div>
+            <div className="space-y-2.5">
+              {STEPS.slice(2, 5).map((step, idx) => (
+                <StepRow key={step} idx={idx + 2} step={step} isRunning={isRunning} onRunStep={() => onRunStep(step)} />
+              ))}
+            </div>
           </div>
+        )}
+
+        {/* Finalisation Section */}
+        <div className="space-y-3 mb-6">
+          <p className="text-[9px] text-slate-600 font-extrabold uppercase tracking-widest border-b border-slate-800/60 pb-1.5 mb-2">3. Finalisation</p>
+          <div className="space-y-2.5">
+            <StepRow idx={5} step={STEPS[5]} isRunning={isRunning} onRunStep={() => onRunStep(STEPS[5])} />
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="space-y-3 pt-4 border-t border-slate-800/60">
+          <button
+            onClick={() => onRun()}
+            disabled={isRunning}
+            className={`w-full py-3 rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-2 group/btn ${
+              isRunning ? 'bg-slate-900 border border-slate-800 text-slate-700 cursor-not-allowed' :
+              'bg-brand-600/10 hover:bg-brand-600 border border-brand-500/20 hover:border-brand-500 text-brand-400 hover:text-white shadow-lg hover:shadow-brand-500/20 active:scale-95'
+            }`}
+          >
+            {isRunning ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} className="group-hover/btn:animate-pulse" />}
+            <span className="uppercase tracking-widest">Lancer le Pipeline</span>
+          </button>
+
+          <button
+            onClick={() => window.open(`${API_BASE}/results/`, '_blank')}
+            className="w-full py-2.5 rounded-xl text-[11px] font-black bg-slate-800/40 hover:bg-slate-800 text-slate-500 hover:text-slate-300 border border-slate-700/50 hover:border-slate-600 transition-all flex items-center justify-center gap-2 active:scale-95 group/explore"
+          >
+            <FileText size={12} className="group-hover/explore:scale-110 transition-transform" />
+            <span className="uppercase tracking-widest">Explorer les Sources</span>
+          </button>
         </div>
       </div>
     </div>
   );
 };
+
+/**
+ * Reusable row for pipeline steps
+ */
+const StepRow = ({ idx, step, isRunning, onRunStep }) => (
+  <div className="flex items-center justify-between group/step">
+    <div className="flex items-center gap-3">
+      <span className="text-[10px] text-slate-700 font-black font-mono w-3">{idx + 1}.</span>
+      <span className={`text-[11px] font-bold ${isRunning ? 'text-slate-700' : 'text-slate-400 group-hover/step:text-slate-200 transition-colors'}`}>
+        {step}
+      </span>
+    </div>
+    <button
+      onClick={(e) => { e.stopPropagation(); onRunStep(); }}
+      disabled={isRunning}
+      className={`p-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50 transition-all ${
+        isRunning ? 'opacity-20 cursor-not-allowed' : 'hover:bg-brand-600 hover:border-brand-500 hover:text-white text-slate-600 hover:shadow-[0_0_10px_rgba(14,165,233,0.3)] hover:scale-110'
+      }`}
+    >
+      <Play size={10} className="fill-current" />
+    </button>
+  </div>
+);
 
 // ── Stats Card ────────────────────────────────────────────────────────────────
 const StatCard = ({ icon, label, value, sub, color, loading }) => {

@@ -3,7 +3,8 @@ import axios from 'axios';
 import logo from '../assets/logo.png';
 import {
   ChevronLeft, Terminal, BarChart3, CheckCircle2,
-  XCircle, Loader2, Circle, Shield, Cpu, Database, Zap, Square
+  XCircle, Loader2, Circle, Shield, Cpu, Database, Zap, Square,
+  Globe, Languages, ScanEye
 } from 'lucide-react';
 
 const API_BASE = "http://localhost:8000";
@@ -11,19 +12,24 @@ const WS_BASE  = "ws://localhost:8000/ws";
 
 // ─── Config étapes ────────────────────────────────────────────────────────────
 const PIPELINE_STEPS = [
-  { name: "Collecte",             icon: Database, color: "blue"   },
-  { name: "Extraction CVE / IOC", icon: Cpu,      color: "violet" },
-  { name: "Enrichissement",       icon: Zap,      color: "amber"  },
-  { name: "Normalisation",        icon: Shield,   color: "emerald"},
-  { name: "Intégration MISP",     icon: Zap,      color: "orange" },
+  { name: "Collecte",             icon: Database,  color: "blue"   },
+  { name: "Extraction CVE / IOC", icon: Cpu,       color: "violet" },
+  { name: "NLP Enrichment",       icon: Languages, color: "indigo" },
+  { name: "Geolocalisation",      icon: Globe,     color: "emerald"},
+  { name: "URLScan",              icon: ScanEye,   color: "pink"   },
+  { name: "Normalisation",        icon: Shield,    color: "cyan"   },
+  { name: "Intégration MISP",     icon: Zap,       color: "orange" },
 ];
 
 const COLOR_MAP = {
   blue:    { bg: "bg-blue-500/10",    border: "border-blue-500/30",    text: "text-blue-400",    ring: "ring-blue-500",    dot: "bg-blue-500"    },
   violet:  { bg: "bg-violet-500/10",  border: "border-violet-500/30",  text: "text-violet-400",  ring: "ring-violet-500",  dot: "bg-violet-500"  },
-  amber:   { bg: "bg-amber-500/10",   border: "border-amber-500/30",   text: "text-amber-400",   ring: "ring-amber-500",   dot: "bg-amber-500"   },
+  indigo:  { bg: "bg-indigo-500/10",  border: "border-indigo-500/30",  text: "text-indigo-400",  ring: "ring-indigo-500",  dot: "bg-indigo-500"  },
   emerald: { bg: "bg-emerald-500/10", border: "border-emerald-500/30", text: "text-emerald-400", ring: "ring-emerald-500", dot: "bg-emerald-500" },
+  pink:    { bg: "bg-pink-500/10",    border: "border-pink-500/30",    text: "text-pink-400",    ring: "ring-pink-500",    dot: "bg-pink-500"    },
+  cyan:    { bg: "bg-cyan-500/10",    border: "border-cyan-500/30",    text: "text-cyan-400",    ring: "ring-cyan-500",    dot: "bg-cyan-500"    },
   orange:  { bg: "bg-orange-500/10",  border: "border-orange-500/30",  text: "text-orange-400",  ring: "ring-orange-500",  dot: "bg-orange-500"  },
+  amber:   { bg: "bg-amber-500/10",   border: "border-amber-500/30",   text: "text-amber-400",   ring: "ring-amber-500",   dot: "bg-amber-500"   },
 };
 
 // ─── Icônes de statut ─────────────────────────────────────────────────────────
