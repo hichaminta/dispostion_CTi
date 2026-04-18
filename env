@@ -20,4 +20,4 @@ PULSEDIVE_API_KEY=
 # URLhaus       →  https://urlhaus.abuse.ch/
 # CINS_URL       →  https://cinsarmy.com/list/ci-badguys.txt
 VIRUSTOTAL_API_KEY=
-URLScan_API_KEY=0
+URLScan_API_KEY=
