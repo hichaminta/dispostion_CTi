@@ -328,8 +328,7 @@ def enrich_urlscan(source_filter=None):
                                 attempts += 1
                             
                             if attempts >= 12:
-                                logger.warning(f"  [TIMEOUT] Scan {uuid} toujours en attente apr\u00e8s 60s.")
-)
+                                logger.warning(f"  [TIMEOUT] Scan {uuid} toujours en attente après 60s.")
 
                 if record_modified: 
                     modified = True
