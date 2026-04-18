@@ -51,6 +51,11 @@ class BaseExtractor:
             "localhost", "example.com", "127.0.0.1"
         }
 
+        # Blacklist of URL patterns to ignore (e.g. metadata URLs)
+        self.BLACKLIST_URL_PATTERNS = [
+            r"phishtank\.com/phish_detail\.php\?phish_id="
+        ]
+
     def is_whitelisted(self, domain):
         """Checks if a domain or its parent is in the whitelist."""
         if not domain: return False
@@ -108,6 +113,14 @@ class BaseExtractor:
         url_matches = re.findall(self.patterns['url'], text)
         for val in set(url_matches):
             val_norm = self.normalize_url(val)
+            # Check blacklist
+            is_blacklisted = False
+            for pattern in self.BLACKLIST_URL_PATTERNS:
+                if re.search(pattern, val_norm, re.IGNORECASE):
+                    is_blacklisted = True
+                    break
+            if is_blacklisted: continue
+
             # Extraire le domaine de l'URL pour vérification whitelist
             try:
                 from urllib.parse import urlparse

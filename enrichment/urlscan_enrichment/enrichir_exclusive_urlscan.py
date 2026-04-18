@@ -148,7 +148,7 @@ def enrich_urlscan(source_filter=None):
     limit_reached = False
     start_time = time.time()
     MAX_RUNTIME = 3600 # 1 hour
-    MAX_SUBMISSIONS_PER_SOURCE = 50 # Prevent one source from hogging the API
+    MAX_SUBMISSIONS_PER_SOURCE = 50 
 
     REGISTRY_FILE = os.path.join(os.path.dirname(__file__), "scanner_par_url_io.json")
     
@@ -158,7 +158,9 @@ def enrich_urlscan(source_filter=None):
             try:
                 with open(REGISTRY_FILE, "r", encoding="utf-8") as f:
                     return json.load(f)
-            except: return {}
+            except: 
+                logger.error("Failed to load registry file!")
+                return {}
         return {}
 
     def save_registry(registry):
@@ -169,6 +171,31 @@ def enrich_urlscan(source_filter=None):
             logger.error(f"Failed to save registry: {e}")
 
     registry = load_registry()
+    
+    def apply_urlscan_metadata(ioc, record, res):
+        """Helper to apply full URLScan metadata from a result object (registry or API)"""
+        # Ensure ioc_enrichment structure
+        if "ioc_enrichment" not in ioc: ioc["ioc_enrichment"] = {}
+        
+        # Purge old metadata
+        for k in ["url_analysis", "domain_analysis", "url_scan"]:
+            if k in ioc["ioc_enrichment"]: del ioc["ioc_enrichment"][k]
+        
+        # Core flags
+        ioc["ioc_enrichment"]["canne_par_url"] = 1
+        ioc["ioc_enrichment"]["passer_par_urlscan"] = 1
+        
+        # Metadata mapping
+        if "score" in res: record["attributes"]["urlscan_score"] = res["score"]
+        if "verdict" in res: record["attributes"]["urlscan_verdict"] = res["verdict"]
+        
+        # Extra technical metadata to pass to ioc_enrichment
+        for key in ["ip", "country", "server", "page_title", "effective_url", "screenshot_url", "report_url"]:
+            if key in res and res[key]:
+                ioc["ioc_enrichment"][f"urlscan_{key}"] = res[key]
+        
+        return True
+
     # ---------------------------
 
     for filename in files:
@@ -216,6 +243,19 @@ def enrich_urlscan(source_filter=None):
                     try:
                         record_ts = datetime.fromisoformat(record_ts_str.replace('Z', '+00:00'))
                         if record_ts <= last_scanned_date:
+                            # Strict Tracking: Skip live scan but sync status flags from registry
+                            record_modified = False
+                            for ioc in record.get("iocs", []):
+                                if ioc.get("type") not in ["url", "domain"]: continue
+                                if ioc.get("value") in registry:
+                                    if "ioc_enrichment" not in ioc: ioc["ioc_enrichment"] = {}
+                                    # Add user-requested status flag
+                                    if ioc["ioc_enrichment"].get("canne_par_url") != 1:
+                                        ioc["ioc_enrichment"]["canne_par_url"] = 1
+                                        ioc["ioc_enrichment"]["passer_par_urlscan"] = 1
+                                        record_modified = True
+                            
+                            if record_modified: modified = True
                             records_to_keep.append(record)
                             continue
                     except: pass
@@ -229,36 +269,14 @@ def enrich_urlscan(source_filter=None):
                     ioc_value = ioc.get("value")
                     if ioc_type not in ["url", "domain"]: continue
 
-                    if "ioc_enrichment" not in ioc: ioc["ioc_enrichment"] = {}
-                    
-                    # 1. LOCAL CHECK FIRST (The Registry)
+                    # 1. DATABASE FIRST (PRIORITY)
                     if ioc_value in registry:
-                        res = registry[ioc_value]
-                        res_score = res.get("score", 0)
-                        
-                        if res_score > 0:
-                            # Purge old metadata ONLY if we have a positive score
-                            for k in ["url_analysis", "domain_analysis", "url_scan"]:
-                                if k in ioc["ioc_enrichment"]:
-                                    del ioc["ioc_enrichment"][k]
-                            
-                            ioc["ioc_enrichment"]["passer_par_urlscan"] = 1
-                            if "score" in res: record["attributes"]["urlscan_score"] = res["score"]
-                            if "verdict" in res: record["attributes"]["urlscan_verdict"] = res["verdict"]
-                            
-                            # IP DISCOVERY
-                            if res.get("ip") and not any(i.get("value") == res["ip"] for i in record.get("iocs", [])):
-                                record["iocs"].append({
-                                    "type": "ip",
-                                    "value": res["ip"],
-                                    "source": f"urlscan_discovery_{source}",
-                                    "ioc_enrichment": {"discovery_date": datetime.now().isoformat()}
-                                })
-                            
+                        if apply_urlscan_metadata(ioc, record, registry[ioc_value]):
+                            logger.info(f"  [DB MATCH] {ioc_value[:30]}... Data applied from local DB")
                             record_modified = True
                         continue
 
-                    # 2. API CALL (If not in registry and limit not reached)
+                    # 2. API CALL (ONLY IF NOT IN DB)
                     if not limit_reached:
                         if source_submissions >= MAX_SUBMISSIONS_PER_SOURCE: continue
                         if not is_valid_urlscan_target(ioc_value): continue
@@ -271,16 +289,15 @@ def enrich_urlscan(source_filter=None):
                             break
                         elif uuid and uuid != "DNS_ERROR":
                             logger.info(f"  [SUBMIT] {ioc_value[:30]}... Poll en cours (60s max)...")
-                            # ACTIVE POLLING (Wait for results)
+                            # ACTIVE POLLING
                             attempts = 0
-                            while attempts < 12: # 12 attempts * 5s = 60s
+                            while attempts < 12:
                                 time.sleep(5)
                                 result = urlscan.fetch_result(uuid)
                                 if result and result != "PENDING":
                                     # SUCCESS: Extract Rich Data
                                     page = result.get("page", {})
                                     verdicts = result.get("verdicts", {}).get("overall", {})
-                                    task_data = result.get("task", {})
                                     
                                     rich_data = {
                                         "score": verdicts.get("score", 0),
@@ -298,27 +315,10 @@ def enrich_urlscan(source_filter=None):
                                     
                                     # Save to Registry
                                     registry[ioc_value] = rich_data
-                                    save_registry(registry) # Persistent save
+                                    save_registry(registry)
                                     
-                                    # 2. Update Record ONLY if score > 0
-                                    if rich_data["score"] > 0:
-                                        # Purge old metadata
-                                        for k in ["url_analysis", "domain_analysis", "url_scan"]:
-                                            if k in ioc["ioc_enrichment"]:
-                                                del ioc["ioc_enrichment"][k]
-
-                                        ioc["ioc_enrichment"]["passer_par_urlscan"] = 1
-                                        record["attributes"]["urlscan_score"] = rich_data["score"]
-                                        record["attributes"]["urlscan_verdict"] = rich_data["verdict"]
-                                        
-                                        # IP Discovery logic
-                                        if rich_data["ip"]:
-                                            record["iocs"].append({
-                                                "type": "ip",
-                                                "value": rich_data["ip"],
-                                                "source": f"urlscan_discovery_{source}"
-                                            })
-                                        
+                                    # Apply to Record
+                                    if apply_urlscan_metadata(ioc, record, rich_data):
                                         record_modified = True
                                     
                                     new_submissions += 1
@@ -328,7 +328,8 @@ def enrich_urlscan(source_filter=None):
                                 attempts += 1
                             
                             if attempts >= 12:
-                                logger.warning(f"  [TIMEOUT] Scan {uuid} toujours en attente après 60s. Ignoré pour ce cycle.")
+                                logger.warning(f"  [TIMEOUT] Scan {uuid} toujours en attente apr\u00e8s 60s.")
+)
 
                 if record_modified: 
                     modified = True

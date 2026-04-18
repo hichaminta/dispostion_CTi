@@ -224,6 +224,7 @@ async function loadData() {
             </td>
             <td><div class="h-4 w-24 bg-slate-800/50 rounded"></div></td>
             <td><div class="h-4 w-16 bg-slate-800/50 rounded"></div></td>
+            <td><div class="h-6 w-16 bg-slate-800/50 rounded-full"></div></td>
             <td><div class="h-7 w-20 bg-slate-800/50 rounded"></div></td>
         </tr>
     `).join('');
@@ -368,10 +369,29 @@ function renderTable(data) {
         const logoUrl = getSourceLogo(item.source);
         const sourceIcon = logoUrl ? `<div class="source-logo-sm"><img src="${logoUrl}" alt="${item.source}"></div>` : `<i data-lucide="shield" class="source-logo-sm"></i>`;
 
+        // URLScan Info
+        let urlscanDisplay = `<span class="scan-status no">No</span>`;
+        const hasUrlScan = (item.iocs || []).some(ioc => ioc.ioc_enrichment?.passer_par_urlscan === 1);
+        const score = item.attributes?.urlscan_score;
+
+        if (hasUrlScan || score !== undefined) {
+            const displayScore = score !== undefined ? score : "0";
+            let scoreClass = "score-low";
+            if (score >= 100) scoreClass = "score-high";
+            else if (score > 0) scoreClass = "score-mid";
+            
+            urlscanDisplay = `
+                <div class="urlscan-cell">
+                    <span class="scan-status yes">Yes</span>
+                    <span class="score-badge ${scoreClass}">${displayScore}</span>
+                </div>
+            `;
+        }
+
         return `
             <tr>
                 <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-secondary)">${item.record_id.substring(0, 10)}...</td>
-                <td><span class="type-pill ${type}">${type}</span></td>
+                <td><span class="type-pill ${type}">${type === 'domaine' ? 'DOMAIN' : type.toUpperCase()}</span></td>
                 <td>
                     <div style="display: flex; flex-direction: column; gap: 4px;">
                         <div style="display: flex; align-items: center; gap: 8px;">
@@ -383,6 +403,7 @@ function renderTable(data) {
                 </td>
                 <td>${tags}${item.tags?.length > 2 ? '...' : ''}</td>
                 <td>${date}</td>
+                <td>${urlscanDisplay}</td>
                 <td>
                     <button class="view-btn action-view-details" data-record-id="${item.record_id}">View Details</button>
                 </td>
