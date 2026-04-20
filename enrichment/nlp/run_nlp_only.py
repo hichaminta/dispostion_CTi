@@ -7,7 +7,11 @@ import argparse
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("NLP_Only")
 
+# Pipeline Configuration
+SKIP_SOURCES = {"alienvault"}
+
 def run_nlp(source_filter=None):
+
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     nlp_scripts_dir = os.path.join(base_dir, "nlp", "scripts")
     
@@ -34,6 +38,10 @@ def run_nlp(source_filter=None):
 
     for script_name in scripts:
         if not script_name.endswith('_enricher.py'): continue
+        if any(skip in script_name.lower() for skip in SKIP_SOURCES):
+            logger.info(f"  [NLP] Skipping {script_name} (in SKIP_SOURCES)")
+            continue
+            
         script_path = os.path.join(nlp_scripts_dir, script_name)
         logger.info(f"  [NLP] Processing {script_name}...")
         try:

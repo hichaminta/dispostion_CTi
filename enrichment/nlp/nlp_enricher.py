@@ -106,7 +106,10 @@ class NLPEnricher(BaseEnricher):
         ]
 
         # Sources that contain descriptive narrative text (High NLP value)
-        self.narrative_sources = ["alienvault", "virustotal"]
+        self.narrative_sources = [
+            # "alienvault", 
+            "virustotal"
+        ]
 
     def _get_summary(self, text: str, num_sentences: int = 2) -> str:
         """

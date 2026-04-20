@@ -95,26 +95,6 @@ class WhitelistChecker:
             except Exception as e:
                 logger.error(f"Failed to update whitelist: {e}")
 
-def get_tracking_file(source):
-    return os.path.join(TRACKING_DIR, f"{source}_tracking.json")
-
-def load_source_tracking(source):
-    if not os.path.exists(TRACKING_DIR):
-        os.makedirs(TRACKING_DIR)
-    path = get_tracking_file(source)
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
-
-def save_source_tracking(source, data):
-    path = get_tracking_file(source)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
-
 def save_json_file(path, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
@@ -209,56 +189,19 @@ def enrich_urlscan(source_filter=None):
         
         logger.info(f">>> STARTING SOURCE: {source.upper()} <<<")
         source_submissions = 0
-        source_fetches = 0
         
-        # Load unified tracking
-        source_tracking = load_source_tracking(source)
-        if "urlscan" not in source_tracking:
-            source_tracking["urlscan"] = {
-                "first_scanned_at": None, "last_scanned_at": None, "total_processed": 0, "last_run": None
-            }
-        
-        last_scanned_str = source_tracking["urlscan"].get("last_scanned_at")
-        last_scanned_date = None
-        if last_scanned_str:
-            try: last_scanned_date = datetime.fromisoformat(last_scanned_str.replace('Z', '+00:00'))
-            except: pass
-
+        # Standard mode: process all indicators in the file
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             
             modified = False
-            file_max_date = None
-            file_min_date = None
             records_to_keep = []
 
             for record in data:
                 if (time.time() - start_time) > MAX_RUNTIME: 
                     records_to_keep.append(record)
                     continue
-
-                record_ts_str = record.get("collected_at") or record.get("extracted_at") or record.get("first_seen")
-                if record_ts_str and last_scanned_date:
-                    try:
-                        record_ts = datetime.fromisoformat(record_ts_str.replace('Z', '+00:00'))
-                        if record_ts <= last_scanned_date:
-                            # Strict Tracking: Skip live scan but sync status flags from registry
-                            record_modified = False
-                            for ioc in record.get("iocs", []):
-                                if ioc.get("type") not in ["url", "domain"]: continue
-                                if ioc.get("value") in registry:
-                                    if "ioc_enrichment" not in ioc: ioc["ioc_enrichment"] = {}
-                                    # Add user-requested status flag
-                                    if ioc["ioc_enrichment"].get("canne_par_url") != 1:
-                                        ioc["ioc_enrichment"]["canne_par_url"] = 1
-                                        ioc["ioc_enrichment"]["passer_par_urlscan"] = 1
-                                        record_modified = True
-                            
-                            if record_modified: modified = True
-                            records_to_keep.append(record)
-                            continue
-                    except: pass
 
                 record_modified = False
                 # Technical metadata update: Ensure attributes exist
@@ -268,6 +211,16 @@ def enrich_urlscan(source_filter=None):
                     ioc_type = ioc.get("type")
                     ioc_value = ioc.get("value")
                     if ioc_type not in ["url", "domain"]: continue
+
+                    # --- SKIP IF ALREADY MARKED (NEW LOGIC) ---
+                    if ioc.get("ioc_enrichment", {}).get("passer_par_urlscan") == 1:
+                        # Still try to sync metadata if missing high-level attributes
+                        if not record.get("attributes", {}).get("urlscan_score") and ioc_value in registry:
+                            if apply_urlscan_metadata(ioc, record, registry[ioc_value]):
+                                logger.info(f"  [SYNC] {ioc_value[:30]}... Metadata synced from registry")
+                                record_modified = True
+                        continue
+                    # -----------------------------------------
 
                     # 1. DATABASE FIRST (PRIORITY)
                     if ioc_value in registry:
@@ -330,28 +283,17 @@ def enrich_urlscan(source_filter=None):
                             if attempts >= 12:
                                 logger.warning(f"  [TIMEOUT] Scan {uuid} toujours en attente après 60s.")
 
-                if record_modified: 
+                if record_modified:
                     modified = True
-                    if record_ts_str:
-                        if not file_min_date or record_ts_str < file_min_date: file_min_date = record_ts_str
-                        if not file_max_date or record_ts_str > file_max_date: file_max_date = record_ts_str
                 
                 records_to_keep.append(record)
                 if limit_reached: break
 
             if modified: 
                 save_json_file(file_path, records_to_keep)
-                u_stats = source_tracking["urlscan"]
-                if file_min_date:
-                    if not u_stats.get("first_scanned_at") or file_min_date < u_stats["first_scanned_at"]:
-                        u_stats["first_scanned_at"] = file_min_date
-                if file_max_date:
-                    if not u_stats.get("last_scanned_at") or file_max_date > u_stats["last_scanned_at"]:
-                        u_stats["last_scanned_at"] = file_max_date
-                u_stats.update({"total_processed": len(records_to_keep), "last_run": datetime.now().isoformat()})
-                save_source_tracking(source, source_tracking)
+                logger.info(f"  [SAVED] Updated {filename}")
 
-            logger.info(f">>> FINISHED {source.upper()}: Submits: {source_submissions}, Fetches: {source_fetches}")
+            logger.info(f">>> FINISHED {source.upper()}: Submits: {source_submissions} <<<")
             if limit_reached: break
 
         except Exception as e:
