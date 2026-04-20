@@ -19,7 +19,7 @@ if sys.platform == 'win32':
 # Ensure we can import from project root
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from enrichment.external_services.urlscan_client import URLScanClient
+from enrichment.urlscan_enrichment.urlscan_client import URLScanClient
 
 # Setup logging
 logging.basicConfig(
