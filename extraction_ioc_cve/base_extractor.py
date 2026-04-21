@@ -415,11 +415,43 @@ class BaseExtractor:
                 
                 # Update IOCs
                 existing_iocs = existing.get("iocs", [])
-                seen_iocs = {(i["type"], i["value"]) for i in existing_iocs}
+                # Normalize types for deduplication: domain -> domaine, hash -> hashe
+                type_map = {"domain": "domaine", "hash": "hashe", "sha256": "hashe", "md5": "hashe", "sha1": "hashe"}
+                
+                def get_norm_type(t):
+                    return type_map.get(t.lower(), t.lower())
+
+                # Track existing IOCs by normalized (type, value)
+                seen_iocs = {} # (norm_type, value) -> index_in_existing_iocs
+                for idx, i in enumerate(existing_iocs):
+                    key = (get_norm_type(i["type"]), i["value"])
+                    seen_iocs[key] = idx
+
                 for ioc in new_item.get("iocs", []):
-                    if (ioc["type"], ioc["value"]) not in seen_iocs:
+                    norm_type = get_norm_type(ioc["type"])
+                    key = (norm_type, ioc["value"])
+                    
+                    if key in seen_iocs:
+                        idx = seen_iocs[key]
+                        existing_ioc = existing_iocs[idx]
+                        
+                        # Enrichment merge: prefer the one that HAS enrichment or the better type
+                        # If existing is 'domain' and new is 'domaine', replace type
+                        if ioc["type"] == "domaine" and existing_ioc["type"] == "domain":
+                            existing_ioc["type"] = "domaine"
+                        
+                        # Merge enrichment
+                        if "ioc_enrichment" in ioc and ioc["ioc_enrichment"]:
+                            if "ioc_enrichment" not in existing_ioc or not existing_ioc["ioc_enrichment"]:
+                                existing_ioc["ioc_enrichment"] = ioc["ioc_enrichment"]
+                            else:
+                                # Merge nested dicts
+                                for ek, ev in ioc["ioc_enrichment"].items():
+                                    existing_ioc["ioc_enrichment"][ek] = ev
+                    else:
                         existing_iocs.append(ioc)
-                        seen_iocs.add((ioc["type"], ioc["value"]))
+                        seen_iocs[key] = len(existing_iocs) - 1
+                
                 existing["iocs"] = existing_iocs
                 
                 # Update CVEs

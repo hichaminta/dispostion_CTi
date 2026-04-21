@@ -382,7 +382,7 @@ function renderTable(data) {
             
             urlscanDisplay = `
                 <div class="urlscan-cell">
-                    <span class="scan-status yes">Yes</span>
+                    <span class="scan-status yes">passer_par_urlscan:1</span>
                     <span class="score-badge ${scoreClass}">${displayScore}</span>
                 </div>
             `;

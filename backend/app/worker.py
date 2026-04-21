@@ -19,6 +19,9 @@ ACTIVE_PROCS = {}
 
 def terminate_run(run_id: str):
     """Arrête violemment un run en cours."""
+    # Mark as failed in DB first so the worker sees it immediately if it checks between steps
+    db.update_run(run_id, {"status_global": "failed"})
+    
     proc = ACTIVE_PROCS.get(run_id)
     if proc:
         try:
@@ -42,7 +45,14 @@ def terminate_run(run_id: str):
             if run_id in ACTIVE_PROCS:
                 del ACTIVE_PROCS[run_id]
             return True
-    return False
+    return True # Return true even if no proc found, as long as we marked it failed.
+
+def _is_run_cancelled(run_id: str) -> bool:
+    """Vérifie si le run a été marqué comme échoué/arrêté dans la base."""
+    run = db.get_run_by_external_id(run_id)
+    if not run:
+        return True
+    return run.get("status_global") == "failed"
 
 # Répertoire racine du projet
 PROJECT_ROOT      = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -115,6 +125,12 @@ async def _run_proc(run_id: str, step_name: str, cmd: list, cwd: str) -> bool:
                     await _ws_log(run_id, step_name, f"[{ts_func()}] {line}")
             
             await proc.wait()
+            
+            # Check if it was cancelled
+            if _is_run_cancelled(run_id):
+                await _ws_log(run_id, step_name, f"[{ts_func()}] \u26a0 Processus arrêté par l'utilisateur.")
+                return False
+
             ok = proc.returncode == 0
             
             # Nettoyage
@@ -166,6 +182,11 @@ async def _run_proc(run_id: str, step_name: str, cmd: list, cwd: str) -> bool:
 
             return_code = await asyncio.to_thread(stream_logs, proc_sync, run_id, step_name, main_loop)
             
+            # Check if it was cancelled
+            if _is_run_cancelled(run_id):
+                await _ws_log(run_id, step_name, f"[{ts_func()}] \u26a0 Processus arrêté par l'utilisateur (fallback).")
+                return False
+
             # Nettoyage
             if run_id in ACTIVE_PROCS: del ACTIVE_PROCS[run_id]
             
@@ -275,6 +296,7 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         # ══════════════════════════════════════════════════════════════
         # ÉTAPE 1 : Collecte — exécuter script.py de chaque source
         # ══════════════════════════════════════════════════════════════
+        if _is_run_cancelled(run_id): return
         await _update_step(run_id, "Collecte", "running")
         await _ws_log(run_id, "Collecte", f"[{ts()}] ═══ DÉMARRAGE COLLECTE ═══")
         await _ws_log(run_id, "Collecte", f"[{ts()}] Source cible : {source_name}")
@@ -287,6 +309,7 @@ async def execute_pipeline_task(run_id: str, source_name: str):
             collecte_ok = await _run_proc(run_id, "Collecte", [sys.executable, COLLECTION_SCRIPT], PROJECT_ROOT)
         else:
             for src in sources_to_run:
+                if _is_run_cancelled(run_id): break
                 info = SOURCE_MAP.get(src)
                 if not info:
                     await _ws_log(run_id, "Collecte", f"[{ts()}] ⚠ Source inconnue '{src}', ignorée.")
@@ -317,6 +340,7 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         # ══════════════════════════════════════════════════════════════
         # ÉTAPE 2 : Extraction CVE / IOC — exécuter les extracteurs
         # ══════════════════════════════════════════════════════════════
+        if _is_run_cancelled(run_id): return
         await _update_step(run_id, "Extraction CVE / IOC", "running")
         await _ws_log(run_id, "Extraction CVE / IOC", f"[{ts()}] ═══ DÉMARRAGE EXTRACTION ═══")
 
@@ -327,7 +351,7 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         else:
             extraction_ok = True
             for src in sources_to_run:
-                # ... loop logic summarized ...
+                if _is_run_cancelled(run_id): break
                 info = SOURCE_MAP.get(src)
                 if not info: continue
                 extractor_path = os.path.join(EXTRACTORS_DIR, info["extractor"])
@@ -353,6 +377,7 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         source_flag = ["-s", source_name] if not is_unified else []
 
         # NLP
+        if _is_run_cancelled(run_id): return
         await _update_step(run_id, "NLP Enrichment", "running")
         await _ws_log(run_id, "NLP Enrichment", f"[{ts()}] ➔ STAGE 1 : Analyse NLP")
         nlp_script = os.path.join(PROJECT_ROOT, "enrichment", "nlp", "run_nlp_only.py")
@@ -360,6 +385,7 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         await _update_step(run_id, "NLP Enrichment", "success" if nlp_ok else "failed")
 
         # Geolocation
+        if _is_run_cancelled(run_id): return
         await _update_step(run_id, "Geolocalisation", "running")
         await _ws_log(run_id, "Geolocalisation", f"[{ts()}] ➔ STAGE 2 : Géolocalisation")
         geo_script = os.path.join(PROJECT_ROOT, "enrichment", "geolocalisation", "enrichir.py")
@@ -367,6 +393,7 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         await _update_step(run_id, "Geolocalisation", "success" if geo_ok else "failed")
 
         # URLScan
+        if _is_run_cancelled(run_id): return
         await _update_step(run_id, "URLScan", "running")
         await _ws_log(run_id, "URLScan", f"[{ts()}] ➔ STAGE 3 : URLScan Analysis")
         url_script = os.path.join(PROJECT_ROOT, "enrichment", "urlscan_enrichment", "enrichir_exclusive_urlscan.py")
@@ -376,6 +403,7 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         # ══════════════════════════════════════════════════════════════
         # ÉTAPE 6 : Normalisation
         # ══════════════════════════════════════════════════════════════
+        if _is_run_cancelled(run_id): return
         await _update_step(run_id, "Normalisation", "running")
         await _ws_log(run_id, "Normalisation", f"[{ts()}] ➔ STAGE 4 : Normalisation des données")
         norm_script = os.path.join(PROJECT_ROOT, "normalisation", "standardize.py")
@@ -404,6 +432,7 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
     ts = lambda: datetime.utcnow().strftime("%H:%M:%S")
 
     try:
+        if _is_run_cancelled(run_id): return
         await _update_step(run_id, step_name, "running")
         await _ws_log(run_id, step_name, f"[{ts()}] ═══ DÉMARRAGE ÉTAPE CIBLÉE : {step_name.upper()} ═══")
 
@@ -418,6 +447,7 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
                 step_ok = await _run_proc(run_id, step_name, [sys.executable, COLLECTION_SCRIPT], PROJECT_ROOT)
             else:
                 for src in sources_to_run:
+                    if _is_run_cancelled(run_id): break
                     info = SOURCE_MAP.get(src)
                     if not info: continue
                     src_folder = os.path.join(SOURCES_DATA_DIR, info["folder"])
@@ -434,6 +464,7 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
                 step_ok = await _run_proc(run_id, step_name, [sys.executable, extraction_script], PROJECT_ROOT)
             else:
                 for src in sources_to_run:
+                    if _is_run_cancelled(run_id): break
                     info = SOURCE_MAP.get(src)
                     if not info: continue
                     extractor_path = os.path.join(EXTRACTORS_DIR, info["extractor"])
