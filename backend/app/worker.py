@@ -376,14 +376,6 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         # ══════════════════════════════════════════════════════════════
         source_flag = ["-s", source_name] if not is_unified else []
 
-        # NLP
-        if _is_run_cancelled(run_id): return
-        await _update_step(run_id, "NLP Enrichment", "running")
-        await _ws_log(run_id, "NLP Enrichment", f"[{ts()}] ➔ STAGE 1 : Analyse NLP")
-        nlp_script = os.path.join(PROJECT_ROOT, "enrichment", "nlp", "run_nlp_only.py")
-        nlp_ok = await _run_proc(run_id, "NLP Enrichment", [sys.executable, nlp_script] + source_flag, PROJECT_ROOT)
-        await _update_step(run_id, "NLP Enrichment", "success" if nlp_ok else "failed")
-
         # Geolocation
         if _is_run_cancelled(run_id): return
         await _update_step(run_id, "Geolocalisation", "running")
@@ -489,11 +481,6 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
                 await _ws_log(run_id, step_name, f"[{ts()}] ➔ Full Enrichment for {source_name}")
                 source_flag = ["-s", source_name]
                 
-                # NLP
-                await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 1 : Analyse NLP")
-                nlp_script = os.path.join(PROJECT_ROOT, "enrichment", "nlp", "run_nlp_only.py")
-                ok1 = await _run_proc(run_id, step_name, [sys.executable, nlp_script] + source_flag, PROJECT_ROOT)
-                
                 # Geo
                 await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 2 : Géolocalisation")
                 geo_script = os.path.join(PROJECT_ROOT, "enrichment", "geolocalisation", "enrichir.py")
@@ -507,17 +494,11 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
                 ok3 = await _run_proc(run_id, step_name, [sys.executable, url_script] + source_flag, PROJECT_ROOT)
                 ok4 = await _run_proc(run_id, step_name, [sys.executable, fallback_script] + source_flag, PROJECT_ROOT)
                 
-                step_ok = ok1 and ok2 and ok3 and ok4
+                step_ok = ok2 and ok3 and ok4
 
         # --- New Granular Steps ---
         # Special case: 'Unified Extraction' means process all JSON files (no filter)
         source_flag = ["-s", source_name] if source_name and source_name != "Unified Extraction" else []
-
-        if step_name == "NLP Enrichment":
-            await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 1 : Analyse NLP (Entités & Familles)")
-            nlp_script = os.path.join(PROJECT_ROOT, "enrichment", "nlp", "run_nlp_only.py")
-            step_ok = await _run_proc(run_id, step_name, [sys.executable, nlp_script] + source_flag, PROJECT_ROOT)
-            ioc_count, cve_count = _count_ioc_cve(source_name)
 
         elif step_name == "Geolocalisation":
             await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 2 : Géolocalisation (Infrastructure)")

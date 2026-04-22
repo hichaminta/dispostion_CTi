@@ -72,8 +72,51 @@ def run_extraction():
     current_oldest = oldest_extracted_at
     current_recent = recent_extracted_at
 
+    def process_nvd_item(item):
+        cve_id = item.get("id") or item.get("cve", {}).get("id") or item.get("cve_id")
+        record_id = str(cve_id or hash(str(item)))
+        
+        # Get dates
+        date_fields = ['published', 'lastModified', 'modified', 'extracted_at', 'collected_at']
+        collected_at = None
+        for df in date_fields:
+            if item.get(df):
+                collected_at = item.get(df)
+                break
+                
+        tags = set()
+        attrs = {}
+        refs = set()
+        
+        # Extract CVSS score or something if needed
+        # We explicitly don't extract IOCs from NVD
+        extracted_cves = []
+        if cve_id:
+            extracted_cves.append({
+                "id": cve_id.upper(),
+                "source": SOURCE_NAME,
+                "ioc_enrichment": {}
+            })
+            
+        res = {
+            "source": SOURCE_NAME,
+            "record_id": record_id,
+            "summary": "Extracted CVE explicitly from NVD.",
+            "iocs": [], # Explicitly no IOCs
+            "cves": extracted_cves,
+            "tags": sorted(list(tags)),
+            "references": sorted(list(refs)),
+            "attributes": attrs,
+            "collected_at": collected_at
+        }
+        
+        if "description" in item:
+            res["description"] = item["description"]
+            
+        return res
+
     for item in new_data:
-        res = extractor.process_item(SOURCE_NAME, item)
+        res = process_nvd_item(item)
         new_results.append(res)
         
         # Update bounds

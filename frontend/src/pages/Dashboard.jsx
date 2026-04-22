@@ -327,7 +327,7 @@ const Dashboard = ({ onSelectRun }) => {
                 <button
                   onClick={() => startGlobalStep('Enrichissement')}
                   disabled={stats?.running_runs > 0}
-                  title="Lancer l'Enrichissement Complet (NLP + G\u00e9o + Scan) - Toutes sources"
+                  title="Lancer l'Enrichissement Complet (Géo + Scan) - Toutes sources"
                   className={`flex items-center gap-2 pr-4 pl-3 py-2 rounded-xl font-bold transition-all duration-200 active:scale-95 ${
                     stats?.running_runs > 0
                       ? 'opacity-40 cursor-not-allowed'
@@ -350,7 +350,7 @@ const Dashboard = ({ onSelectRun }) => {
                 <button
                   onClick={() => setShowEnrichDetails(!showEnrichDetails)}
                   className={`p-2 rounded-lg transition-colors ${showEnrichDetails ? 'bg-amber-500/20 text-white' : 'text-amber-500/40 hover:text-amber-400'}`}
-                  title={showEnrichDetails ? "Masquer les sous-\u00e9tapes" : "Afficher les sous-\u00e9tapes (NLP, G\u00e9o, Scan)"}
+                  title={showEnrichDetails ? "Masquer les sous-étapes" : "Afficher les sous-étapes (Géo, Scan)"}
                 >
                   {showEnrichDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
@@ -361,18 +361,6 @@ const Dashboard = ({ onSelectRun }) => {
                 <div className="flex items-center animate-in slide-in-from-left duration-300">
                   <ArrowConnector />
                   
-                  {/* NLP */}
-                  <button
-                    onClick={() => startGlobalStep('NLP Enrichment')}
-                    disabled={stats?.running_runs > 0 || isStarting}
-                    title="Stage 1: NLP Enrichment"
-                    className={`flex flex-col items-center gap-1 px-3 py-1 group/step ${isStarting ? 'opacity-40' : ''}`}
-                  >
-                    <div className="w-7 h-7 rounded bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover/step:bg-indigo-500 group-hover/step:text-white transition-all">
-                      {isStarting ? <Loader2 size={12} className="animate-spin" /> : <Languages size={12} />}
-                    </div>
-                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-indigo-400 uppercase">NLP</span>
-                  </button>
 
                   {/* GEO */}
                   <button
@@ -663,7 +651,6 @@ const PIPELINE_STEPS = [
   { name: "Collecte",             icon: Database  },
   { name: "Extraction CVE / IOC", icon: Activity  },
   { name: "Enrichissement",        icon: Sparkles  },
-  { name: "NLP Enrichment",       icon: Languages },
   { name: "Geolocalisation",      icon: Globe     },
   { name: "URLScan",              icon: ScanEye   },
   { name: "Fallback",             icon: Layers,    color: "orange" },
@@ -744,7 +731,6 @@ const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning, isStarting 
   const STEPS = [
     "Collecte",
     "Extraction CVE / IOC",
-    "NLP Enrichment",
     "Geolocalisation",
     "URLScan_Only",
     "Fallback",
@@ -818,24 +804,6 @@ const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning, isStarting 
                 <div className="flex items-center gap-3">
                   <span className="text-[10px] text-slate-700 font-black font-mono w-3">3.</span>
                   <span className={`text-[11px] font-bold ${isRunning ? 'text-slate-700' : 'text-slate-400 group-hover/step:text-slate-200 transition-colors'}`}>
-                    NLP Enrichment
-                  </span>
-                </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onRunStep('NLP Enrichment'); }}
-                  disabled={isRunning || isStarting}
-                  className={`p-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50 transition-all ${
-                    (isRunning || isStarting) ? 'opacity-20 cursor-not-allowed' : 'hover:bg-brand-600 hover:border-brand-500 hover:text-white text-slate-600 hover:shadow-[0_0_10px_rgba(14,165,233,0.3)] hover:scale-110'
-                  }`}
-                >
-                  {isStarting ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} className="fill-current" />}
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between group/step">
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] text-slate-700 font-black font-mono w-3">4.</span>
-                  <span className={`text-[11px] font-bold ${isRunning ? 'text-slate-700' : 'text-slate-400 group-hover/step:text-slate-200 transition-colors'}`}>
                     Geolocalisation
                   </span>
                 </div>
@@ -849,6 +817,7 @@ const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning, isStarting 
                   {isStarting ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} className="fill-current" />}
                 </button>
               </div>
+
             </div>
 
             {/* Specialized URL Enrichment Controls (Expandable) */}

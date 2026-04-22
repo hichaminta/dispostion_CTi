@@ -346,9 +346,9 @@ class BaseExtractor:
         return attrs
 
     def process_item(self, source_name, item):
-        # Convert item to a string representation for global extraction
-        raw_text = json.dumps(item, ensure_ascii=False)
-        extracted = self.extract_from_text(raw_text)
+        # Convert item to a string representation for extraction purposes only
+        temp_text = json.dumps(item, ensure_ascii=False)
+        extracted = self.extract_from_text(temp_text)
         
         record_id = self.get_record_id(source_name, item)
         tags = self.extract_tags(item)
@@ -377,19 +377,34 @@ class BaseExtractor:
             for k in ['confidence', 'reputation', 'status']:
                 if k in attributes:
                     cve['ioc_enrichment'][k] = attributes[k]
+
+        # Get best date for "texte de debut"
+        date_fields = ['collected_at', 'submission_time', 'extracted_at', 'created_at', 'created', 'reportedAt', 'lastReportedAt', 'dateAdded', 'date', 'published', 'modified', 'last_modified']
+        collected_at = None
+        for df in date_fields:
+            if item.get(df):
+                collected_at = item.get(df)
+                break
         
-        return {
+        res = {
             "source": source_name,
             "record_id": record_id,
-            "raw_text": raw_text,
             "summary": f"Extracted {len(extracted['iocs'])} IOCs from {source_name}. Contextual attributes anchored to each indicator.",
             "iocs": extracted['iocs'],
             "cves": extracted['cves'],
             "tags": tags,
             "references": refs,
             "attributes": attributes, # Kept for record-level context
-            "collected_at": item.get('collected_at') or item.get('extracted_at') or item.get('lastReportedAt') or item.get('last_modified') or item.get('published')
+            "collected_at": collected_at
         }
+        
+        # Only keep raw_text or description if they initially existed in the raw data
+        if "raw_text" in item:
+            res["raw_text"] = item["raw_text"]
+        elif "description" in item:
+            res["description"] = item["description"]
+            
+        return res
 
     def merge_results(self, existing_list, new_list, source_name):
         """
@@ -403,9 +418,10 @@ class BaseExtractor:
         for item in existing_list:
             rid = item.get("record_id")
             if not rid:
-                # Try to migrate: parse raw_text to extract ID
+                # Try to migrate: parse raw_text or fallback if missing
                 try:
-                    raw = json.loads(item.get("raw_text", "{}"))
+                    raw_str = item.get("raw_text", "{}")
+                    raw = json.loads(raw_str) if isinstance(raw_str, str) else raw_str
                     rid = self.get_record_id(source_name, raw)
                     item["record_id"] = rid
                 except:
@@ -501,9 +517,11 @@ class BaseExtractor:
                 if new_ts and (not old_ts or new_ts > old_ts):
                     existing["collected_at"] = new_ts
                     
-                # Update raw_text if missing
-                if not existing.get("raw_text"):
-                    existing["raw_text"] = new_item.get("raw_text")
+                # Update optional raw_text / description
+                if "raw_text" in new_item and not existing.get("raw_text"):
+                    existing["raw_text"] = new_item["raw_text"]
+                if "description" in new_item and not existing.get("description"):
+                    existing["description"] = new_item["description"]
                 
                 # Update summary
                 existing["summary"] = f"Merged data from {source_name}. Total {len(existing_iocs)} IOCs, {len(existing_cves)} CVEs, and {len(existing['tags'])} tags."
@@ -513,8 +531,10 @@ class BaseExtractor:
                 old_ts = existing.get("collected_at")
                 if new_ts and (not old_ts or new_ts > old_ts):
                     existing["collected_at"] = new_ts
-                    # Update raw_text to the most recent version
-                    existing["raw_text"] = new_item.get("raw_text", existing.get("raw_text"))
+                    if "raw_text" in new_item:
+                        existing["raw_text"] = new_item.get("raw_text", existing.get("raw_text"))
+                    if "description" in new_item:
+                        existing["description"] = new_item.get("description", existing.get("description"))
             else:
                 indexed_data[rid] = new_item
         
@@ -541,7 +561,13 @@ class BaseExtractor:
         filtered = []
         for item in data:
             # Try various common timestamp fields
-            ts_str = item.get('collected_at') or item.get('extracted_at') or item.get('lastReportedAt') or item.get('last_modified') or item.get('published')
+            date_fields = ['collected_at', 'submission_time', 'extracted_at', 'created_at', 'created', 'reportedAt', 'lastReportedAt', 'dateAdded', 'date', 'published', 'modified', 'last_modified']
+            ts_str = None
+            for df in date_fields:
+                if item.get(df):
+                    ts_str = item.get(df)
+                    break
+                    
             if not ts_str:
                 filtered.append(item)
                 continue

@@ -149,17 +149,8 @@
                     </div>
                     
                     <div class="step-grid">
-                        <div class="enrich-step glass" onclick="triggerEnrichmentStep('NLP Enrichment')">
-                            <div class="step-number">3</div>
-                            <div class="step-info">
-                                <h4>NLP Enrichment</h4>
-                                <p>Extract malware families & summaries</p>
-                            </div>
-                            <div class="step-action"><i data-lucide="chevron-right"></i></div>
-                        </div>
-                        
                         <div class="enrich-step glass" onclick="triggerEnrichmentStep('Geolocalisation')">
-                            <div class="step-number">4</div>
+                            <div class="step-number">3</div>
                             <div class="step-info">
                                 <h4>Geolocalisation</h4>
                                 <p>Map IPs and domains to locations</p>
@@ -168,7 +159,7 @@
                         </div>
                         
                         <div class="enrich-step glass" onclick="triggerEnrichmentStep('URLScan_Only')">
-                            <div class="step-number">5</div>
+                            <div class="step-number">4</div>
                             <div class="step-icon-container">
                                 <i data-lucide="scan-eye" class="step-lucide-icon text-pink-400"></i>
                             </div>
@@ -180,7 +171,7 @@
                         </div>
 
                         <div class="enrich-step glass" onclick="triggerEnrichmentStep('Fallback')">
-                            <div class="step-number">6</div>
+                            <div class="step-number">5</div>
                             <div class="step-icon-container">
                                 <i data-lucide="layers" class="step-lucide-icon text-orange-400"></i>
                             </div>
@@ -192,7 +183,7 @@
                         </div>
 
                         <div class="enrich-step glass highlight-step" onclick="triggerEnrichmentStep('URLScan')">
-                            <div class="step-number">7</div>
+                            <div class="step-number">6</div>
                             <div class="step-icon-container">
                                 <i data-lucide="sparkles" class="step-lucide-icon text-amber-400"></i>
                             </div>
@@ -204,7 +195,7 @@
                         </div>
 
                         <div class="enrich-step glass" onclick="triggerEnrichmentStep('Normalisation')">
-                            <div class="step-number">8</div>
+                            <div class="step-number">7</div>
                             <div class="step-info">
                                 <h4>Normalisation</h4>
                                 <p>Standardize data for MISP format</p>
@@ -296,7 +287,7 @@
                 <div id="tab-overview" class="tab-pane active">
                     <div class="info-grid">
                         <div class="main-brief glass">
-                            <div class="tab-section-label">Expert Summary</div>
+                            <div class="tab-section-label">Record Summary</div>
                             <div id="nlp-brief-content" class="brief-text">No summary available.</div>
                         </div>
                         <div class="meta-sidebar">

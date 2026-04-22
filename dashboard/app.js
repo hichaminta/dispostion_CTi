@@ -353,13 +353,7 @@ function renderTable(data) {
         // Enrichment context
         let enrichmentBadge = "";
         if (viewMode === 'enriched' && item.enrichment) {
-            const nlp = item.enrichment.nlp_extracted;
-            if (nlp?.malware_families?.length > 0) {
-                enrichmentBadge += `<span class="family-pill">${nlp.malware_families[0]}</span>`;
-            }
-            if (nlp?.threat_categories?.length > 0) {
-                enrichmentBadge += `<span class="category-pill">${nlp.threat_categories[0]}</span>`;
-            }
+            // Keep empty or add other enriched badges if needed
         }
 
         const tags = (item.tags || []).slice(0, 2).map(t => `<span class="tag">${t}</span>`).join('');
@@ -480,7 +474,7 @@ window.switchTab = (tabId) => {
 };
 
 function generateIntelligenceBrief(item) {
-    const families = item.enrichment?.nlp_extracted?.malware_families || [];
+    const iocs = item.iocs || [];
     const iocs = item.iocs || [];
     const cves = item.cves || [];
     const source = (item.source || 'Threat Intel').toUpperCase();
@@ -501,10 +495,7 @@ function generateIntelligenceBrief(item) {
         cleaned += `Identified **${iocs.length}** IOCs and **${cves.length}** CVEs. `;
     }
 
-    // 2. Add intelligence insights if families are found
-    if (families.length > 0) {
-        cleaned += `<br><br><span style="color: var(--danger-color); font-weight: 700;">[THREAD INSIGHT]</span> This activity is associated with the **${families.join(', ')}** malware family.`;
-    } else if (iocs.length > 0) {
+    if (iocs.length > 0) {
         cleaned += `<br><br>The extracted indicators provide actionable technical data for incident response and proactive defense.`;
     }
 
@@ -551,9 +542,7 @@ window.viewRaw = (recordId) => {
     const threatEl = document.getElementById('detail-threat-level');
     let level = 'low';
     const iocCount = (item.iocs || []).length;
-    const families = item.enrichment?.nlp_extracted?.malware_families || [];
-    if (families.length > 0) level = 'high';
-    else if (iocCount > 3) level = 'medium';
+    if (iocCount > 3) level = 'medium';
     
     threatEl.textContent = level.toUpperCase();
     threatEl.className = `threat-badge ${level}`;
@@ -569,20 +558,11 @@ window.viewRaw = (recordId) => {
     `).join('') || '<p class="empty-msg">No IOCs detected</p>';
 
     // Aggregators for indicator-level enrichment
-    const allFamilies = new Set(item.enrichment?.nlp_extracted?.malware_families || []);
-    const allCategories = new Set(item.enrichment?.nlp_extracted?.threat_categories || []);
     const allGeography = new Set(item.enrichment?.nlp_advanced?.geography || []);
     const allAttributes = { ...(item.attributes || {}) };
 
     (item.iocs || []).forEach(ioc => {
         const enr = ioc.ioc_enrichment || {};
-        
-        // Families
-        if (enr.malware_family) allFamilies.add(enr.malware_family);
-        if (enr.malware_families) enr.malware_families.forEach(f => allFamilies.add(f));
-        
-        // Categories
-        if (enr.threat_categories) enr.threat_categories.forEach(c => allCategories.add(c));
         
         // Geography
         if (enr.geography) enr.geography.forEach(g => allGeography.add(g));
@@ -600,19 +580,15 @@ window.viewRaw = (recordId) => {
     });
 
     const familyList = document.getElementById('family-list');
-    familyList.innerHTML = Array.from(allFamilies).map(f => `
-        <span class="family-pill">${f}</span>
-    `).join('') || '<p class="empty-msg">No malware families identified</p>';
+    familyList.innerHTML = '<p class="empty-msg">No malware families identified</p>';
 
     const catList = document.getElementById('category-list');
-    catList.innerHTML = Array.from(allCategories).map(c => `
-        <span class="category-pill">${c}</span>
-    `).join('') || '<p class="empty-msg">No threat categories assigned</p>';
+    catList.innerHTML = '<p class="empty-msg">No threat categories assigned</p>';
 
     // Context Tab: Orgs, Geo, Attrs
     const orgProdList = document.getElementById('org-prod-list');
-    const orgs = item.enrichment?.nlp_advanced?.organizations || [];
-    const prods = item.enrichment?.nlp_advanced?.affected_products || [];
+    const orgs = [];
+    const prods = [];
     orgProdList.innerHTML = [...orgs.map(o => ({ k: 'Org', v: o })), ...prods.map(p => ({ k: 'Prod', v: p }))]
         .map(x => `<div class="context-item"><span class="context-key">${x.k}</span><span class="context-val">${x.v}</span></div>`).join('') 
         || '<p class="empty-msg">No organizational context</p>';
