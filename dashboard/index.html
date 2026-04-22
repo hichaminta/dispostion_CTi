@@ -167,11 +167,47 @@
                             <div class="step-action"><i data-lucide="chevron-right"></i></div>
                         </div>
                         
-                        <div class="enrich-step glass" onclick="triggerEnrichmentStep('URLScan')">
+                        <div class="enrich-step glass" onclick="triggerEnrichmentStep('URLScan_Only')">
                             <div class="step-number">5</div>
+                            <div class="step-icon-container">
+                                <i data-lucide="scan-eye" class="step-lucide-icon text-pink-400"></i>
+                            </div>
                             <div class="step-info">
-                                <h4>TEST DE URLSCAN</h4>
-                                <p>Dynamic URL scanning & screenshots</p>
+                                <h4>URLScan</h4>
+                                <p>Dynamic API scanning (Stage 3)</p>
+                            </div>
+                            <div class="step-action"><i data-lucide="chevron-right"></i></div>
+                        </div>
+
+                        <div class="enrich-step glass" onclick="triggerEnrichmentStep('Fallback')">
+                            <div class="step-number">6</div>
+                            <div class="step-icon-container">
+                                <i data-lucide="layers" class="step-lucide-icon text-orange-400"></i>
+                            </div>
+                            <div class="step-info">
+                                <h4>Fallback</h4>
+                                <p>DNS/Whois Heuristics (Stage 4)</p>
+                            </div>
+                            <div class="step-action"><i data-lucide="chevron-right"></i></div>
+                        </div>
+
+                        <div class="enrich-step glass highlight-step" onclick="triggerEnrichmentStep('URLScan')">
+                            <div class="step-number">7</div>
+                            <div class="step-icon-container">
+                                <i data-lucide="sparkles" class="step-lucide-icon text-amber-400"></i>
+                            </div>
+                            <div class="step-info">
+                                <h4>URL Analysis (Both)</h4>
+                                <p>Complete URL enrichment pipeline</p>
+                            </div>
+                            <div class="step-action"><i data-lucide="chevron-right"></i></div>
+                        </div>
+
+                        <div class="enrich-step glass" onclick="triggerEnrichmentStep('Normalisation')">
+                            <div class="step-number">8</div>
+                            <div class="step-info">
+                                <h4>Normalisation</h4>
+                                <p>Standardize data for MISP format</p>
                             </div>
                             <div class="step-action"><i data-lucide="chevron-right"></i></div>
                         </div>
@@ -209,6 +245,7 @@
                                     <th>Tags</th>
                                     <th>Collected At</th>
                                     <th>TEST DE URLSCAN</th>
+                                    <th>FALLBACK</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -250,7 +287,7 @@
                 <button class="tab-btn active" onclick="switchTab('overview')"><i data-lucide="layout"></i> Overview</button>
                 <button class="tab-btn" onclick="switchTab('intelligence')"><i data-lucide="zap"></i> Intelligence</button>
                 <button class="tab-btn" onclick="switchTab('context')"><i data-lucide="globe"></i> Context</button>
-                <button class="tab-btn" onclick="switchTab('analysis')"><i data-lucide="scan-eye"></i> TEST DE URLSCAN</button>
+                <button class="tab-btn" onclick="switchTab('analysis')"><i data-lucide="scan-eye"></i> URL ANALYSIS</button>
                 <button class="tab-btn" onclick="switchTab('raw')"><i data-lucide="code"></i> Raw Data</button>
             </nav>
 
@@ -330,6 +367,12 @@
                             <div class="tab-section-label"><i data-lucide="info"></i> Scan Metadata</div>
                             <div id="urlscan-metadata" class="analysis-list">
                                 <div class="loading-shimmer"></div>
+                            </div>
+                        </div>
+                        <div class="analysis-meta-vault glass mt-4">
+                            <div class="tab-section-label"><i data-lucide="layers"></i> Fallback Heuristics</div>
+                            <div id="fallback-metadata" class="analysis-list">
+                                <p class="empty-msg">No fallback data available</p>
                             </div>
                         </div>
                     </div>

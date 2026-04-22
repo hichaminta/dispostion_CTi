@@ -51,10 +51,16 @@ class BaseExtractor:
             "localhost", "example.com", "127.0.0.1"
         }
 
-        # Blacklist of URL patterns to ignore (e.g. metadata URLs)
         self.BLACKLIST_URL_PATTERNS = [
             r"phishtank\.com/phish_detail\.php\?phish_id="
         ]
+
+        # Extensions that indicate a filename rather than a domain
+        self.INVALID_DOMAIN_EXTENSIONS = {
+            '.exe', '.dll', '.zip', '.rar', '.7z', '.tar', '.gz', '.file', '.arm', 
+            '.mpsl', '.mips', '.hta', '.msi', '.bat', '.vbs', '.scr', '.js', '.elf', 
+            '.sh', '.lnk', '.bin', '.dat', '.tmp', '.ulise', '.variant', '.png', '.jpg', '.jpeg'
+        }
 
     def is_whitelisted(self, domain):
         """Checks if a domain or its parent is in the whitelist."""
@@ -185,7 +191,15 @@ class BaseExtractor:
                     break
             
             if not is_part_of_other:
-                results['iocs'].append({'type': 'domaine', 'value': self.normalize_domain(val)})
+                # NEW: Filter out domains that look like filenames
+                is_filename = False
+                for ext in self.INVALID_DOMAIN_EXTENSIONS:
+                    if val_lower.endswith(ext):
+                        is_filename = True
+                        break
+                
+                if not is_filename:
+                    results['iocs'].append({'type': 'domaine', 'value': self.normalize_domain(val)})
 
         # Deduplication
         unique_iocs = []

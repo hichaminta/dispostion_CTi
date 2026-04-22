@@ -19,7 +19,7 @@ if sys.platform == 'win32':
 # Ensure we can import from project root
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from enrichment.urlscan_enrichment.urlscan_client import URLScanClient
+from enrichment.enrichment_url.urlscan_client import URLScanClient
 
 # Setup logging
 logging.basicConfig(
@@ -37,7 +37,7 @@ INVALID_EXTENSIONS = [
     '.dll', '.exe', '.png', '.jpg', '.jpeg', '.gif', '.msi', '.bat', 
     '.vbs', '.scr', '.js', '.hta', '.tmp', '.bin', '.dat', '.file', 
     '.arm', '.mpsl', '.mips', '.variant', '.ulise', '.elf', '.sh',
-    '.zip', '.tar', '.rar', '.7z', '.jar', '.iso', '.lnk'
+    '.zip', '.tar', '.rar', '.7z', '.jar', '.iso', '.lnk', '.gz'
 ]
 
 def is_valid_urlscan_target(value):
@@ -170,7 +170,7 @@ def enrich_urlscan(source_filter=None):
         if "verdict" in res: record["attributes"]["urlscan_verdict"] = res["verdict"]
         
         # Extra technical metadata to pass to ioc_enrichment
-        for key in ["ip", "country", "server", "page_title", "effective_url", "screenshot_url", "report_url"]:
+        for key in ["country", "server", "page_title", "effective_url", "screenshot_url", "report_url"]:
             if key in res and res[key]:
                 ioc["ioc_enrichment"][f"urlscan_{key}"] = res[key]
         
@@ -179,7 +179,10 @@ def enrich_urlscan(source_filter=None):
     # ---------------------------
 
     for filename in files:
-        if (time.time() - start_time) > MAX_RUNTIME: break
+        if "otx_alienvault" in filename.lower():
+            logger.info(f"--- [IGNORE] Skipping OTX source file: {filename} ---")
+            continue
+
         if limit_reached: 
             logger.warning(f"--- [QUOTA REACHED] Skipping {filename} ---")
             continue
@@ -258,7 +261,6 @@ def enrich_urlscan(source_filter=None):
                                         "page_title": page.get("title"),
                                         "effective_url": page.get("url"),
                                         "domain": page.get("domain"),
-                                        "ip": page.get("ip"),
                                         "country": page.get("country"),
                                         "server": page.get("server"),
                                         "screenshot_url": f"https://urlscan.io/screenshots/{uuid}.png",

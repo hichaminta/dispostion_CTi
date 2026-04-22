@@ -19,11 +19,11 @@ def run_collection():
 
     source_folders = sorted([
         f for f in os.listdir(SOURCES_DATA_DIR)
-        if os.path.isdir(os.path.join(SOURCES_DATA_DIR, f)) and "alienvault" not in f.lower()
+        if os.path.isdir(os.path.join(SOURCES_DATA_DIR, f))
     ])
 
     logger.info(f"### PLATFORM STATUS: STARTING COLLECTION PIPELINE ###")
-    logger.info(f"Found {len(source_folders)} source folders (AlienVault skipped).")
+    logger.info(f"Found {len(source_folders)} source folders.")
 
     start_time = time.time()
     success_count = 0

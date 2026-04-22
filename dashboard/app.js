@@ -66,7 +66,7 @@ window.setMode = async (mode) => {
     if (sources.length > 0) {
         selectSource(sources[0].id);
     } else {
-        tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 40px; color: var(--text-secondary);">No sources found for this mode</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding: 40px; color: var(--text-secondary);">No sources found for this mode</td></tr>';
         currentSourceName.textContent = mode === 'extracted' ? "Extraction Overview" : "Enrichment Overview";
         currentSourceInfo.textContent = "Select a source to view data";
     }
@@ -245,7 +245,7 @@ async function loadData() {
         updateDashboardStats(result);
     } catch (err) {
         console.error("Error loading data:", err);
-        tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; color: var(--danger-color);">Error loading data</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center; color: var(--danger-color);">Error loading data</td></tr>';
     } finally {
         if (loader) loader.classList.remove('active');
         if (statsGrid) statsGrid.classList.remove('loading');
@@ -339,7 +339,7 @@ window.setCountryFilter = (country) => {
 
 function renderTable(data) {
     if (data.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 40px; color: var(--text-secondary);">No records found matching criteria</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding: 40px; color: var(--text-secondary);">No records found matching criteria</td></tr>';
         return;
     }
 
@@ -388,6 +388,19 @@ function renderTable(data) {
             `;
         }
 
+        // Fallback Info
+        let fallbackDisplay = `<span class="scan-status no">No</span>`;
+        const hasFallback = (item.iocs || []).some(ioc => ioc.ioc_enrichment?.passer_par_fallback === 1);
+        const riskFlag = item.attributes?.fallback_enriched ? "Enriched" : null;
+
+        if (hasFallback) {
+            fallbackDisplay = `
+                <div class="urlscan-cell">
+                    <span class="scan-status yes" style="border-color: var(--warning-color); color: var(--warning-color);">passer_par_fallback:1</span>
+                </div>
+            `;
+        }
+
         return `
             <tr>
                 <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-secondary)">${item.record_id.substring(0, 10)}...</td>
@@ -404,6 +417,7 @@ function renderTable(data) {
                 <td>${tags}${item.tags?.length > 2 ? '...' : ''}</td>
                 <td>${date}</td>
                 <td>${urlscanDisplay}</td>
+                <td>${fallbackDisplay}</td>
                 <td>
                     <button class="view-btn action-view-details" data-record-id="${item.record_id}">View Details</button>
                 </td>
@@ -647,6 +661,32 @@ window.viewRaw = (recordId) => {
     } else {
         screenContainer.innerHTML = `<div class="empty-msg">No screenshot available</div>`;
         metaContainer.innerHTML = `<p class="empty-msg">No scan data available</p>`;
+    }
+
+    // Fallback Heuristics
+    const fallbackMeta = document.getElementById('fallback-metadata');
+    const hasFallbackData = (item.iocs || []).some(i => i.ioc_enrichment?.passer_par_fallback === 1);
+    
+    if (hasFallbackData) {
+        const ioc = (item.iocs || []).find(i => i.ioc_enrichment?.passer_par_fallback === 1);
+        const enr = ioc.ioc_enrichment;
+        const details = [
+            { k: 'Risk Level',        v: enr.risk_flag?.toUpperCase(), class: enr.risk_flag },
+            { k: 'Heuristics',       v: enr.suspicious_keywords?.length > 0 ? enr.suspicious_keywords.join(', ') : 'None' },
+            { k: 'Typosquatting',    v: enr.typosquat_flag ? 'Detected' : 'No' },
+            { k: 'Whois Age',        v: enr.domain_age_days ? `${enr.domain_age_days} days` : null },
+            { k: 'Server Header',    v: enr.server },
+            { k: 'Page Title',       v: enr.page_title }
+        ];
+
+        fallbackMeta.innerHTML = details.map(d => d.v ? `
+            <div class="context-item">
+                <span class="context-key">${d.k}</span>
+                <span class="context-val analysis-val ${d.class || ''}">${d.v}</span>
+            </div>
+        ` : '').join('') || '<p class="empty-msg">Analysis completed, no indicators found.</p>';
+    } else {
+        fallbackMeta.innerHTML = `<p class="empty-msg">No fallback data available</p>`;
     }
 
     // Show Modal

@@ -14,14 +14,15 @@ def run_enrichment():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     nlp_scripts_dir = os.path.join(base_dir, "nlp", "scripts")
     geo_script = os.path.join(base_dir, "geolocalisation", "enrichir.py")
-    urlscan_script = os.path.join(base_dir, "urlscan_enrichment", "enrichir_exclusive_urlscan.py")
+    urlscan_script = os.path.join(base_dir, "enrichment_url", "enrichir_exclusive_urlscan.py")
+    fallback_script = os.path.join(base_dir, "enrichment_url", "enrichir_fallback.py")
 
     logger.info("### PLATFORM STATUS: STARTING FULL ENRICHMENT PIPELINE (NLP -> GEO -> SCAN) ###")
 
     # ─── STAGE 1: NLP ENRICHMENT ───
     if os.path.exists(nlp_scripts_dir):
         logger.info("──────────────────────────────────────────")
-        logger.info("[STAGE 1/3] NLP Enrichment (Entities, Categories, Families)...")
+        logger.info("[STAGE 1/4] NLP Enrichment (Entities, Categories, Families)...")
         logger.info("──────────────────────────────────────────")
         for script_name in sorted(os.listdir(nlp_scripts_dir)):
             if not script_name.endswith('_enricher.py'): continue
@@ -39,7 +40,7 @@ def run_enrichment():
     # ─── STAGE 2: GEOLOCATION ENRICHMENT ───
     if os.path.exists(geo_script):
         logger.info("──────────────────────────────────────────")
-        logger.info("[STAGE 2/3] Global Geolocation Enrichment (IP -> Country)...")
+        logger.info("[STAGE 2/4] Global Geolocation Enrichment (IP -> Country)...")
         logger.info("──────────────────────────────────────────")
         try:
             subprocess.run([sys.executable, geo_script], check=False)
@@ -51,7 +52,7 @@ def run_enrichment():
     # ─── STAGE 3: DYNAMIC ANALYSIS (URLScan.io - Exclusive) ───
     if os.path.exists(urlscan_script):
         logger.info("──────────────────────────────────────────")
-        logger.info("[STAGE 3/3] Dynamic URLScan Analysis (Screenshots & Verdicts)...")
+        logger.info("[STAGE 3/4] Dynamic URLScan Analysis (Screenshots & Verdicts)...")
         logger.info("──────────────────────────────────────────")
         try:
             # Explicitly processing for all files (Unified) when called from here
@@ -60,6 +61,18 @@ def run_enrichment():
             logger.error(f"  [ERROR] Failed to run URLScan stage: {e}")
     else:
         logger.warning("[STAGE 3] URLScan script NOT FOUND. Skipping.")
+
+    # ─── STAGE 4: FALLBACK ENRICHMENT (Reputation, WHOIS, DNS) ───
+    if os.path.exists(fallback_script):
+        logger.info("──────────────────────────────────────────")
+        logger.info("[STAGE 4/4] Fallback Enrichment (WHOIS, DNS, Reputation)...")
+        logger.info("──────────────────────────────────────────")
+        try:
+            subprocess.run([sys.executable, fallback_script], check=False)
+        except Exception as e:
+            logger.error(f"  [ERROR] Failed to run fallback stage: {e}")
+    else:
+        logger.warning("[STAGE 4] Fallback script NOT FOUND. Skipping.")
 
     logger.info("==========================================")
     logger.info("FULL ENRICHMENT PIPELINE COMPLETED.")

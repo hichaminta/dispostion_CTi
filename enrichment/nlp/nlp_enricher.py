@@ -107,7 +107,7 @@ class NLPEnricher(BaseEnricher):
 
         # Sources that contain descriptive narrative text (High NLP value)
         self.narrative_sources = [
-            # "alienvault", 
+            "alienvault", 
             "virustotal"
         ]
 

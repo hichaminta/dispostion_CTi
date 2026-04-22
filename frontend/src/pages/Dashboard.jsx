@@ -14,7 +14,7 @@ const WS_BASE  = "ws://localhost:8000/ws";
 
 const SOURCES = [
   { id: 'abuseipdb',    name: 'AbuseIPDB',       type: 'IP Reputation',    color: 'blue'   },
-//   { id: 'alienvault',   name: 'AlienVault OTX',  type: 'Threat Feeds',     color: 'purple' },
+  { id: 'alienvault',   name: 'AlienVault OTX',  type: 'Threat Feeds',     color: 'purple' },
   { id: 'cins_army',    name: 'CINS Army',        type: 'IP Blocking',      color: 'red'    },
   { id: 'feodotracker', name: 'FeodoTracker',     type: 'Botnet C2',        color: 'orange' },
   { id: 'malwarebazaar',name: 'MalwareBazaar',    type: 'Malware Samples',  color: 'pink'   },
@@ -58,6 +58,9 @@ const Dashboard = ({ onSelectRun }) => {
   const [stopping,       setStopping]       = useState(false);
   const [runningSources, setRunningSources] = useState(new Set());
   const [showEnrichDetails, setShowEnrichDetails] = useState(false);
+
+  const [showGlobalUrlDetails, setShowGlobalUrlDetails] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
 
   useEffect(() => {
     fetchAll();
@@ -147,6 +150,7 @@ const Dashboard = ({ onSelectRun }) => {
   };
 
   const startGlobalStep = async (stepName) => {
+    setIsStarting(true);
     try {
       const res = await axios.post(
         `${API_BASE}/runs/targeted`,
@@ -159,10 +163,14 @@ const Dashboard = ({ onSelectRun }) => {
       fetchAll();
     } catch (e) {
       console.error('Error starting global step:', e);
+      alert("Erreur lors du démarrage : " + (e.response?.data?.detail || e.message));
+    } finally {
+      setIsStarting(false);
     }
   };
 
   const startTargetedRun = async (source, stepName) => {
+    setIsStarting(true);
     setRunningSources(prev => new Set([...prev, source.id]));
     try {
       const res = await axios.post(`${API_BASE}/runs/targeted`, { 
@@ -175,7 +183,15 @@ const Dashboard = ({ onSelectRun }) => {
       }
       fetchAll();
     } catch (e) {
-      console.error("Error starting targeted run:", e);
+      console.error('Error starting targeted run:', e);
+      alert("Erreur : " + (e.response?.data?.detail || e.message));
+      setRunningSources(prev => {
+        const next = new Set(prev);
+        next.delete(source.id);
+        return next;
+      });
+    } finally {
+      setIsStarting(false);
     }
   };
 
@@ -348,12 +364,12 @@ const Dashboard = ({ onSelectRun }) => {
                   {/* NLP */}
                   <button
                     onClick={() => startGlobalStep('NLP Enrichment')}
-                    disabled={stats?.running_runs > 0}
+                    disabled={stats?.running_runs > 0 || isStarting}
                     title="Stage 1: NLP Enrichment"
-                    className="flex flex-col items-center gap-1 px-3 py-1 group/step"
+                    className={`flex flex-col items-center gap-1 px-3 py-1 group/step ${isStarting ? 'opacity-40' : ''}`}
                   >
                     <div className="w-7 h-7 rounded bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover/step:bg-indigo-500 group-hover/step:text-white transition-all">
-                      <Languages size={12} />
+                      {isStarting ? <Loader2 size={12} className="animate-spin" /> : <Languages size={12} />}
                     </div>
                     <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-indigo-400 uppercase">NLP</span>
                   </button>
@@ -361,28 +377,79 @@ const Dashboard = ({ onSelectRun }) => {
                   {/* GEO */}
                   <button
                     onClick={() => startGlobalStep('Geolocalisation')}
-                    disabled={stats?.running_runs > 0}
+                    disabled={stats?.running_runs > 0 || isStarting}
                     title="Stage 2: Geolocation"
-                    className="flex flex-col items-center gap-1 px-3 py-1 group/step"
+                    className={`flex flex-col items-center gap-1 px-3 py-1 group/step ${isStarting ? 'opacity-40' : ''}`}
                   >
                     <div className="w-7 h-7 rounded bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover/step:bg-emerald-500 group-hover/step:text-white transition-all">
-                      <Globe size={12} />
+                      {isStarting ? <Loader2 size={12} className="animate-spin" /> : <Globe size={12} />}
                     </div>
                     <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-emerald-400 uppercase">Geo</span>
                   </button>
 
-                  {/* SCAN */}
-                  <button
-                    onClick={() => startGlobalStep('URLScan')}
-                    disabled={stats?.running_runs > 0}
-                    title="Stage 3: URLScan Analysis"
-                    className="flex flex-col items-center gap-1 px-3 py-1 group/step"
-                  >
-                    <div className="w-7 h-7 rounded bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 group-hover/step:bg-pink-500 group-hover/step:text-white transition-all">
-                      <ScanEye size={12} />
+                  <ArrowConnector />
+                  
+                  {/* URL Analysis Group */}
+                  <div className="flex items-center gap-0.5 bg-brand-500/5 rounded-2xl p-0.5 border border-brand-500/10 h-10">
+                    <button
+                      onClick={() => startGlobalStep('URLScan')}
+                      disabled={stats?.running_runs > 0 || isStarting}
+                      title="Complete Global URL Analysis (URLScan + Fallback)"
+                      className={`flex items-center gap-2 pr-4 pl-3 py-1.5 rounded-xl font-bold transition-all duration-200 active:scale-95 ${
+                        (stats?.running_runs > 0 || isStarting)
+                          ? 'opacity-40 cursor-not-allowed'
+                          : 'hover:bg-brand-500/20 text-brand-400 group/gs'
+                      }`}
+                    >
+                      <div className={`w-7 h-7 rounded bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400 group-hover/gs:bg-brand-500 group-hover/gs:text-white transition-all`}>
+                        {isStarting ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                      </div>
+                      <span className="text-[10px] uppercase font-black tracking-widest">URL Enrichment</span>
+                    </button>
+                    
+                    <button
+                      onClick={() => setShowGlobalUrlDetails(!showGlobalUrlDetails)}
+                      className={`p-2 rounded-lg transition-colors ${showGlobalUrlDetails ? 'bg-brand-500/20 text-white' : 'text-brand-500/40 hover:text-brand-400'}`}
+                      title={showGlobalUrlDetails ? "Masquer les sous-options" : "Afficher les sous-options (Only Scan, Only Fallback)"}
+                    >
+                      {showGlobalUrlDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    </button>
+                  </div>
+
+                  {/* SUB-STEPS (URL Only) */}
+                  {showGlobalUrlDetails && (
+                    <div className="flex items-center animate-in slide-in-from-left duration-300">
+                      <ArrowConnector />
+                      
+                      {/* URLScan Only */}
+                      <button
+                        onClick={() => startGlobalStep('URLScan_Only')}
+                        disabled={stats?.running_runs > 0 || isStarting}
+                        title="URLScan.io API Analysis Only"
+                        className={`flex flex-col items-center gap-1 px-3 py-1 group/step ${isStarting ? 'opacity-40' : ''}`}
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 group-hover/step:bg-pink-500/30 transition-all">
+                          {isStarting ? <Loader2 size={14} className="animate-spin" /> : <ScanEye size={14} />}
+                        </div>
+                        <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-pink-400 uppercase">URLScan</span>
+                      </button>
+
+                      <ArrowConnector />
+
+                      {/* Fallback Only */}
+                      <button
+                        onClick={() => startGlobalStep('Fallback')}
+                        disabled={stats?.running_runs > 0 || isStarting}
+                        title="Stage 4: Fallback Enrichment"
+                        className={`flex flex-col items-center gap-1 px-3 py-1 group/step ${isStarting ? 'opacity-40' : ''}`}
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 group-hover/step:bg-orange-500/30 transition-all">
+                          {isStarting ? <Loader2 size={14} className="animate-spin" /> : <Layers size={14} />}
+                        </div>
+                        <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-orange-400 uppercase">Fallback</span>
+                      </button>
                     </div>
-                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-pink-400 uppercase">Scan</span>
-                  </button>
+                  )}
                 </div>
               )}
 
@@ -497,6 +564,7 @@ const Dashboard = ({ onSelectRun }) => {
                 onEnrich={() => startEnrichment(source)}
                 onRunStep={(step) => startTargetedRun(source, step)}
                 isRunning={runningSources.has(source.id)}
+                isStarting={isStarting}
               />
             ))}
           </div>
@@ -598,6 +666,7 @@ const PIPELINE_STEPS = [
   { name: "NLP Enrichment",       icon: Languages },
   { name: "Geolocalisation",      icon: Globe     },
   { name: "URLScan",              icon: ScanEye   },
+  { name: "Fallback",             icon: Layers,    color: "orange" },
   { name: "Normalisation",        icon: Shield    },
   { name: "Intégration MISP",     icon: Zap       },
 ];
@@ -615,6 +684,7 @@ const PipelineStepper = ({ run }) => {
           const stepData = stepMap[step.name];
           const isLast   = idx === activeSteps.length - 1;
           const Icon     = step.icon;
+          const Logo     = step.logo;
 
           const iconClass =
             stepData.status === 'running'  ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30 scale-110' :
@@ -626,10 +696,17 @@ const PipelineStepper = ({ run }) => {
           return (
             <React.Fragment key={step.name}>
               <div className="flex flex-col items-center flex-shrink-0">
-                <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition-all duration-500 ${iconClass}`}>
-                  {stepData.status === 'running'
-                    ? <Loader2 className="w-5 h-5 animate-spin" />
-                    : <Icon className="w-5 h-5" />}
+                <div 
+                  onClick={() => startGlobalStep(step.name)}
+                  className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition-all duration-500 cursor-pointer hover:border-white/50 active:scale-95 ${iconClass}`}
+                >
+                  {stepData.status === 'running' ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : Logo ? (
+                    <img src={Logo} alt={step.name} className="w-7 h-7 object-contain" />
+                  ) : (
+                    <Icon className="w-5 h-5" />
+                  )}
                 </div>
                 <div className="mt-2 text-center w-28">
                   <p className={`text-[11px] font-semibold truncate ${
@@ -661,14 +738,17 @@ const PipelineStepper = ({ run }) => {
 };
 
 // ── Source Card ───────────────────────────────────────────────────────────────
-const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning }) => {
+const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning, isStarting }) => {
+  const [showUrlDetails, setShowUrlDetails] = useState(false);
   // Liste des étapes pour le lancement ciblé
   const STEPS = [
     "Collecte",
     "Extraction CVE / IOC",
     "NLP Enrichment",
     "Geolocalisation",
-    "URLScan",
+    "URLScan_Only",
+    "Fallback",
+    "URLScan", // This is "Both" in backend
     "Intégration MISP"
   ];
   const isNVD = source.id === 'nvd' || source.id === 'alienvault';
@@ -729,13 +809,101 @@ const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning }) => {
                 className={`flex items-center gap-1.5 px-2 py-1 rounded bg-brand-500/10 border border-brand-500/30 text-brand-400 text-[8px] font-black uppercase tracking-wider hover:bg-brand-500 hover:text-white transition-all ${isRunning ? 'opacity-20 cursor-not-allowed' : 'active:scale-90 shadow-md shadow-brand-500/10'}`}
               >
                 <Sparkles size={8} />
-                <span>Tout lancer</span>
+                <span>Tout</span>
               </button>
             </div>
-            <div className="space-y-2.5">
-              {STEPS.slice(2, 5).map((step, idx) => (
-                <StepRow key={step} idx={idx + 2} step={step} isRunning={isRunning} onRunStep={() => onRunStep(step)} />
-              ))}
+            {/* Standard Enrichment Steps */}
+            <div className="space-y-2.5 mb-4">
+              <div className="flex items-center justify-between group/step">
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] text-slate-700 font-black font-mono w-3">3.</span>
+                  <span className={`text-[11px] font-bold ${isRunning ? 'text-slate-700' : 'text-slate-400 group-hover/step:text-slate-200 transition-colors'}`}>
+                    NLP Enrichment
+                  </span>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onRunStep('NLP Enrichment'); }}
+                  disabled={isRunning || isStarting}
+                  className={`p-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50 transition-all ${
+                    (isRunning || isStarting) ? 'opacity-20 cursor-not-allowed' : 'hover:bg-brand-600 hover:border-brand-500 hover:text-white text-slate-600 hover:shadow-[0_0_10px_rgba(14,165,233,0.3)] hover:scale-110'
+                  }`}
+                >
+                  {isStarting ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} className="fill-current" />}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between group/step">
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] text-slate-700 font-black font-mono w-3">4.</span>
+                  <span className={`text-[11px] font-bold ${isRunning ? 'text-slate-700' : 'text-slate-400 group-hover/step:text-slate-200 transition-colors'}`}>
+                    Geolocalisation
+                  </span>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onRunStep('Geolocalisation'); }}
+                  disabled={isRunning || isStarting}
+                  className={`p-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50 transition-all ${
+                    (isRunning || isStarting) ? 'opacity-20 cursor-not-allowed' : 'hover:bg-brand-600 hover:border-brand-500 hover:text-white text-slate-600 hover:shadow-[0_0_10px_rgba(14,165,233,0.3)] hover:scale-110'
+                  }`}
+                >
+                  {isStarting ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} className="fill-current" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Specialized URL Enrichment Controls (Expandable) */}
+            <div className="pt-2 border-t border-brand-500/10">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">URL Enrichment</span>
+              </div>
+              
+              <div className="flex flex-col gap-1.5">
+                {/* Master Global Analysis Button */}
+                <div className="flex items-center gap-0.5 bg-brand-500/5 rounded-xl p-0.5 border border-brand-500/10">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRunStep('URLScan'); }}
+                    disabled={isRunning || isStarting}
+                    title="Lancer l'Analyse URL Complète (URLScan + Fallback)"
+                    className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all active:scale-95 ${
+                      (isRunning || isStarting) ? 'opacity-20 cursor-not-allowed' : 'hover:bg-brand-500/20 text-brand-400 group/url'
+                    }`}
+                  >
+                    {isStarting ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} className="group-hover/url:animate-pulse" />}
+                    <span className="text-[8px] font-black uppercase tracking-widest">Analyse Complète</span>
+                  </button>
+                  
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowUrlDetails(!showUrlDetails); }}
+                    className={`p-1.5 rounded-lg transition-colors ${showUrlDetails ? 'bg-brand-500/20 text-white' : 'text-brand-500/40 hover:text-brand-400'}`}
+                    title={showUrlDetails ? "Cacher les options 'Only'" : "Afficher les options 'Only'"}
+                  >
+                    {showUrlDetails ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                  </button>
+                </div>
+
+                {/* Sub-options (Only) */}
+                {showUrlDetails && (
+                  <div className="grid grid-cols-2 gap-1.5 mt-1.5 animate-in slide-in-from-top duration-300">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onRunStep('URLScan_Only'); }}
+                      disabled={isRunning || isStarting}
+                      className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-pink-500/10 border border-pink-500/20 text-pink-400 hover:bg-pink-500/20 transition-all active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed text-[7px] font-black uppercase tracking-tighter"
+                    >
+                      {isStarting ? <Loader2 size={10} className="animate-spin" /> : <ScanEye size={10} />}
+                      <span>URLScan Only</span>
+                    </button>
+                    
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onRunStep('Fallback'); }}
+                      disabled={isRunning || isStarting}
+                      className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 hover:bg-orange-500/20 transition-all active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed text-[7px] font-black uppercase tracking-tighter"
+                    >
+                      {isStarting ? <Loader2 size={10} className="animate-spin" /> : <Layers size={10} />}
+                      <span>Fallback Only</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -744,7 +912,7 @@ const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning }) => {
         <div className="space-y-3 mb-6">
           <p className="text-[9px] text-slate-600 font-extrabold uppercase tracking-widest border-b border-slate-800/60 pb-1.5 mb-2">3. Finalisation</p>
           <div className="space-y-2.5">
-            <StepRow idx={5} step={STEPS[5]} isRunning={isRunning} onRunStep={() => onRunStep(STEPS[5])} />
+            <StepRow idx={7} step="Normalisation" isRunning={isRunning} onRunStep={() => onRunStep('Normalisation')} />
           </div>
         </div>
 
