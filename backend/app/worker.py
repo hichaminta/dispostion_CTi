@@ -403,30 +403,16 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         await _update_step(run_id, "Normalisation", "running")
         await _ws_log(run_id, "Normalisation", f"[{ts()}] ➔ STAGE 4 : Normalisation complète (Standard + MISP)")
         norm_script = os.path.join(PROJECT_ROOT, "normalisation", "pipeline_runner.py")
-        ok_norm = await _run_proc(run_id, "Normalisation", [sys.executable, norm_script] + source_flag, PROJECT_ROOT)
+        ok_norm = await _run_proc(run_id, "Normalisation", [sys.executable, norm_script, "--skip-misp"] + source_flag, PROJECT_ROOT)
+
         await _update_step(run_id, "Normalisation", "success" if ok_norm else "failed")
 
         # ══════════════════════════════════════════════════════════════
-        # ÉTAPE 7 : Intégration MISP
+        # ÉTAPE 7 : Intégration MISP (IGNORÉ POUR LE MOMENT)
         # ══════════════════════════════════════════════════════════════
-        if _is_run_cancelled(run_id): return
-        await _update_step(run_id, "Intégration MISP", "running")
-        await _ws_log(run_id, "Intégration MISP", f"[{ts()}] ➔ STAGE 5 : Export & Normalisation MISP")
-        
-        misp_norm_script = os.path.join(PROJECT_ROOT, "normalisation", "misp_normalizer.py")
-        misp_api_script = os.path.join(PROJECT_ROOT, "misp_ntegration", "misp_api_integration.py")
-        
-        await _ws_log(run_id, "Intégration MISP", f"[{ts()}] ── Phase 1 : Génération des fichiers MISP ──")
-        ok_norm = await _run_proc(run_id, "Intégration MISP", [sys.executable, misp_norm_script] + source_flag, PROJECT_ROOT)
-        
-        if ok_norm:
-            await _ws_log(run_id, "Intégration MISP", f"[{ts()}] ── Phase 2 : Exportation via API vers MISP ──")
-            ok_api = await _run_proc(run_id, "Intégration MISP", [sys.executable, misp_api_script], PROJECT_ROOT)
-            misp_ok = ok_norm and ok_api
-        else:
-            misp_ok = False
-            
-        await _update_step(run_id, "Intégration MISP", "success" if misp_ok else "failed")
+        await _ws_log(run_id, "Intégration MISP", f"[{ts()}] ℹ Intégration MISP ignorée selon la configuration.")
+        await _update_step(run_id, "Intégration MISP", "success")
+
 
         # Terminer
         db.update_run(run_id, {"status_global": "success"})
@@ -550,14 +536,19 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
             step_ok = await _run_proc(run_id, step_name, [sys.executable, norm_script] + source_flag, PROJECT_ROOT)
 
         elif step_name == "Intégration MISP":
-            await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 5 : Intégration MISP Directe (API Push)")
+            await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 5 : Intégration MISP (Normalisation + API Push)")
+            misp_norm_script = os.path.join(PROJECT_ROOT, "normalisation", "misp_normalizer.py")
             misp_api_script = os.path.join(PROJECT_ROOT, "misp_integration", "misp_api_integration.py")
             
-            # Phase 1 : Normalisation ignorée selon demande utilisateur
-            # ok_norm = await _run_proc(run_id, step_name, [sys.executable, misp_norm_script] + source_flag, PROJECT_ROOT)
+            await _ws_log(run_id, step_name, f"[{ts()}] ── Phase 1 : Génération des fichiers MISP ──")
+            ok_norm = await _run_proc(run_id, step_name, [sys.executable, misp_norm_script] + source_flag, PROJECT_ROOT)
             
-            await _ws_log(run_id, step_name, f"[{ts()}] ── Phase Unique : Exportation API ──")
-            step_ok = await _run_proc(run_id, step_name, [sys.executable, misp_api_script] + source_flag, PROJECT_ROOT)
+            if ok_norm:
+                await _ws_log(run_id, step_name, f"[{ts()}] ── Phase 2 : Exportation via API vers MISP ──")
+                step_ok = await _run_proc(run_id, step_name, [sys.executable, misp_api_script] + source_flag, PROJECT_ROOT)
+            else:
+                step_ok = False
+
 
         await _ws_log(run_id, step_name, f"[{ts()}] ═══ ÉTAPE {step_name.upper()} {'OK' if step_ok else 'TERMINÉE'} ═══")
         await _update_step(run_id, step_name, "success" if step_ok else "failed", ioc_count=ioc_count, cve_count=cve_count)

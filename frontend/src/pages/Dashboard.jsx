@@ -45,9 +45,9 @@ const COLOR_CLASSES = {
 };
 
 const ArrowConnector = () => (
-  <div className="flex items-center pb-4 px-1">
-    <div className="w-3 h-px bg-slate-700" />
-    <div className="w-0 h-0 border-t-[3px] border-t-transparent border-b-[3px] border-b-transparent border-l-[4px] border-l-slate-600" />
+  <div className="flex items-center pb-4 px-1.5 opacity-60">
+    <div className="w-3 h-[2px] bg-gradient-to-r from-slate-700 to-brand-500/50 rounded-full" />
+    <div className="w-1.5 h-1.5 rounded-full bg-brand-500/50 shadow-[0_0_8px_rgba(14,165,233,0.5)] ml-[-2px]" />
   </div>
 );
 
@@ -235,7 +235,11 @@ const Dashboard = ({ onSelectRun }) => {
   const latestRun = runs.length > 0 ? runs[0] : null;
 
   return (
-    <div className="min-h-screen bg-[#0a0d1a] p-6 md:p-8">
+    <div className="min-h-screen bg-[#070913] relative overflow-hidden p-6 md:p-8 text-slate-200">
+      {/* ── Background Glow Effects ── */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-brand-500/10 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-indigo-500/5 blur-[150px] rounded-full pointer-events-none" />
+
       {/* ── Top Global Cyber Loading Bar ── */}
       {loading && (
         <div className="fixed top-0 left-0 w-full h-1.5 z-[100] bg-[#0a0d1a] border-b border-brand-500/20">
@@ -248,15 +252,16 @@ const Dashboard = ({ onSelectRun }) => {
         {/* ── Header ─────────────────────────────────────────────────── */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
           <div className="flex flex-col items-start gap-2">
-            <img src={logo} alt="BlueSec Logo" className="h-6 w-auto object-contain" />
-            <div className="flex items-center gap-2 mt-1">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-              <p className="text-slate-400 text-sm font-medium tracking-wide uppercase text-[10px]">Threat intelligence — monitoring temps réel</p>
+            <img src={logo} alt="BlueSec Logo" className="h-7 w-auto object-contain drop-shadow-lg" />
+            <div className="flex items-center gap-2 mt-2 bg-slate-900/60 border border-slate-800 rounded-full px-3 py-1 backdrop-blur-md shadow-sm">
+              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+              <p className="text-slate-300 font-bold tracking-widest uppercase text-[9px]">Plateforme Active • Monitoring Temps Réel</p>
             </div>
           </div>
           <div className="flex flex-col items-end gap-3">
             {/* HUD Pipeline Control Panel */}
-            <div className="flex items-center gap-0 bg-slate-900/80 border border-slate-700/60 rounded-2xl p-1.5 shadow-xl backdrop-blur-sm">
+            <div className="flex items-center gap-0 bg-slate-900/40 border border-white/10 rounded-2xl p-2 shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-xl relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.02] to-transparent pointer-events-none" />
               {/* Stop button when running */}
               {stats?.running_runs > 0 && (
                 <>
@@ -498,17 +503,20 @@ const Dashboard = ({ onSelectRun }) => {
               <button
                 onClick={() => startRun()}
                 disabled={stats?.running_runs > 0}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all duration-200 shadow-lg active:scale-95 text-sm mr-0.5 ${
+                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black transition-all duration-300 shadow-xl active:scale-95 text-sm ml-2 overflow-hidden relative group/master ${
                   stats?.running_runs > 0
                     ? 'bg-slate-800 text-slate-500 cursor-not-allowed shadow-none'
-                    : 'bg-brand-600 hover:bg-brand-500 text-white shadow-brand-600/30 hover:shadow-brand-600/50 hover:shadow-lg'
+                    : 'bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white shadow-brand-600/30 hover:shadow-brand-500/50 hover:-translate-y-0.5'
                 }`}
               >
-                {stats?.running_runs > 0
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : <Zap className="w-4 h-4" />
-                }
-                <span>{stats?.running_runs > 0 ? 'En cours...' : 'Pipeline Complet'}</span>
+                {!(stats?.running_runs > 0) && <div className="absolute inset-0 bg-white/20 translate-y-full group-hover/master:translate-y-0 transition-transform duration-300 ease-out" />}
+                <div className="relative z-10 flex items-center gap-2">
+                  {stats?.running_runs > 0
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <Zap className="w-4 h-4 group-hover/master:animate-bounce" />
+                  }
+                  <span className="tracking-wide uppercase">{stats?.running_runs > 0 ? 'En cours...' : 'Pipeline Complet'}</span>
+                </div>
               </button>
             </div>
 
@@ -519,27 +527,7 @@ const Dashboard = ({ onSelectRun }) => {
           </div>
         </div>
 
-        {/* ── Opérations de Finalisation (Phase Finale) ────────────────── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-          <PhaseCard 
-            title="NORMALISER" 
-            subtitle="Standardisation des IOCs"
-            icon={<Shield className="w-8 h-8" />}
-            color="emerald"
-            sources={SOURCES}
-            onAction={(source) => startTargetedRun(source, 'Normalisation')}
-            isRunning={stats?.running_runs > 0}
-          />
-          <PhaseCard 
-            title="MISP" 
-            subtitle="Intégration Threat Intel"
-            icon={<Zap className="w-8 h-8" />}
-            color="orange"
-            sources={SOURCES}
-            onAction={(source) => startTargetedRun(source, 'Intégration MISP')}
-            isRunning={stats?.running_runs > 0}
-          />
-        </div>
+
 
         {/* ── Dashboard Menu / System ────────────────────────────────── */}
         <div className="flex items-center gap-4 mb-8">
@@ -735,8 +723,9 @@ const PipelineStepper = ({ run }) => {
   const activeSteps = PIPELINE_STEPS.filter(s => stepMap[s.name]);
 
   return (
-    <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-2xl">
-      <div className="flex items-center gap-0">
+    <div className="bg-slate-900/50 border border-white/5 p-8 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-xl relative overflow-hidden group/stepper transition-all duration-500 hover:shadow-brand-500/10 hover:border-white/10">
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.01] to-transparent pointer-events-none" />
+      <div className="flex items-center gap-0 relative z-10">
         {activeSteps.map((step, idx) => {
           const stepData = stepMap[step.name];
           const isLast   = idx === activeSteps.length - 1;
@@ -744,11 +733,11 @@ const PipelineStepper = ({ run }) => {
           const Logo     = step.logo;
 
           const iconClass =
-            stepData.status === 'running'  ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30 scale-110' :
-            stepData.status === 'success'  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' :
-            stepData.status === 'failed'   ? 'bg-red-500/20 text-red-400 border-red-500/40' :
-            stepData.status === 'planned'  ? 'bg-slate-800/40 text-slate-500 border-dashed border-slate-700' :
-            'bg-slate-800 text-slate-600 border-slate-700';
+            stepData.status === 'running'  ? 'bg-brand-500 text-white shadow-[0_0_20px_rgba(14,165,233,0.6)] scale-110 border-brand-400' :
+            stepData.status === 'success'  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.2)]' :
+            stepData.status === 'failed'   ? 'bg-red-500/10 text-red-400 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]' :
+            stepData.status === 'planned'  ? 'bg-slate-800/20 text-slate-500 border-dashed border-slate-700/50' :
+            'bg-slate-800/50 text-slate-500 border-slate-700 shadow-inner';
 
           return (
             <React.Fragment key={step.name}>
@@ -777,12 +766,12 @@ const PipelineStepper = ({ run }) => {
                 </div>
               </div>
               {!isLast && (
-                <div className="flex-1 h-[1px] mx-2 mb-8 bg-slate-800 relative overflow-hidden">
+                <div className="flex-1 h-[3px] mx-2 mb-8 bg-slate-800/60 rounded-full relative overflow-hidden shadow-inner">
                   {(stepData.status === 'success') && (
-                    <div className="absolute inset-0 bg-emerald-500/40" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/50 to-emerald-400/80 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
                   )}
                   {(stepData.status === 'running') && (
-                    <div className="absolute inset-0 bg-brand-500/60 animate-pulse" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-brand-600 to-brand-400 animate-pulse shadow-[0_0_15px_rgba(14,165,233,0.8)]" />
                   )}
                 </div>
               )}
@@ -811,10 +800,10 @@ const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning, isStarting 
 
   return (
     <div 
-      className={`rounded-2xl border transition-all duration-500 relative overflow-hidden group/card shadow-2xl ${
+      className={`rounded-2xl border transition-all duration-500 relative overflow-hidden group/card shadow-lg ${
         isRunning 
           ? `bg-slate-900 border-brand-500/50 ring-1 ring-brand-500/30` 
-          : `bg-[#111827]/80 border-slate-800/60 hover:border-slate-700`
+          : `bg-slate-900/50 backdrop-blur-sm border-slate-800 hover:border-slate-600 hover:bg-slate-800/80 hover:shadow-2xl hover:-translate-y-1`
       }`}
     >
       {/* HUD Elements for active source */}
@@ -1024,13 +1013,13 @@ const StepRow = ({ idx, step, isRunning, onRunStep }) => (
 // ── Stats Card ────────────────────────────────────────────────────────────────
 const StatCard = ({ icon, label, value, sub, color, loading }) => {
   const colorBg = {
-    blue:    'from-blue-500/10 to-transparent border-blue-500/20',
-    purple:  'from-purple-500/10 to-transparent border-purple-500/20',
-    emerald: 'from-emerald-500/10 to-transparent border-emerald-500/20',
-    orange:  'from-orange-500/10 to-transparent border-orange-500/20',
+    blue:    'from-blue-500/10 to-slate-900/40 border-blue-500/30 hover:border-blue-400 hover:shadow-[0_0_20px_rgba(59,130,246,0.15)]',
+    purple:  'from-purple-500/10 to-slate-900/40 border-purple-500/30 hover:border-purple-400 hover:shadow-[0_0_20px_rgba(168,85,247,0.15)]',
+    emerald: 'from-emerald-500/10 to-slate-900/40 border-emerald-500/30 hover:border-emerald-400 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)]',
+    orange:  'from-orange-500/10 to-slate-900/40 border-orange-500/30 hover:border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.15)]',
   };
   return (
-    <div className={`bg-gradient-to-br ${colorBg[color]} border rounded-2xl p-5 relative overflow-hidden group transition-all duration-300 hover:shadow-lg hover:border-brand-500/40`}>
+    <div className={`bg-gradient-to-br backdrop-blur-md ${colorBg[color]} border rounded-2xl p-6 relative overflow-hidden group transition-all duration-500 hover:-translate-y-0.5`}>
       {loading && <div className="absolute inset-0 hud-grid" />}
       {loading && <div className="scan-beam" />}
       

@@ -21,7 +21,9 @@ def run_command(command):
 def main():
     parser = argparse.ArgumentParser(description="Run the CTI pipeline (Standardize -> Normalize)")
     parser.add_argument("-s", "--source", help="Source to process (default: all)")
+    parser.add_argument("--skip-misp", action="store_true", help="Skip MISP normalization")
     args = parser.parse_args()
+
 
     source = args.source
     source_display = source.upper() if source else "ALL SOURCES"
@@ -36,10 +38,15 @@ def main():
         sys.exit(1)
 
     # Étape 2 : MISP Normalization
-    logger.info(f"Étape 2 : Normalisation MISP ({source_display})...")
-    if not run_command([sys.executable, "normalisation/misp_normalizer.py"] + source_flag):
-        logger.error("La normalisation MISP a échoué. Arrêt de la pipeline.")
-        sys.exit(1)
+    if args.skip_misp:
+        logger.info(f"Étape 2 : Normalisation MISP ({source_display}) IGNORÉE.")
+    else:
+        logger.info(f"Étape 2 : Normalisation MISP ({source_display})...")
+        if not run_command([sys.executable, "normalisation/misp_normalizer.py"] + source_flag):
+            logger.error("La normalisation MISP a échoué. Arrêt de la pipeline.")
+            sys.exit(1)
+
+
 
     logger.info(f"--- PIPELINE TERMINÉE AVEC SUCCÈS POUR {source_display} ---")
     logger.info("Note : L'intégration MISP n'a pas été lancée comme demandé.")
