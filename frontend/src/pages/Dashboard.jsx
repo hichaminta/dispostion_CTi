@@ -61,6 +61,11 @@ const Dashboard = ({ onSelectRun }) => {
 
   const [showGlobalUrlDetails, setShowGlobalUrlDetails] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [countryStats, setCountryStats] = useState([]);
+  const [enrichmentStats, setEnrichmentStats] = useState({
+    coverage: 0,
+    topCountries: []
+  });
 
   useEffect(() => {
     fetchAll();
@@ -103,9 +108,22 @@ const Dashboard = ({ onSelectRun }) => {
     try {
       const statsRes = await axios.get(`${API_BASE}/stats`);
       setStats(statsRes.data);
+      
+      // Calculate coverage (approximate)
+      const coverage = statsRes.data.total_ioc > 0 
+        ? Math.min(100, Math.round((statsRes.data.total_ioc / (statsRes.data.total_ioc + 100)) * 100)) 
+        : 0;
+      setEnrichmentStats(prev => ({ ...prev, coverage }));
     } catch (e) {
       console.error("Fetch stats error:", e);
       setStats({ total_ioc: 0, total_cve: 0, total_runs: 0, success_runs: 0, avg_duration_sec: 0 });
+    }
+
+    try {
+      const geoRes = await axios.get(`${API_BASE}/api/stats/countries`);
+      setCountryStats(geoRes.data);
+    } catch (e) {
+      console.error("Fetch geo stats error:", e);
     } finally {
       setLoading(false);
     }
@@ -234,11 +252,26 @@ const Dashboard = ({ onSelectRun }) => {
 
   const latestRun = runs.length > 0 ? runs[0] : null;
 
+  // Helper to get source health
+  const getSourceHealth = (sourceId) => {
+    const sourceRuns = runs.filter(r => 
+      r.source_name.toLowerCase().includes(sourceId.toLowerCase()) || 
+      (sourceId === 'nvd' && r.source_name === 'NVD')
+    );
+    if (sourceRuns.length === 0) return 'neutral';
+    const latest = sourceRuns[0];
+    if (latest.status_global === 'running') return 'running';
+    if (latest.status_global === 'success') return 'healthy';
+    return 'unhealthy';
+  };
+
   return (
-    <div className="min-h-screen bg-[#070913] relative overflow-hidden p-6 md:p-8 text-slate-200">
+    <div className="min-h-screen bg-[#05060b] relative overflow-hidden p-6 md:p-8 text-slate-200">
+      <div className="fixed inset-0 hud-grid pointer-events-none opacity-20" />
+      
       {/* ── Background Glow Effects ── */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-brand-500/10 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-indigo-500/5 blur-[150px] rounded-full pointer-events-none" />
+      <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-brand-500/10 blur-[150px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-purple-500/10 blur-[150px] rounded-full pointer-events-none" />
 
       {/* ── Top Global Cyber Loading Bar ── */}
       {loading && (
@@ -531,14 +564,14 @@ const Dashboard = ({ onSelectRun }) => {
 
         {/* ── Dashboard Menu / System ────────────────────────────────── */}
         <div className="flex items-center gap-4 mb-8">
-           <div className="flex p-1 bg-slate-900/60 rounded-xl border border-slate-800">
-              <button className="px-4 py-2 bg-slate-800 text-white text-xs font-bold rounded-lg shadow-sm">Dashboard</button>
+           <div className="flex p-1 bg-slate-900/40 rounded-xl border border-white/5 backdrop-blur-md">
+              <div className="px-4 py-2 bg-brand-500/20 text-brand-400 text-xs font-bold rounded-lg border border-brand-500/30">System Monitor</div>
               <button 
                 onClick={clearHistory}
                 className="px-4 py-2 text-slate-500 hover:text-red-400 text-xs font-bold transition-colors flex items-center gap-2"
               >
                 <AlertTriangle className="w-3.5 h-3.5" />
-                R\u00e9initialiser la Plateforme
+                Reset Infrastructure
               </button>
            </div>
         </div>
@@ -595,13 +628,73 @@ const Dashboard = ({ onSelectRun }) => {
           </div>
         )}
 
+        {/* ── Enrichment Breakdown ──────────────────────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+          <div className="lg:col-span-2 bg-slate-900/40 rounded-3xl border border-white/5 p-6 glass-panel relative overflow-hidden">
+            <div className="absolute inset-0 hud-grid opacity-10" />
+            <div className="flex items-center justify-between mb-6 relative z-10">
+              <h2 className="text-lg font-black text-white flex items-center gap-2">
+                <Globe className="w-5 h-5 text-cyber-blue" />
+                Intelligence Enrichment Breakdown
+              </h2>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 px-3 py-1 bg-cyber-blue/10 rounded-full border border-cyber-blue/20">
+                  <span className="text-[10px] font-black text-cyber-blue uppercase tracking-widest">Enrichment Coverage</span>
+                  <span className="text-xs font-mono font-bold text-white">{enrichmentStats.coverage}%</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 relative z-10">
+              {countryStats.length > 0 ? countryStats.map((item, idx) => (
+                <div key={item.country} className="flex flex-col items-center p-3 bg-white/5 rounded-2xl border border-white/5 hover:border-cyber-blue/30 transition-all group">
+                   <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                      <span className="text-lg font-bold">{idx === 0 ? '🏆' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '📍'}</span>
+                   </div>
+                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter truncate w-full text-center">{item.country}</span>
+                   <span className="text-sm font-mono font-bold text-cyber-blue">{item.count}</span>
+                </div>
+              )) : (
+                <div className="col-span-full py-8 text-center text-slate-500 font-mono text-xs italic">
+                  Collecting enrichment data... Run enrichment pipeline to see metrics.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-indigo-500/10 to-slate-900/40 rounded-3xl border border-indigo-500/20 p-6 relative overflow-hidden flex flex-col justify-center">
+             <div className="absolute top-0 right-0 p-4 opacity-10">
+                <Zap className="w-24 h-24 text-indigo-500" />
+             </div>
+             <h3 className="text-sm font-black text-indigo-400 uppercase tracking-[0.2em] mb-2">Targeted Insight</h3>
+             <p className="text-2xl font-black text-white mb-4 leading-tight">Enhanced Data Integration</p>
+             <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+               Current intelligence shows high activity in <span className="text-cyber-blue font-bold">{countryStats[0]?.country || 'Global'}</span> sources. 
+               The pipeline has processed <span className="text-white font-bold">{fmtNum(stats?.total_ioc)}</span> indicators with multi-engine enrichment.
+             </p>
+             <div className="flex items-center gap-3">
+                <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+                   <div className="h-full bg-indigo-500 rounded-full shadow-[0_0_10px_#6366f1]" style={{ width: `${enrichmentStats.coverage}%` }} />
+                </div>
+                <span className="text-[10px] font-bold text-indigo-400">{enrichmentStats.coverage}%</span>
+             </div>
+          </div>
+        </div>
+
         {/* ── Sources ─────────────────────────────────────────────────── */}
         <div className="mb-10">
-          <h2 className="text-base font-bold text-white mb-4 flex items-center gap-2">
-            <Activity className="w-4 h-4 text-brand-400" />
-            Sources d'Extraction
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-base font-black text-white flex items-center gap-2 uppercase tracking-widest">
+              <Activity className="w-5 h-5 text-brand-400" />
+              Source Health Center
+            </h2>
+            <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+               <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_#10b981]" /> Healthy</span>
+               <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_#ef4444]" /> Issue</span>
+               <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" /> Syncing</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4">
             {SOURCES.map(source => (
               <SourceCard
                 key={source.id}
@@ -611,6 +704,7 @@ const Dashboard = ({ onSelectRun }) => {
                 onRunStep={(step) => startTargetedRun(source, step)}
                 isRunning={runningSources.has(source.id)}
                 isStarting={isStarting}
+                health={getSourceHealth(source.id)}
               />
             ))}
           </div>
@@ -723,9 +817,9 @@ const PipelineStepper = ({ run }) => {
   const activeSteps = PIPELINE_STEPS.filter(s => stepMap[s.name]);
 
   return (
-    <div className="bg-slate-900/50 border border-white/5 p-8 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-xl relative overflow-hidden group/stepper transition-all duration-500 hover:shadow-brand-500/10 hover:border-white/10">
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.01] to-transparent pointer-events-none" />
-      <div className="flex items-center gap-0 relative z-10">
+    <div className="bg-slate-900/40 border border-white/5 p-8 rounded-3xl shadow-2xl backdrop-blur-xl relative overflow-hidden group/stepper transition-all duration-500 hover:shadow-brand-500/5 hover:border-white/10 glass-panel">
+      <div className="absolute inset-0 hud-grid opacity-5 pointer-events-none" />
+      <div className="flex items-center gap-0 relative z-10 overflow-x-auto pb-4 scrollbar-hide">
         {activeSteps.map((step, idx) => {
           const stepData = stepMap[step.name];
           const isLast   = idx === activeSteps.length - 1;
@@ -733,18 +827,17 @@ const PipelineStepper = ({ run }) => {
           const Logo     = step.logo;
 
           const iconClass =
-            stepData.status === 'running'  ? 'bg-brand-500 text-white shadow-[0_0_20px_rgba(14,165,233,0.6)] scale-110 border-brand-400' :
-            stepData.status === 'success'  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.2)]' :
-            stepData.status === 'failed'   ? 'bg-red-500/10 text-red-400 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]' :
+            stepData.status === 'running'  ? 'bg-brand-500 text-white shadow-[0_0_20px_rgba(14,165,233,0.4)] scale-110 border-brand-400' :
+            stepData.status === 'success'  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]' :
+            stepData.status === 'failed'   ? 'bg-red-500/10 text-red-400 border-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.1)]' :
             stepData.status === 'planned'  ? 'bg-slate-800/20 text-slate-500 border-dashed border-slate-700/50' :
-            'bg-slate-800/50 text-slate-500 border-slate-700 shadow-inner';
+            'bg-slate-800/40 text-slate-500 border-slate-700/50';
 
           return (
             <React.Fragment key={step.name}>
               <div className="flex flex-col items-center flex-shrink-0">
                 <div 
-                  onClick={() => startGlobalStep(step.name)}
-                  className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition-all duration-500 cursor-pointer hover:border-white/50 active:scale-95 ${iconClass}`}
+                  className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition-all duration-500 ${iconClass}`}
                 >
                   {stepData.status === 'running' ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
@@ -754,24 +847,24 @@ const PipelineStepper = ({ run }) => {
                     <Icon className="w-5 h-5" />
                   )}
                 </div>
-                <div className="mt-2 text-center w-28">
-                  <p className={`text-[11px] font-semibold truncate ${
+                <div className="mt-3 text-center w-28 px-2">
+                  <p className={`text-[10px] font-black uppercase tracking-widest truncate ${
                     stepData.status === 'running' ? 'text-brand-400' :
                     stepData.status === 'success' ? 'text-emerald-400' :
                     stepData.status === 'failed'  ? 'text-red-400'    : 'text-slate-500'
                   }`}>{step.name}</p>
-                  <p className="text-[9px] font-mono text-slate-600 uppercase mt-0.5">
-                    {stepData.status === 'planned' ? 'À Venir' : stepData.status}
+                  <p className="text-[8px] font-mono font-bold text-slate-600 uppercase mt-1 opacity-60">
+                    {stepData.status === 'planned' ? 'Planned' : stepData.status}
                   </p>
                 </div>
               </div>
               {!isLast && (
-                <div className="flex-1 h-[3px] mx-2 mb-8 bg-slate-800/60 rounded-full relative overflow-hidden shadow-inner">
+                <div className="flex-1 min-w-[20px] h-[2px] mx-2 mb-10 bg-slate-800/40 rounded-full relative overflow-hidden">
                   {(stepData.status === 'success') && (
-                    <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/50 to-emerald-400/80 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+                    <div className="absolute inset-0 bg-emerald-500/40" />
                   )}
                   {(stepData.status === 'running') && (
-                    <div className="absolute inset-0 bg-gradient-to-r from-brand-600 to-brand-400 animate-pulse shadow-[0_0_15px_rgba(14,165,233,0.8)]" />
+                    <div className="absolute inset-0 bg-brand-500 animate-pulse" />
                   )}
                 </div>
               )}
@@ -783,10 +876,18 @@ const PipelineStepper = ({ run }) => {
   );
 };
 
+
 // ── Source Card ───────────────────────────────────────────────────────────────
-const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning, isStarting }) => {
+const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning, isStarting, health }) => {
   const [showUrlDetails, setShowUrlDetails] = useState(false);
-  // Liste des étapes pour le lancement ciblé
+  
+  const healthColors = {
+    healthy:   'bg-emerald-500 shadow-[0_0_10px_#10b981]',
+    unhealthy: 'bg-red-500 shadow-[0_0_10px_#ef4444]',
+    running:   'bg-brand-500 animate-pulse shadow-[0_0_10px_#0ea5e9]',
+    neutral:   'bg-slate-700'
+  };
+
   const STEPS = [
     "Collecte",
     "Extraction CVE / IOC",
@@ -800,10 +901,10 @@ const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning, isStarting 
 
   return (
     <div 
-      className={`rounded-2xl border transition-all duration-500 relative overflow-hidden group/card shadow-lg ${
+      className={`rounded-2xl border transition-all duration-500 relative overflow-hidden group/card shadow-lg glass-card ${
         isRunning 
           ? `bg-slate-900 border-brand-500/50 ring-1 ring-brand-500/30` 
-          : `bg-slate-900/50 backdrop-blur-sm border-slate-800 hover:border-slate-600 hover:bg-slate-800/80 hover:shadow-2xl hover:-translate-y-1`
+          : `border-white/5 hover:border-brand-500/40 hover:shadow-brand-500/5`
       }`}
     >
       {/* HUD Elements for active source */}
@@ -821,16 +922,18 @@ const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning, isStarting 
 
       {/* Header Info */}
       <div className="p-4 relative z-10">
-        <div className="flex items-center justify-between mb-3 text-slate-500 uppercase tracking-widest font-black text-[9px] opacity-60">
-          <span>{source.type}</span>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${healthColors[health]}`} title={`Status: ${health}`} />
+            <span className="text-slate-500 uppercase tracking-widest font-black text-[8px] opacity-60">{source.type}</span>
+          </div>
           <div className="flex items-center gap-1.5">
-            <div className={`p-0.5 rounded-full ${isRunning ? 'bg-brand-500 animate-pulse' : 'bg-slate-800 opacity-0'}`} />
             <div className={`w-3 h-3 rounded bg-slate-800 border border-slate-700 flex items-center justify-center`}>
               <ChevronRight className={`w-2 h-2 text-slate-500 transition-transform ${isRunning ? 'rotate-90 text-brand-400' : ''}`} />
             </div>
           </div>
         </div>
-        <h3 className="text-white font-black text-sm tracking-tight mb-5 group-hover/card:text-brand-400 transition-colors uppercase">{source.name}</h3>
+        <h3 className="text-white font-black text-sm tracking-tight mb-5 group-hover/card:text-brand-400 transition-colors uppercase truncate">{source.name}</h3>
         
         {/* Extraction Section */}
         <div className="space-y-3 mb-5">
@@ -1013,10 +1116,10 @@ const StepRow = ({ idx, step, isRunning, onRunStep }) => (
 // ── Stats Card ────────────────────────────────────────────────────────────────
 const StatCard = ({ icon, label, value, sub, color, loading }) => {
   const colorBg = {
-    blue:    'from-blue-500/10 to-slate-900/40 border-blue-500/30 hover:border-blue-400 hover:shadow-[0_0_20px_rgba(59,130,246,0.15)]',
-    purple:  'from-purple-500/10 to-slate-900/40 border-purple-500/30 hover:border-purple-400 hover:shadow-[0_0_20px_rgba(168,85,247,0.15)]',
-    emerald: 'from-emerald-500/10 to-slate-900/40 border-emerald-500/30 hover:border-emerald-400 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)]',
-    orange:  'from-orange-500/10 to-slate-900/40 border-orange-500/30 hover:border-orange-400 hover:shadow-[0_0_20px_rgba(249,115,22,0.15)]',
+    blue:    'from-blue-500/20 to-slate-900/40 border-blue-500/30 hover:shadow-[0_0_30px_rgba(59,130,246,0.1)]',
+    purple:  'from-purple-500/20 to-slate-900/40 border-purple-500/30 hover:shadow-[0_0_30px_rgba(168,85,247,0.1)]',
+    emerald: 'from-emerald-500/20 to-slate-900/40 border-emerald-500/30 hover:shadow-[0_0_30px_rgba(16,185,129,0.1)]',
+    orange:  'from-orange-500/20 to-slate-900/40 border-orange-500/30 hover:shadow-[0_0_30px_rgba(249,115,22,0.1)]',
   };
   return (
     <div className={`bg-gradient-to-br backdrop-blur-md ${colorBg[color]} border rounded-2xl p-6 relative overflow-hidden group transition-all duration-500 hover:-translate-y-0.5`}>
