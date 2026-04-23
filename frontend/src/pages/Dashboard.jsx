@@ -9,8 +9,8 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 
-const API_BASE = "http://localhost:8000";
-const WS_BASE  = "ws://localhost:8000/ws";
+const API_BASE = `http://${window.location.hostname}:8000`;
+const WS_BASE  = `ws://${window.location.hostname}:8000/ws`;
 
 const SOURCES = [
   { id: 'abuseipdb',    name: 'AbuseIPDB',       type: 'IP Reputation',    color: 'blue'   },
@@ -441,10 +441,58 @@ const Dashboard = ({ onSelectRun }) => {
                 </div>
               )}
 
+              <ArrowConnector />
+
+              {/* Step 4: Normalisation */}
+              <button
+                onClick={() => startGlobalStep('Normalisation')}
+                disabled={stats?.running_runs > 0}
+                title="Normalisation des données"
+                className={`group relative flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all duration-200 active:scale-95 ${
+                  stats?.running_runs > 0
+                    ? 'opacity-40 cursor-not-allowed'
+                    : 'hover:bg-emerald-500/10 cursor-pointer'
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all duration-200 ${
+                  stats?.running_runs > 0
+                    ? 'bg-slate-800 border-slate-700 text-slate-600'
+                    : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 group-hover:bg-emerald-500/20 group-hover:border-emerald-400 group-hover:shadow-[0_0_12px_rgba(16,185,129,0.3)]'
+                }`}>
+                  <Shield className="w-3.5 h-3.5" />
+                </div>
+                <span className={`text-[9px] font-bold uppercase tracking-wider transition-colors ${
+                  stats?.running_runs > 0 ? 'text-slate-600' : 'text-slate-500 group-hover:text-emerald-400'
+                }`}>Normaliser</span>
+              </button>
+
+              <ArrowConnector />
+
+              {/* Step 5: Intégration MISP (Direct API Push) */}
+              <button
+                onClick={() => startGlobalStep('Intégration MISP')}
+                disabled={stats?.running_runs > 0}
+                title="Intégration MISP (Push API uniquement)"
+                className={`group relative flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200 active:scale-95 ${
+                  stats?.running_runs > 0
+                    ? 'opacity-40 cursor-not-allowed'
+                    : 'hover:bg-orange-500/10 cursor-pointer'
+                }`}
+              >
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all duration-200 ${
+                  stats?.running_runs > 0
+                    ? 'bg-slate-800 border-slate-700 text-slate-600'
+                    : 'bg-orange-600/20 border-orange-500/40 text-orange-400 group-hover:bg-orange-600 group-hover:border-orange-400 group-hover:text-white group-hover:shadow-[0_0_15px_rgba(249,115,22,0.4)]'
+                }`}>
+                  {stats?.running_runs > 0 ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
+                </div>
+                <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${
+                  stats?.running_runs > 0 ? 'text-slate-600' : 'text-slate-500 group-hover:text-orange-400'
+                }`}>Intégrer MISP</span>
+              </button>
+
               {/* Separator */}
               <div className="w-px h-10 bg-slate-700 mx-2" />
-
-
 
               {/* Full pipeline button */}
               <button
@@ -469,6 +517,28 @@ const Dashboard = ({ onSelectRun }) => {
               PIPELINE GLOBAL — TOUTES SOURCES
             </p>
           </div>
+        </div>
+
+        {/* ── Opérations de Finalisation (Phase Finale) ────────────────── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+          <PhaseCard 
+            title="NORMALISER" 
+            subtitle="Standardisation des IOCs"
+            icon={<Shield className="w-8 h-8" />}
+            color="emerald"
+            sources={SOURCES}
+            onAction={(source) => startTargetedRun(source, 'Normalisation')}
+            isRunning={stats?.running_runs > 0}
+          />
+          <PhaseCard 
+            title="MISP" 
+            subtitle="Intégration Threat Intel"
+            icon={<Zap className="w-8 h-8" />}
+            color="orange"
+            sources={SOURCES}
+            onAction={(source) => startTargetedRun(source, 'Intégration MISP')}
+            isRunning={stats?.running_runs > 0}
+          />
         </div>
 
         {/* ── Dashboard Menu / System ────────────────────────────────── */}
@@ -879,9 +949,25 @@ const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning, isStarting 
 
         {/* Finalisation Section */}
         <div className="space-y-3 mb-6">
-          <p className="text-[9px] text-slate-600 font-extrabold uppercase tracking-widest border-b border-slate-800/60 pb-1.5 mb-2">3. Finalisation</p>
+          <p className="text-[9px] text-slate-600 font-extrabold uppercase tracking-widest border-b border-slate-800/60 pb-1.5 mb-2">3. Finalisation & Export</p>
           <div className="space-y-2.5">
-            <StepRow idx={7} step="Normalisation" isRunning={isRunning} onRunStep={() => onRunStep('Normalisation')} />
+            <div className="flex items-center justify-between group/step bg-orange-500/5 p-2.5 rounded-xl border border-orange-500/10">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] text-orange-500/60 font-black font-mono w-3">7.</span>
+                <span className={`text-[11px] font-bold ${isRunning ? 'text-slate-700' : 'text-orange-400 group-hover/step:text-orange-300 transition-colors'}`}>
+                  Intégration MISP (Direct)
+                </span>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); onRunStep('Intégration MISP'); }}
+                disabled={isRunning}
+                title="Lancer l'intégration API directe"
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-600/10 border border-orange-500/20 text-orange-400 text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 hover:text-white transition-all ${isRunning ? 'opacity-20 cursor-not-allowed' : 'active:scale-90 shadow-md shadow-orange-500/20'}`}
+              >
+                <Zap size={11} />
+                <span>Intégrer</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -995,4 +1081,74 @@ const StatusBadge = ({ status }) => {
   );
 };
 
+// ── Phase Card (Operational Center) ──────────────────────────────────────────
+const PhaseCard = ({ title, subtitle, icon, color, sources, onAction, isRunning }) => {
+  const [selectedSourceId, setSelectedSourceId] = useState(sources[0]?.id || '');
+  
+  const colors = {
+    emerald: "from-emerald-500/20 via-emerald-500/5 to-transparent border-emerald-500/30 text-emerald-400 btn-emerald",
+    orange: "from-orange-500/20 via-orange-500/5 to-transparent border-orange-500/30 text-orange-400 btn-orange",
+  };
+
+  const btnColors = {
+    emerald: "bg-emerald-500 hover:bg-emerald-400 shadow-emerald-500/20",
+    orange: "bg-orange-500 hover:bg-orange-400 shadow-orange-500/20",
+  };
+
+  const selectedSource = sources.find(s => s.id === selectedSourceId);
+
+  return (
+    <div className={`relative overflow-hidden rounded-3xl border bg-gradient-to-br ${colors[color]} p-6 transition-all duration-300 hover:shadow-2xl`}>
+      <div className="absolute inset-0 hud-grid opacity-10" />
+      
+      <div className="relative z-10 flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className={`p-3 bg-slate-900/80 rounded-2xl border border-white/10 shadow-inner`}>
+              {icon}
+            </div>
+            <div>
+              <h3 className="text-xl font-black tracking-tighter text-white uppercase">{title}</h3>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{subtitle}</p>
+            </div>
+          </div>
+          <div className="h-10 w-10 rounded-full bg-slate-900/50 border border-white/5 flex items-center justify-center">
+            <ChevronRight className="w-5 h-5 text-slate-700" />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Sélectionner la Source</label>
+          <div className="flex gap-2">
+            <select 
+              value={selectedSourceId}
+              onChange={(e) => setSelectedSourceId(e.target.value)}
+              disabled={isRunning}
+              className="flex-1 bg-slate-900/80 border border-slate-700 text-white rounded-xl px-4 py-3 text-xs font-bold focus:outline-none focus:border-brand-500 transition-colors appearance-none cursor-pointer"
+            >
+              {sources.map(s => (
+                <option key={s.id} value={s.id}>{s.name.toUpperCase()}</option>
+              ))}
+            </select>
+            
+            <button 
+              onClick={() => onAction(selectedSource)}
+              disabled={isRunning || !selectedSourceId}
+              className={`px-6 py-3 rounded-xl text-white font-black text-xs uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2 shadow-lg disabled:opacity-30 disabled:cursor-not-allowed ${btnColors[color]}`}
+            >
+              {isRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-current" />}
+              <span>Lancer</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Decorative Brackets */}
+      <div className="hud-corner hud-corner-tl !border-slate-700" />
+      <div className="hud-corner hud-corner-br !border-slate-700" />
+    </div>
+  );
+};
+
 export default Dashboard;
+

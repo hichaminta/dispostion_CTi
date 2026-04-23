@@ -226,6 +226,7 @@ async function loadData() {
             <td><div class="h-4 w-16 bg-slate-800/50 rounded"></div></td>
             <td><div class="h-6 w-16 bg-slate-800/50 rounded-full"></div></td>
             <td><div class="h-7 w-20 bg-slate-800/50 rounded"></div></td>
+            <td><div class="h-6 w-12 bg-slate-800/50 rounded"></div></td>
         </tr>
     `).join('');
     
@@ -255,8 +256,8 @@ async function loadData() {
 const SOURCE_LOGOS = {
     'AbuseIPDB': 'https://www.abuseipdb.com/favicon.ico',
     'VirusTotal': 'https://www.virustotal.com/gui/images/favicon.png',
-    'OTX AlienVault': 'https://otx.alienvault.com/assets/favicon.ico',
-    'AlienVault': 'https://otx.alienvault.com/assets/favicon.ico',
+    // 'OTX AlienVault': 'https://otx.alienvault.com/assets/favicon.ico',
+    // 'AlienVault': 'https://otx.alienvault.com/assets/favicon.ico',
     'Spamhaus': 'https://www.spamhaus.org/favicon.ico',
     'URLHaus': 'https://urlhaus.abuse.ch/favicon.ico',
     'ThreatFox': 'https://threatfox.abuse.ch/favicon.ico',
@@ -376,7 +377,7 @@ function renderTable(data) {
             
             urlscanDisplay = `
                 <div class="urlscan-cell">
-                    <span class="scan-status yes">passer_par_urlscan:1</span>
+                    <span class="scan-status yes">Scanned</span>
                     <span class="score-badge ${scoreClass}">${displayScore}</span>
                 </div>
             `;
@@ -390,7 +391,7 @@ function renderTable(data) {
         if (hasFallback) {
             fallbackDisplay = `
                 <div class="urlscan-cell">
-                    <span class="scan-status yes" style="border-color: var(--warning-color); color: var(--warning-color);">passer_par_fallback:1</span>
+                    <span class="scan-status yes status-heuristic">Analyzed</span>
                 </div>
             `;
         }
@@ -474,7 +475,6 @@ window.switchTab = (tabId) => {
 };
 
 function generateIntelligenceBrief(item) {
-    const iocs = item.iocs || [];
     const iocs = item.iocs || [];
     const cves = item.cves || [];
     const source = (item.source || 'Threat Intel').toUpperCase();
@@ -579,11 +579,22 @@ window.viewRaw = (recordId) => {
         });
     });
 
+    // Families and Categories extraction
+    const families = new Set();
+    const categories = new Set();
+    
+    (item.iocs || []).forEach(ioc => {
+        const enr = ioc.ioc_enrichment || {};
+        if (enr.malware_families) enr.malware_families.forEach(f => families.add(f));
+        if (enr.malware_family) families.add(enr.malware_family);
+        if (enr.threat_categories) enr.threat_categories.forEach(c => categories.add(c));
+    });
+
     const familyList = document.getElementById('family-list');
-    familyList.innerHTML = '<p class="empty-msg">No malware families identified</p>';
+    familyList.innerHTML = Array.from(families).map(f => `<span class="intel-badge malware">${f}</span>`).join('') || '<p class="empty-msg">No malware families identified</p>';
 
     const catList = document.getElementById('category-list');
-    catList.innerHTML = '<p class="empty-msg">No threat categories assigned</p>';
+    catList.innerHTML = Array.from(categories).map(c => `<span class="intel-badge category">${c}</span>`).join('') || '<p class="empty-msg">No threat categories assigned</p>';
 
     // Context Tab: Orgs, Geo, Attrs
     const orgProdList = document.getElementById('org-prod-list');

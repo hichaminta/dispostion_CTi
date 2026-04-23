@@ -2,10 +2,22 @@ import subprocess
 import os
 import sys
 import time
+import socket
+
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except:
+        return "localhost"
 
 def run_platform():
+    local_ip = get_local_ip()
     # 1. Start Backend
-    print("Starting Backend (app.main with fix)...")
+    print(f"Starting Backend (app.main on 0.0.0.0)...")
     backend_process = subprocess.Popen(
         [sys.executable, "-m", "app.main"],
         cwd=os.path.join(os.getcwd(), "backend")
@@ -15,18 +27,20 @@ def run_platform():
     time.sleep(2)
     
     # 3. Start Frontend
-    print("Starting Frontend (Vite)...")
+    print(f"Starting Frontend (Vite --host)...")
     frontend_process = subprocess.Popen(
-        ["npm", "run", "dev"],
+        ["npm", "run", "dev", "--", "--host"],
         cwd=os.path.join(os.getcwd(), "frontend"),
         shell=True # Needed for npm on windows
     )
     
-    print("\n" + "="*40)
+    print("\n" + "="*50)
     print("CTI Pipeline Platform is running!")
-    print("Backend: http://localhost:8000")
-    print("Frontend: http://localhost:5173")
-    print("="*40 + "\n")
+    print(f"Local access:    http://localhost:5173")
+    print(f"Network access:  http://{local_ip}:5173")
+    print("-" * 50)
+    print(f"Backend API:     http://{local_ip}:8000")
+    print("="*50 + "\n")
     
     try:
         while True:

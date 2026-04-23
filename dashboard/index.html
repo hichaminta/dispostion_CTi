@@ -188,7 +188,7 @@
                                 <i data-lucide="sparkles" class="step-lucide-icon text-amber-400"></i>
                             </div>
                             <div class="step-info">
-                                <h4>URL Analysis (Both)</h4>
+                                <h4>Full URL Analysis</h4>
                                 <p>Complete URL enrichment pipeline</p>
                             </div>
                             <div class="step-action"><i data-lucide="chevron-right"></i></div>
@@ -199,6 +199,18 @@
                             <div class="step-info">
                                 <h4>Normalisation</h4>
                                 <p>Standardize data for MISP format</p>
+                            </div>
+                            <div class="step-action"><i data-lucide="chevron-right"></i></div>
+                        </div>
+
+                        <div class="enrich-step glass highlight-step-misp" onclick="triggerEnrichmentStep('Intégration MISP')">
+                            <div class="step-number">8</div>
+                            <div class="step-icon-container">
+                                <i data-lucide="share-2" class="step-lucide-icon text-green-400"></i>
+                            </div>
+                            <div class="step-info">
+                                <h4>MISP Export</h4>
+                                <p>Push indicators to MISP API</p>
                             </div>
                             <div class="step-action"><i data-lucide="chevron-right"></i></div>
                         </div>
@@ -235,8 +247,8 @@
                                     <th>Indicator</th>
                                     <th>Tags</th>
                                     <th>Collected At</th>
-                                    <th>TEST DE URLSCAN</th>
-                                    <th>FALLBACK</th>
+                                    <th>URL Analysis</th>
+                                    <th>Heuristics</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -278,7 +290,7 @@
                 <button class="tab-btn active" onclick="switchTab('overview')"><i data-lucide="layout"></i> Overview</button>
                 <button class="tab-btn" onclick="switchTab('intelligence')"><i data-lucide="zap"></i> Intelligence</button>
                 <button class="tab-btn" onclick="switchTab('context')"><i data-lucide="globe"></i> Context</button>
-                <button class="tab-btn" onclick="switchTab('analysis')"><i data-lucide="scan-eye"></i> URL ANALYSIS</button>
+                <button class="tab-btn" onclick="switchTab('analysis')"><i data-lucide="scan-eye"></i> URL Analysis</button>
                 <button class="tab-btn" onclick="switchTab('raw')"><i data-lucide="code"></i> Raw Data</button>
             </nav>
 
@@ -349,7 +361,7 @@
                 <div id="tab-analysis" class="tab-pane">
                     <div class="analysis-grid">
                         <div class="screenshot-vault glass">
-                            <div class="tab-section-label"><i data-lucide="monitor"></i> TEST DE URLSCAN Screenshot</div>
+                            <div class="tab-section-label"><i data-lucide="monitor"></i> Analysis Screenshot</div>
                             <div id="urlscan-screenshot-container" class="urlscan-container">
                                 <div class="loading-shimmer"></div>
                             </div>

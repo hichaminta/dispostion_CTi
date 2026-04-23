@@ -7,8 +7,8 @@ import {
   Globe, Languages, ScanEye
 } from 'lucide-react';
 
-const API_BASE = "http://localhost:8000";
-const WS_BASE  = "ws://localhost:8000/ws";
+const API_BASE = `http://${window.location.hostname}:8000`;
+const WS_BASE  = `ws://${window.location.hostname}:8000/ws`;
 
 // ─── Config étapes ────────────────────────────────────────────────────────────
 const PIPELINE_STEPS = [
