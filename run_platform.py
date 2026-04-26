@@ -18,9 +18,10 @@ def run_platform():
     local_ip = get_local_ip()
     # 1. Start Backend
     print(f"Starting Backend (app.main on 0.0.0.0)...")
+    base_dir = os.path.dirname(os.path.abspath(__file__))
     backend_process = subprocess.Popen(
         [sys.executable, "-m", "app.main"],
-        cwd=os.path.join(os.getcwd(), "backend")
+        cwd=os.path.join(base_dir, "backend")
     )
     
     # 2. Wait a bit for backend to start
@@ -30,7 +31,7 @@ def run_platform():
     print(f"Starting Frontend (Vite --host)...")
     frontend_process = subprocess.Popen(
         ["npm", "run", "dev", "--", "--host"],
-        cwd=os.path.join(os.getcwd(), "frontend"),
+        cwd=os.path.join(base_dir, "frontend"),
         shell=True # Needed for npm on windows
     )
     

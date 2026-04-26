@@ -133,19 +133,27 @@ const Dashboard = ({ onSelectRun }) => {
     const sourceName = source ? source.name : "Unified Extraction";
     const sourceType = source ? source.type : "All Sources";
 
+    console.log(`[FRONTEND] Starting full run for ${sourceName}...`);
     if (source) setRunningSources(prev => new Set([...prev, source.id]));
+    setIsStarting(true);
 
     try {
       const res = await axios.post(`${API_BASE}/runs`, { source_name: sourceName, source_type: sourceType });
+      console.log("[FRONTEND] Run started response:", res.data);
       
       // Navigation immédiate vers le terminal pour montrer l'activité
       if (res.data && res.data.id) {
         onSelectRun(res.data.id);
+      } else {
+        alert("Run démarré mais ID manquant dans la réponse");
       }
       
       fetchAll();
     } catch (e) {
       console.error("Error starting run:", e);
+      alert("Erreur lors du démarrage du run: " + (e.response?.data?.detail || e.message));
+    } finally {
+      setIsStarting(false);
     }
   };
 
@@ -168,6 +176,7 @@ const Dashboard = ({ onSelectRun }) => {
   };
 
   const startGlobalStep = async (stepName) => {
+    console.log(`[FRONTEND] Triggering global step: ${stepName}`);
     setIsStarting(true);
     try {
       const res = await axios.post(
@@ -175,8 +184,11 @@ const Dashboard = ({ onSelectRun }) => {
         { source_name: 'Unified Extraction', source_type: 'All Sources' },
         { params: { step_name: stepName } }
       );
+      console.log(`[FRONTEND] Targeted run response for ${stepName}:`, res.data);
       if (res.data && res.data.id) {
         onSelectRun(res.data.id);
+      } else {
+        alert("Run ciblé démarré mais ID manquant dans la réponse");
       }
       fetchAll();
     } catch (e) {
@@ -322,11 +334,11 @@ const Dashboard = ({ onSelectRun }) => {
                 }`}
               >
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all duration-200 ${
-                  stats?.running_runs > 0
+                  stats?.running_runs > 0 || isStarting
                     ? 'bg-slate-800 border-slate-700 text-slate-600'
                     : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 group-hover:bg-cyan-500/20 group-hover:border-cyan-400 group-hover:shadow-[0_0_12px_rgba(6,182,212,0.3)]'
                 }`}>
-                  <Download className="w-3.5 h-3.5" />
+                  {isStarting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                 </div>
                 <span className={`text-[9px] font-bold uppercase tracking-wider transition-colors ${
                   stats?.running_runs > 0 ? 'text-slate-600' : 'text-slate-500 group-hover:text-cyan-400'
@@ -648,8 +660,19 @@ const Dashboard = ({ onSelectRun }) => {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 relative z-10">
               {countryStats.length > 0 ? countryStats.map((item, idx) => (
                 <div key={item.country} className="flex flex-col items-center p-3 bg-white/5 rounded-2xl border border-white/5 hover:border-cyber-blue/30 transition-all group">
-                   <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                      <span className="text-lg font-bold">{idx === 0 ? '🏆' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '📍'}</span>
+                   <div className="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center mb-2 group-hover:scale-110 transition-all relative overflow-hidden border border-white/10 shadow-lg">
+                      <img 
+                        src={`https://flagcdn.com/w80/${item.country.toLowerCase()}.png`} 
+                        alt={item.country}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
+                      />
+                      <span className="hidden text-lg font-bold">📍</span>
+                      {idx < 3 && (
+                        <div className="absolute -top-1 -right-1 bg-slate-900/80 rounded-full w-5 h-5 flex items-center justify-center text-[10px] border border-white/10 shadow-sm">
+                          {idx === 0 ? '🏆' : idx === 1 ? '🥈' : '🥉'}
+                        </div>
+                      )}
                    </div>
                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter truncate w-full text-center">{item.country}</span>
                    <span className="text-sm font-mono font-bold text-cyber-blue">{item.count}</span>
@@ -939,9 +962,10 @@ const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning, isStarting,
         <div className="space-y-3 mb-5">
           <p className="text-[9px] text-slate-600 font-extrabold uppercase tracking-widest border-b border-slate-800/60 pb-1.5 mb-2">1. Extraction / Collecte</p>
           <div className="space-y-2.5">
-            {STEPS.slice(0, 2).map((step, idx) => (
-              <StepRow key={step} idx={idx} step={step} isRunning={isRunning} onRunStep={() => onRunStep(step)} />
-            ))}
+            {STEPS.slice(0, 2).map((step, idx) => {
+              if (step === "Collecte" && source.id === "alienvault") return null;
+              return <StepRow key={step} idx={idx} step={step} isRunning={isRunning} onRunStep={() => onRunStep(step)} />;
+            })}
           </div>
         </div>
         

@@ -310,10 +310,11 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         else:
             for src in sources_to_run:
                 if _is_run_cancelled(run_id): break
-                info = SOURCE_MAP.get(src)
-                if not info:
-                    await _ws_log(run_id, "Collecte", f"[{ts()}] ⚠ Source inconnue '{src}', ignorée.")
+                if src == "AlienVault OTX":
+                    await _ws_log(run_id, "Collecte", f"[{ts()}] ℹ {src} ignoré pour la collecte (Configuration).")
                     continue
+
+                info = SOURCE_MAP.get(src)
 
                 src_folder = os.path.join(SOURCES_DATA_DIR, info["folder"])
                 script_path = os.path.join(src_folder, "script.py")
@@ -453,6 +454,9 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
             else:
                 for src in sources_to_run:
                     if _is_run_cancelled(run_id): break
+                    if src == "AlienVault OTX":
+                        await _ws_log(run_id, step_name, f"[{ts()}] ℹ {src} ignoré pour la collecte (Configuration).")
+                        continue
                     info = SOURCE_MAP.get(src)
                     if not info: continue
                     src_folder = os.path.join(SOURCES_DATA_DIR, info["folder"])

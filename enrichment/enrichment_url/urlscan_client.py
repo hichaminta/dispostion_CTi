@@ -60,16 +60,17 @@ class URLScanClient:
                 
                 msg = str(resp_json.get("message", "")).lower()
                 if "quota" in msg or "limit" in msg or "daily" in msg or response.status_code == 401:
-                    logger.error(f"URLScan API Quota Reached: {msg}")
+                    logger.error(f"URLScan API Quota/Auth Error: {msg} (Status: {response.status_code})")
                     return "LIMIT_REACHED"
                 
                 if "DNS Error" in resp_text or "could not resolve" in resp_text.lower():
+                    logger.warning(f"URLScan DNS Error for {url}: Site may be down.")
                     return "DNS_ERROR"
                 else:
                     logger.error(f"Failed to submit scan for {url}: {response.status_code} - {resp_text}")
                 return None
         except Exception as e:
-            logger.error(f"Error submitting to URLScan: {e}")
+            logger.error(f"Network error submitting to URLScan: {e}")
             return None
 
     def fetch_result(self, uuid):

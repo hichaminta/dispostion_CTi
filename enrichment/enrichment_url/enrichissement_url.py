@@ -51,6 +51,13 @@ def main():
         if not run_script(fallback_script, args.source):
             success = False
             
+    # NEW: Stage 5 - Global Database Synchronization
+    if args.mode in ["urlscan", "both"]:
+        logger.info("--- [STAGE 5] Global Database Synchronization ---")
+        sync_script = os.path.join(base_dir, "sync_urlscan_flags.py")
+        if not run_script(sync_script):
+            logger.warning("Database synchronization finished with warnings.")
+            
     logger.info(f"### URL ENRICHMENT COMPLETED (Status: {'OK' if success else 'PARTIAL/FAILED'}) ###")
     sys.exit(0 if success else 1)
 

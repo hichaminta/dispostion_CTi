@@ -45,12 +45,29 @@ def initialize_enrichment_files():
         dst_path = os.path.join(OUTPUT_DIR, new_filename)
 
         try:
-            # Copie directe pour laisser les mêmes données comme demandé
-            shutil.copy2(src_path, dst_path)
-            logger.info(f"  [OK] {filename} -> {new_filename}")
+            with open(src_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            
+            if isinstance(data, list):
+                # Sort by collected_at descending (newest first)
+                # Handle missing field by using an empty string as fallback
+                data.sort(key=lambda x: x.get("collected_at", ""), reverse=True)
+                
+                # Keep only the 15 most recent
+                limited_data = data[:15]
+                
+                with open(dst_path, "w", encoding="utf-8") as f:
+                    json.dump(limited_data, f, indent=4)
+                
+                logger.info(f"  [OK] {filename} -> {new_filename} (Latest {len(limited_data)} records)")
+            else:
+                # Fallback: if structure is not a list, copy entire file
+                shutil.copy2(src_path, dst_path)
+                logger.info(f"  [OK] {filename} -> {new_filename} (Full copy - Non-standard format)")
+                
             count += 1
         except Exception as e:
-            logger.error(f"  [ERREUR] Impossible de copier {filename} : {e}")
+            logger.error(f"  [ERREUR] Impossible d'initialiser {filename} : {e}")
 
     logger.info(f"Initialisation terminée. {count} fichiers prêts pour l'enrichissement.")
 

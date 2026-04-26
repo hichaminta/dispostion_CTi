@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import sys
+import time
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -29,6 +30,7 @@ DASHBOARD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 app = FastAPI(title="CTI Pipeline Tracker API")
 
 app.mount("/results", StaticFiles(directory=DASHBOARD_DIR, html=True), name="results")
+GEO_STATS_CACHE = {"data": [], "last_updated": 0}
 
 app.add_middleware(
     CORSMiddleware,
@@ -192,6 +194,11 @@ def get_stats():
 
 @app.get("/api/stats/countries")
 def get_country_stats():
+    global GEO_STATS_CACHE
+    now = time.time()
+    if GEO_STATS_CACHE["data"] and (now - GEO_STATS_CACHE["last_updated"] < 300):
+        return GEO_STATS_CACHE["data"]
+
     country_counts = {}
     if os.path.exists(ENRICHMENT_DIR):
         for fn in os.listdir(ENRICHMENT_DIR):
@@ -201,33 +208,32 @@ def get_country_stats():
                 with open(filepath, "r", encoding="utf-8") as f:
                     records = json.load(f)
                 for record in records:
-                    # Get unique countries for this specific record to avoid over-counting duplicate tags
                     record_countries = set()
-                    
-                    # 1. From IOCs (IOC-centric model)
                     for ioc in record.get("iocs", []):
                         geos = ioc.get("ioc_enrichment", {}).get("geography", [])
-                        for g in geos: record_countries.add(g)
+                        if isinstance(geos, list):
+                            for g in geos: record_countries.add(g)
+                        elif geos:
+                            record_countries.add(geos)
                     
-                    # 2. From NLP Advanced (Legacy/Generic extraction)
                     geos_adv = record.get("enrichment", {}).get("nlp_advanced", {}).get("geography", [])
-                    for g in geos_adv: record_countries.add(g)
-                    
-                    # 3. From record tags (Fallback)
-                    for tag in record.get("tags", []):
-                        # Simple heuristic: if it's a known country or matches our geo list
-                        # (We'll count everything in record_countries set for now)
-                        pass
+                    if isinstance(geos_adv, list):
+                        for g in geos_adv: record_countries.add(g)
+                    elif geos_adv:
+                        record_countries.add(geos_adv)
                     
                     for country in record_countries:
-                        if country and len(country) > 1: # Avoid junk
+                        if country and len(str(country)) > 1:
                             country_counts[country] = country_counts.get(country, 0) + 1
             except:
                 continue
     
-    # Sort and take top 10
     sorted_countries = sorted(country_counts.items(), key=lambda x: x[1], reverse=True)
-    return [{"country": c, "count": n} for c, n in sorted_countries[:12]]
+    result = [{"country": c, "count": n} for c, n in sorted_countries[:12]]
+    
+    GEO_STATS_CACHE["data"] = result
+    GEO_STATS_CACHE["last_updated"] = now
+    return result
 
 # ──────────────────────────────────────────────────────────────────────────────
 # EXTRACTION ENDPOINTS

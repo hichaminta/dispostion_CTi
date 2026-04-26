@@ -152,6 +152,24 @@ def enrich_urlscan(source_filter=None):
 
     registry = load_registry()
     
+    def get_from_registry(value):
+        """Attempts to find an IOC in the registry with normalization."""
+        # 1. Exact match
+        if value in registry: return registry[value]
+        
+        # 2. Try with/without protocol
+        if "://" in value:
+            # Extract domain
+            domain = urlparse(value).hostname
+            if domain and domain in registry: return registry[domain]
+        else:
+            # Try common protocols
+            for proto in ["http://", "https://"]:
+                alt = f"{proto}{value}"
+                if alt in registry: return registry[alt]
+        
+        return None
+
     def apply_urlscan_metadata(ioc, record, res):
         """Helper to apply full URLScan metadata from a result object (registry or API)"""
         # Ensure ioc_enrichment structure
@@ -213,7 +231,7 @@ def enrich_urlscan(source_filter=None):
                 for ioc in record.get("iocs", []):
                     ioc_type = ioc.get("type")
                     ioc_value = ioc.get("value")
-                    if ioc_type not in ["url", "domain"]: continue
+                    if ioc_type not in ["url", "domain", "domaine"]: continue
 
                     # --- SKIP IF ALREADY MARKED (NEW LOGIC) ---
                     if ioc.get("ioc_enrichment", {}).get("passer_par_urlscan") == 1:
@@ -226,10 +244,12 @@ def enrich_urlscan(source_filter=None):
                     # -----------------------------------------
 
                     # 1. DATABASE FIRST (PRIORITY)
-                    if ioc_value in registry:
-                        if apply_urlscan_metadata(ioc, record, registry[ioc_value]):
-                            logger.info(f"  [DB MATCH] {ioc_value[:30]}... Data applied from local DB")
+                    db_entry = get_from_registry(ioc_value)
+                    if db_entry:
+                        if apply_urlscan_metadata(ioc, record, db_entry):
+                            logger.info(f"  [DB MATCH] {ioc_value[:40]}... Data applied from local DB")
                             record_modified = True
+                            results_fetched += 1
                         continue
 
                     # 2. API CALL (ONLY IF NOT IN DB)
@@ -301,7 +321,7 @@ def enrich_urlscan(source_filter=None):
         except Exception as e:
             logger.error(f"Error processing {filename}: {e}")
 
-    logger.info(f"URLScan Enrichment Completed. Registry updated. Fetched: {results_fetched}, Submitted: {new_submissions}")
+    logger.info(f"URLScan Enrichment Completed. Registry updated. DB Matches: {results_fetched}, API Submissions: {new_submissions}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Standalone URLScan.io Enrichment Module")

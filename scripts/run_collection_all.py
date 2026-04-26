@@ -19,7 +19,7 @@ def run_collection():
 
     source_folders = sorted([
         f for f in os.listdir(SOURCES_DATA_DIR)
-        if os.path.isdir(os.path.join(SOURCES_DATA_DIR, f))
+        if os.path.isdir(os.path.join(SOURCES_DATA_DIR, f)) and f != "Otx alienvault"
     ])
 
     logger.info(f"### PLATFORM STATUS: STARTING COLLECTION PIPELINE ###")

@@ -26,12 +26,14 @@ STAGES = {
     "collection": os.path.join(PROJECT_ROOT, "scripts", "run_collection_all.py"),
     "extraction": os.path.join(PROJECT_ROOT, "extraction_ioc_cve", "run_extraction_all.py"),
     "enrichment": os.path.join(PROJECT_ROOT, "enrichment", "run_enrichment_all.py"),
+    "normalisation": os.path.join(PROJECT_ROOT, "normalisation", "pipeline_runner.py"),
 }
 
 STAGE_LABELS = {
     "collection": "COLLECTE",
     "extraction": "EXTRACTION IOC/CVE",
     "enrichment": "ENRICHISSEMENT (NLP + GEO)",
+    "normalisation": "NORMALISATION (STANDARDIZATION + MISP)",
 }
 
 
@@ -78,7 +80,7 @@ def run_all_stages():
     logger.info("  *** MASTER CTI PIPELINE - EXECUTION COMPLETE ***")
     logger.info("="*60)
 
-    for stage in ["collection", "extraction", "enrichment"]:
+    for stage in ["collection", "extraction", "enrichment", "normalisation"]:
         ok = run_stage(stage)
         results[stage] = ok
         if not ok:
@@ -103,10 +105,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Étapes disponibles:
-  collection  -> Telecharge les donnees brutes de toutes les sources
-  extraction  -> Extrait les IOCs et CVEs des donnees collectees
-  enrichment  -> Enrichit les IOCs (NLP + Geolocalisation)
-  all         -> Lance toutes les etapes dans l'ordre
+  collection    -> Telecharge les donnees brutes de toutes les sources
+  extraction    -> Extrait les IOCs et CVEs des donnees collectees
+  enrichment    -> Enrichit les IOCs (NLP + Geolocalisation)
+  normalisation -> Standardise et normalise les donnees (MISP)
+  all           -> Lance toutes les etapes dans l'ordre
 
 Exemples:
   python run_pipeline.py --step collection
@@ -115,7 +118,7 @@ Exemples:
     )
     parser.add_argument(
         "--step",
-        choices=["collection", "extraction", "enrichment", "all"],
+        choices=["collection", "extraction", "enrichment", "normalisation", "all"],
         required=True,
         help="Étape du pipeline à exécuter."
     )
