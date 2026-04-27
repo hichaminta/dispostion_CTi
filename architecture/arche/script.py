@@ -56,6 +56,9 @@ with Diagram(
         with Cluster("URLScan.io", graph_attr=cluster_attr):
             urlscan = Custom("", "./logos/urlscan.png")
 
+        with Cluster("VirusTotal", graph_attr=cluster_attr):
+            vt_enr = Custom("", "./logos/VT.png")
+
     # 5. NORMALISATION
     with Cluster("Normalisation & Deduplication\nStandardize", graph_attr=cluster_attr):
         normalise = Python("", width="2.0", height="2.0")
@@ -75,9 +78,11 @@ with Diagram(
     collecte >> Edge(color="steelblue") >> extraction
     extraction >> Edge(color="blue") >> geo
     extraction >> Edge(color="purple", style="dashed", label="URLs") >> urlscan
+    extraction >> Edge(color="blue", style="dashed", label="IOCs") >> vt_enr
 
     geo >> Edge(color="blue") >> normalise
     urlscan >> Edge(color="purple") >> normalise
+    vt_enr >> Edge(color="blue") >> normalise
 
     normalise >> Edge(color="green") >> misp
     misp >> Edge(color="green") >> bulletin

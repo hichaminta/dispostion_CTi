@@ -133,9 +133,14 @@ def normalize_to_misp(source_filter=None):
                     enrichment = ioc.get("ioc_enrichment", {})
 
                     # Calcul de la confiance
-                    relevant_fields = ["asn", "country", "malware_family", "status", "hostname"]
+                    relevant_fields = ["asn", "country", "malware_family", "status", "hostname", "vt_score"]
                     richness = sum(1 for field in relevant_fields if enrichment.get(field))
-                    confidence_pct = int((richness / len(relevant_fields)) * 100)
+                    
+                    # Bonus de confiance si VirusTotal a scanné
+                    if enrichment.get("passer_par_virustotal"):
+                        richness += 2
+
+                    confidence_pct = int((richness / (len(relevant_fields) + 2)) * 100)
                     
                     if confidence_pct >= 80: conf_level = "high"
                     elif confidence_pct >= 50: conf_level = "medium"
@@ -154,10 +159,26 @@ def normalize_to_misp(source_filter=None):
                     if enrichment.get("malware_family"):
                         main_attr["Tag"].append({"name": f"malware:{enrichment['malware_family'].lower()}"})
                     
+                    # Tags VirusTotal
+                    if enrichment.get("vt_malicious_count", 0) > 0:
+                        main_attr["Tag"].append({"name": f"vt:malicious:{enrichment['vt_malicious_count']}"})
+                        main_attr["Tag"].append({"name": "misp-galaxy:threat-actor=\"Malicious Activity\""})
+                    
+                    if enrichment.get("vt_tags"):
+                        for tag in enrichment["vt_tags"][:3]: # Limiter à 3 tags pour pas surcharger
+                            main_attr["Tag"].append({"name": f"vt:tag:{tag.lower()}"})
+
                     meta_parts = []
                     if enrichment.get("asn"): meta_parts.append(f"ASN: {enrichment['asn']}")
                     if enrichment.get("country"): meta_parts.append(f"Country: {enrichment['country']}")
                     
+                    # Info VirusTotal dans les commentaires
+                    if enrichment.get("passer_par_virustotal"):
+                        vt_score = enrichment.get("vt_score", 0)
+                        malicious = enrichment.get("vt_malicious_count", 0)
+                        total = enrichment.get("vt_total_engines", 0)
+                        meta_parts.append(f"VT Score: {vt_score} | VT Detections: {malicious}/{total}")
+
                     main_attr["comment"] = " | ".join(meta_parts) if meta_parts else f"Enriched from {source}"
 
                     grouped_source_events[source]["Event"]["Attribute"].append(main_attr)

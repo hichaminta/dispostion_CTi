@@ -80,7 +80,7 @@ def sync_flags():
         logger.warning(f"Registry empty or not found at {REGISTRY_FILE}. Nothing to sync.")
         return
 
-    logger.info(f"Loaded {len(registry)} entries from database.")
+    logger.info(f"Loaded {len(registry)} entries from local URLScan database.")
 
     for filename in FILES_TO_SYNC:
         file_path = os.path.join(OUTPUT_DIR, filename)

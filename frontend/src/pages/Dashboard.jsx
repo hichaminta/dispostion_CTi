@@ -426,6 +426,51 @@ const Dashboard = ({ onSelectRun }) => {
                   </button>
 
                   <ArrowConnector />
+
+                  {/* CVE Enrichment */}
+                  <button
+                    onClick={() => startGlobalStep('Enrichissement CVE')}
+                    disabled={stats?.running_runs > 0 || isStarting}
+                    title="Stage 5: NVD CVE Enrichment"
+                    className={`flex flex-col items-center gap-1 px-3 py-1 group/step ${isStarting ? 'opacity-40' : ''}`}
+                  >
+                    <div className="w-7 h-7 rounded bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 group-hover/step:bg-amber-500 group-hover/step:text-white transition-all">
+                      {isStarting ? <Loader2 size={12} className="animate-spin" /> : <AlertTriangle size={12} />}
+                    </div>
+                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-amber-400 uppercase">CVE</span>
+                  </button>
+
+                  <ArrowConnector />
+
+                  {/* NLP CVE Analysis */}
+                  <button
+                    onClick={() => startGlobalStep('Analyse NLP CVE')}
+                    disabled={stats?.running_runs > 0 || isStarting}
+                    title="Stage 6: NLP CVE Entity Extraction"
+                    className={`flex flex-col items-center gap-1 px-3 py-1 group/step ${isStarting ? 'opacity-40' : ''}`}
+                  >
+                    <div className="w-7 h-7 rounded bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover/step:bg-indigo-500 group-hover/step:text-white transition-all">
+                      {isStarting ? <Loader2 size={12} className="animate-spin" /> : <Cpu size={12} />}
+                    </div>
+                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-indigo-400 uppercase">NLP</span>
+                  </button>
+
+                  <ArrowConnector />
+
+                  {/* VirusTotal Enrichment */}
+                  <button
+                    onClick={() => startGlobalStep('VirusTotal')}
+                    disabled={stats?.running_runs > 0 || isStarting}
+                    title="Stage 7: VirusTotal Multi-engine Scan"
+                    className={`flex flex-col items-center gap-1 px-3 py-1 group/step ${isStarting ? 'opacity-40' : ''}`}
+                  >
+                    <div className="w-7 h-7 rounded bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 group-hover/step:bg-violet-500 group-hover/step:text-white transition-all">
+                      {isStarting ? <Loader2 size={12} className="animate-spin" /> : <Shield size={12} />}
+                    </div>
+                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-violet-400 uppercase">VT</span>
+                  </button>
+
+                  <ArrowConnector />
                   
                   {/* URL Analysis Group */}
                   <div className="flex items-center gap-0.5 bg-brand-500/5 rounded-2xl p-0.5 border border-brand-500/10 h-10">
@@ -828,8 +873,9 @@ const PIPELINE_STEPS = [
   { name: "Enrichissement",        icon: Sparkles  },
   { name: "Geolocalisation",      icon: Globe     },
   { name: "URLScan",              icon: ScanEye   },
-  { name: "Fallback",             icon: Layers,    color: "orange" },
-  { name: "Normalisation",        icon: Shield    },
+  { name: "Enrichissement CVE",    icon: AlertTriangle },
+  { name: "Analyse NLP CVE",      icon: Cpu           },
+  { name: "Normalisation",        icon: Shield        },
   { name: "Intégration MISP",     icon: Zap       },
 ];
 
@@ -998,6 +1044,44 @@ const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning, isStarting,
                   disabled={isRunning || isStarting}
                   className={`p-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50 transition-all ${
                     (isRunning || isStarting) ? 'opacity-20 cursor-not-allowed' : 'hover:bg-brand-600 hover:border-brand-500 hover:text-white text-slate-600 hover:shadow-[0_0_10px_rgba(14,165,233,0.3)] hover:scale-110'
+                  }`}
+                >
+                  {isStarting ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} className="fill-current" />}
+                </button>
+              </div>
+
+              {/* CVE Enrichment Sub-step */}
+              <div className="flex items-center justify-between group/step">
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] text-slate-700 font-black font-mono w-3">4.</span>
+                  <span className={`text-[11px] font-bold ${isRunning ? 'text-slate-700' : 'text-slate-400 group-hover/step:text-slate-200 transition-colors'}`}>
+                    Enrichissement CVE
+                  </span>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onRunStep('Enrichissement CVE'); }}
+                  disabled={isRunning || isStarting}
+                  className={`p-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50 transition-all ${
+                    (isRunning || isStarting) ? 'opacity-20 cursor-not-allowed' : 'hover:bg-amber-600 hover:border-amber-500 hover:text-white text-slate-600 hover:shadow-[0_0_10px_rgba(245,158,11,0.3)] hover:scale-110'
+                  }`}
+                >
+                  {isStarting ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} className="fill-current" />}
+                </button>
+              </div>
+
+              {/* NLP CVE Sub-step */}
+              <div className="flex items-center justify-between group/step">
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] text-slate-700 font-black font-mono w-3">5.</span>
+                  <span className={`text-[11px] font-bold ${isRunning ? 'text-slate-700' : 'text-slate-400 group-hover/step:text-slate-200 transition-colors'}`}>
+                    Analyse NLP CVE
+                  </span>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onRunStep('Analyse NLP CVE'); }}
+                  disabled={isRunning || isStarting}
+                  className={`p-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50 transition-all ${
+                    (isRunning || isStarting) ? 'opacity-20 cursor-not-allowed' : 'hover:bg-indigo-600 hover:border-indigo-500 hover:text-white text-slate-600 hover:shadow-[0_0_10px_rgba(99,102,241,0.3)] hover:scale-110'
                   }`}
                 >
                   {isStarting ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} className="fill-current" />}

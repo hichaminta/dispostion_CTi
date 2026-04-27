@@ -2,9 +2,10 @@
  * CTI Extraction Dashboard Logic
  */
 
-const API_BASE_EXTRACTED = "http://localhost:8000/api/extracted";
-const API_BASE_ENRICHED = "http://localhost:8000/api/enriched";
-const API_BASE_STATS = "http://localhost:8000/api/stats";
+const API_BASE = `http://${window.location.hostname}:8000`;
+const API_BASE_EXTRACTED = `${API_BASE}/api/extracted`;
+const API_BASE_ENRICHED = `${API_BASE}/api/enriched`;
+const API_BASE_STATS = `${API_BASE}/api/stats`;
 
 let viewMode = 'extracted'; // 'extracted' or 'enriched'
 
@@ -138,7 +139,7 @@ window.triggerEnrichmentStep = async (stepName) => {
     try {
         showNotification(`Starting ${stepName} for ${srcObj.name}...`, "info");
         
-        const response = await fetch(`http://localhost:8000/runs/targeted?step_name=${encodeURIComponent(stepName)}`, {
+        const response = await fetch(`${API_BASE}/runs/targeted?step_name=${encodeURIComponent(stepName)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -246,7 +247,15 @@ async function loadData() {
         updateDashboardStats(result);
     } catch (err) {
         console.error("Error loading data:", err);
-        tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center; color: var(--danger-color);">Error loading data</td></tr>';
+        const errorMsg = err.message || "Unknown Error";
+        tableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 40px; color: var(--danger-color);">
+            <div style="display:flex; flex-direction:column; gap:10px; align-items:center;">
+                <i data-lucide="alert-circle" size="24"></i>
+                <span>Error loading data: ${errorMsg}</span>
+                <button onclick="loadData()" style="padding: 5px 15px; background: var(--accent-color); border:none; border-radius:5px; color:white; cursor:pointer;">Retry</button>
+            </div>
+        </td></tr>`;
+        if (window.lucide) window.lucide.createIcons();
     } finally {
         if (loader) loader.classList.remove('active');
         if (statsGrid) statsGrid.classList.remove('loading');

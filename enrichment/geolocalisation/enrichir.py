@@ -223,12 +223,18 @@ def enrich_all(source_filter=None):
                             
                             # Update Per-IOC metadata
                             if "ioc_enrichment" not in ioc: ioc["ioc_enrichment"] = {}
+                            now_iso = datetime.now().isoformat()
+                            
                             if ioc["ioc_enrichment"].get("country") != country_code:
                                 ioc["ioc_enrichment"]["country"] = country_code
+                                ioc["ioc_enrichment"]["tlp"] = "TLP:CLEAR"
+                                ioc["ioc_enrichment"]["enriched_at"] = now_iso
                                 record_modified = True
 
                             if country_name and ioc["ioc_enrichment"].get("country_name") != country_name:
                                 ioc["ioc_enrichment"]["country_name"] = country_name
+                                ioc["ioc_enrichment"]["tlp"] = "TLP:CLEAR"
+                                ioc["ioc_enrichment"]["enriched_at"] = now_iso
                                 record_modified = True
 
                             # Update Record-level Metadata

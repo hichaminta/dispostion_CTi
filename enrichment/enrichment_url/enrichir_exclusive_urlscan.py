@@ -55,11 +55,12 @@ def is_valid_urlscan_target(value):
     if val_low.startswith('trojan.') or val_low.startswith('malware.'):
         return False
         
-    # Minimum requirement: must contain at least one dot
-    if '.' not in value:
+    # Minimum requirement: must contain at least one dot and be at least 5 chars
+    if '.' not in value or len(value) < 5:
         return False
         
     return True
+
 
 class WhitelistChecker:
     def __init__(self, path):
@@ -181,10 +182,25 @@ def enrich_urlscan(source_filter=None):
         
         # Core flags
         ioc["ioc_enrichment"]["canne_par_url"] = 1
+        # Explicit marker that this indicator was processed by URLScan (even if from local cache)
         ioc["ioc_enrichment"]["passer_par_urlscan"] = 1
         
+        now_iso = datetime.now().isoformat()
+        ioc["ioc_enrichment"]["tlp"] = "TLP:CLEAR"
+        ioc["ioc_enrichment"]["enriched_at"] = now_iso
+        
+        # Handle special "DOWN" or "DNS_ERROR" status
+        if res.get("status") == "DNS_ERROR":
+            ioc["ioc_enrichment"]["urlscan_status"] = "DOWN"
+            record["attributes"]["urlscan_verdict"] = "DNS_ERROR"
+            return True
+
         # Metadata mapping
-        if "score" in res: record["attributes"]["urlscan_score"] = res["score"]
+        if "score" in res: 
+            record["attributes"]["urlscan_score"] = res["score"]
+            record["attributes"]["tlp"] = "TLP:CLEAR"
+            record["attributes"]["enriched_at"] = now_iso
+        
         if "verdict" in res: record["attributes"]["urlscan_verdict"] = res["verdict"]
         
         # Extra technical metadata to pass to ioc_enrichment
@@ -197,8 +213,9 @@ def enrich_urlscan(source_filter=None):
     # ---------------------------
 
     for filename in files:
-        if "otx_alienvault" in filename.lower():
-            logger.info(f"--- [IGNORE] Skipping OTX source file: {filename} ---")
+        # Exclude AlienVault/OTX files as requested
+        if "otx_alienvault" in filename.lower() or "alienvault" in filename.lower():
+            logger.info(f"--- [IGNORE] Skipping AlienVault/OTX source file: {filename} ---")
             continue
 
         if limit_reached: 
@@ -238,7 +255,7 @@ def enrich_urlscan(source_filter=None):
                         # Still try to sync metadata if missing high-level attributes
                         if not record.get("attributes", {}).get("urlscan_score") and ioc_value in registry:
                             if apply_urlscan_metadata(ioc, record, registry[ioc_value]):
-                                logger.info(f"  [SYNC] {ioc_value[:30]}... Metadata synced from registry")
+                                logger.info(f"  [SYNC] {ioc_value[:30]}... Metadata synced from local URLScan registry")
                                 record_modified = True
                         continue
                     # -----------------------------------------
@@ -247,7 +264,7 @@ def enrich_urlscan(source_filter=None):
                     db_entry = get_from_registry(ioc_value)
                     if db_entry:
                         if apply_urlscan_metadata(ioc, record, db_entry):
-                            logger.info(f"  [DB MATCH] {ioc_value[:40]}... Data applied from local DB")
+                            logger.info(f"  [DB MATCH] {ioc_value[:40]}... Data applied from local DB (via URLScan)")
                             record_modified = True
                             results_fetched += 1
                         continue
@@ -263,7 +280,22 @@ def enrich_urlscan(source_filter=None):
                             limit_reached = True
                             logger.warning("!!! [LIMIT] Quota API atteint !!!")
                             break
-                        elif uuid and uuid != "DNS_ERROR":
+                        elif uuid == "DNS_ERROR":
+                            # CACHE DNS ERROR TO AVOID RETRYING
+                            dns_data = {
+                                "status": "DNS_ERROR",
+                                "last_scanned": datetime.now().isoformat()
+                            }
+                            registry[ioc_value] = dns_data
+                            save_registry(registry)
+                            
+                            if apply_urlscan_metadata(ioc, record, dns_data):
+                                record_modified = True
+                            
+                            dns_errors += 1
+                            logger.warning(f"  [DNS_ERROR] {ioc_value[:30]}... Cached as DOWN")
+                            continue
+                        elif uuid:
                             logger.info(f"  [SUBMIT] {ioc_value[:30]}... Poll en cours (60s max)...")
                             # ACTIVE POLLING
                             attempts = 0

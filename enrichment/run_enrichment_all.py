@@ -42,7 +42,7 @@ def run_enrichment():
     # ─── STAGE 3: FALLBACK ENRICHMENT (Reputation, WHOIS, DNS) ───
     if os.path.exists(fallback_script):
         logger.info("──────────────────────────────────────────")
-        logger.info("[STAGE 3/3] Fallback Enrichment (WHOIS, DNS, Reputation)...")
+        logger.info("[STAGE 3/4] Fallback Enrichment (WHOIS, DNS, Reputation)...")
         logger.info("──────────────────────────────────────────")
         try:
             subprocess.run([sys.executable, fallback_script], check=False)
@@ -50,6 +50,32 @@ def run_enrichment():
             logger.error(f"  [ERROR] Failed to run fallback stage: {e}")
     else:
         logger.warning("[STAGE 3] Fallback script NOT FOUND. Skipping.")
+
+    # ─── STAGE 4: CONSOLIDATED CVE ENRICHMENT (NVD + NLP) ───
+    cve_consolidated = os.path.join(base_dir, "enrichment_cve", "cve_enrchisment.py")
+    if os.path.exists(cve_consolidated):
+        logger.info("──────────────────────────────────────────")
+        logger.info("[STAGE 4/5] Consolidated CVE Enrichment (NVD & NLP)...")
+        logger.info("──────────────────────────────────────────")
+        try:
+            subprocess.run([sys.executable, cve_consolidated], check=False)
+        except Exception as e:
+            logger.error(f"  [ERROR] Failed to run consolidated CVE stage: {e}")
+    else:
+        logger.warning("[STAGE 4] Consolidated CVE script NOT FOUND. Skipping.")
+
+    # ─── STAGE 5: VIRUSTOTAL ENRICHMENT (Reputation & Engines) ───
+    vt_script = os.path.join(base_dir, "Virus_total_enrchisment", "enrichir_vt.py")
+    if os.path.exists(vt_script):
+        logger.info("──────────────────────────────────────────")
+        logger.info("[STAGE 6/6] VirusTotal Enrichment (Multi-engine scan)...")
+        logger.info("──────────────────────────────────────────")
+        try:
+            subprocess.run([sys.executable, vt_script], check=False)
+        except Exception as e:
+            logger.error(f"  [ERROR] Failed to run VirusTotal enrichment stage: {e}")
+    else:
+        logger.warning("[STAGE 6] VirusTotal enrichment script NOT FOUND. Skipping.")
 
     logger.info("==========================================")
     logger.info("ENRICHMENT PIPELINE COMPLETED.")

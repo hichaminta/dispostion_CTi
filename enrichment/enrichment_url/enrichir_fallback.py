@@ -235,6 +235,9 @@ class FallbackEnricher:
         enr["risk_flag"] = heuristics["risk_flag"]
 
         # Final Marker
+        now_iso = datetime.now().isoformat()
+        enr["tlp"] = "TLP:CLEAR"
+        enr["enriched_at"] = now_iso
         enr["passer_par_fallback"] = 1
         
         return ioc

@@ -69,7 +69,7 @@ async def create_run(run_in: schemas.RunCreate, background_tasks: BackgroundTask
         "status_global": "running"
     }
     db.create_run(new_run)
-    steps = ["Collecte", "Extraction CVE / IOC", "Geolocalisation", "URLScan", "Normalisation", "Intégration MISP"]
+    steps = ["Collecte", "Extraction CVE / IOC", "Geolocalisation", "URLScan", "Enrichissement CVE", "Analyse NLP CVE", "VirusTotal", "Normalisation", "Intégration MISP"]
     for step_name in steps:
         db.update_step(external_id, {
             "step_name": step_name,
