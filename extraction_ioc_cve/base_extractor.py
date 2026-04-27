@@ -48,6 +48,9 @@ class BaseExtractor:
             "apple.com", "apple.net",
             "facebook.com", "facebook.net", "facebook.org",
             "sinkhole.ch", "abuse.ch", "shadowserver.org",
+            "phishtank.com", "abuseipdb.com", "alienvault.com", "virustotal.com",
+            "pulsedive.com", "openphish.com", "spamhaus.org", "cinsarmy.com",
+            "nist.gov",
             "localhost", "example.com", "127.0.0.1"
         }
 

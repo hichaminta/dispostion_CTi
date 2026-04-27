@@ -88,7 +88,21 @@ def run_extraction():
         attrs = {}
         refs = set()
         
-        # Extract CVSS score or something if needed
+        # Extract CVSS information if available
+        cvss_list = item.get("cvss", [])
+        if cvss_list:
+            # We try to get the highest score available
+            try:
+                # Filter out entries where score is not a number
+                valid_cvss = [c for c in cvss_list if isinstance(c.get("score"), (int, float))]
+                if valid_cvss:
+                    best_cvss = max(valid_cvss, key=lambda x: x.get("score", 0))
+                    attrs["cvss_score"] = best_cvss.get("score")
+                    attrs["cvss_version"] = best_cvss.get("version")
+                    attrs["cvss_vector"] = best_cvss.get("vector")
+            except Exception:
+                pass
+
         # We explicitly don't extract IOCs from NVD
         extracted_cves = []
         if cve_id:
@@ -101,7 +115,7 @@ def run_extraction():
         res = {
             "source": SOURCE_NAME,
             "record_id": record_id,
-            "summary": "Extracted CVE explicitly from NVD.",
+            "summary": f"Extracted CVE from NVD. CVSS: {attrs.get('cvss_score', 'N/A')}",
             "iocs": [], # Explicitly no IOCs
             "cves": extracted_cves,
             "tags": sorted(list(tags)),
