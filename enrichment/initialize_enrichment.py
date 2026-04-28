@@ -72,36 +72,52 @@ def initialize_enrichment_files(source_filter=None, force=False):
 
         try:
             with open(src_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+                new_data = json.load(f)
             
-            if isinstance(data, list):
-                # Sort by collected_at descending (newest first)
-                data.sort(key=lambda x: x.get("collected_at", ""), reverse=True)
+            if isinstance(new_data, list):
+                # 1. Load existing data if it exists
+                existing_data = []
+                if os.path.exists(dst_path):
+                    try:
+                        with open(dst_path, "r", encoding="utf-8") as f:
+                            existing_data = json.load(f)
+                    except:
+                        existing_data = []
                 
-                # Get the latest collected_at date for tracking
-                latest_ts = data[0].get("collected_at", "") if data else ""
+                # 2. Identify new items (not in existing_data)
+                # We use 'id' or 'value' as unique identifier
+                existing_keys = {item.get('id') or item.get('value') for item in existing_data if item}
+                truly_new_items = [item for item in new_data if (item.get('id') or item.get('value')) not in existing_keys]
+                
+                # 3. Limit the addition to 15 items
+                items_to_add = truly_new_items[:15]
+                
+                if not items_to_add:
+                    logger.info(f"  [SKIP] {filename} (Aucun nouvel IOC trouvé)")
+                    continue
+                
+                # 4. Merge
+                # We put new items at the beginning (most recent)
+                merged_data = items_to_add + existing_data
+                
+                # Get the latest collected_at date for tracking from the new data
+                # Sort new data by collected_at descending
+                new_data.sort(key=lambda x: x.get("collected_at", ""), reverse=True)
+                latest_ts = new_data[0].get("collected_at", "") if new_data else ""
                 source_key = filename.replace("_extracted.json", "").replace(".json", "")
                 
-                # Check tracking to avoid redundant copy
-                last_ts_tracked = tracking["sources"].get(source_key, "")
-                if not force and last_ts_tracked == latest_ts and os.path.exists(dst_path):
-                    logger.info(f"  [SKIP] {filename} (Déjà à jour à {last_ts_tracked})")
-                    continue
-
-                # Keep only the 15 most recent
-                limited_data = data[:15]
-                
+                # Save merged data
                 with open(dst_path, "w", encoding="utf-8") as f:
-                    json.dump(limited_data, f, indent=4)
+                    json.dump(merged_data, f, indent=4)
                 
                 # Update tracking info
                 tracking["sources"][source_key] = latest_ts
                 any_updated = True
                 
-                logger.info(f"  [OK] {filename} -> {new_filename} (Latest {len(limited_data)} records, TS: {latest_ts})")
+                logger.info(f"  [OK] {filename} -> {new_filename} (+{len(items_to_add)} nouveaux IOCs, Total: {len(merged_data)})")
             else:
                 shutil.copy2(src_path, dst_path)
-                logger.info(f"  [OK] {filename} -> {new_filename} (Full copy)")
+                logger.info(f"  [OK] {filename} -> {new_filename} (Full copy - not a list)")
                 
             count += 1
         except Exception as e:

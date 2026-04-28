@@ -1,7 +1,7 @@
 import os
-import json
 import logging
 import sys
+import ipaddress
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("Sync_URLScan_Flags")
@@ -99,10 +99,18 @@ def sync_flags():
                     for ioc in record["iocs"]:
                         ioc_type = ioc.get("type")
                         ioc_value = ioc.get("value")
-                        if ioc_type not in ["url", "domain", "domaine"]: continue
+                        if ioc_type not in ["url", "domain", "domaine", "ip"]: continue
                         
-                        if ioc_value in registry:
-                            if apply_urlscan_metadata(ioc, record, registry[ioc_value]):
+                        # Normalize IP/CIDR for registry lookup
+                        lookup_value = ioc_value
+                        if ioc_type == "ip":
+                            try:
+                                if '/' in ioc_value:
+                                    lookup_value = str(ipaddress.ip_network(ioc_value, strict=False).network_address)
+                            except: pass
+                        
+                        if lookup_value in registry:
+                            if apply_urlscan_metadata(ioc, record, registry[lookup_value]):
                                 record_modified = True
                 
                 if record_modified:

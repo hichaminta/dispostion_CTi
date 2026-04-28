@@ -1,9 +1,9 @@
 import os
 import json
 import logging
-import socket
 import struct
 import tempfile
+import ipaddress
 
 class GeoManager:
     def __init__(self, db_path=None):
@@ -64,67 +64,76 @@ class GeoManager:
                 except:
                     pass
 
-    def _ip_to_int(self, ip):
+    def _normalize_ip(self, ip):
+        """Returns an ipaddress object or None."""
         if not ip or not isinstance(ip, str):
             return None
         try:
-            # Normalize: remove ports and CIDR masks
-            clean_ip = ip.split(':')[0].split('/')[0].strip()
-            return struct.unpack("!L", socket.inet_aton(clean_ip))[0]
+            # Handle CIDR or single IP
+            if '/' in ip:
+                network = ipaddress.ip_network(ip, strict=False)
+                return network.network_address
+            return ipaddress.ip_address(ip)
         except:
             return None
 
     def get_country(self, ip):
         """
-        Looks up the country code for an IP.
-        Checks specific IP cache first, then binary searches ranges.
-        Supports dotted-decimal strings in JSON (Format IP).
+        Looks up the country code for an IP (v4 or v6).
         """
-        # 1. Check direct IP cache
+        # 1. Normalize input
+        ip_obj = self._normalize_ip(ip)
+        if ip_obj is None:
+            return None
+        
+        ip_str = str(ip_obj)
+        
+        # 2. Check direct IP cache
         ips_data = self.data.get("ips", {})
-        # Compatibility check for very old flat format
-        if not ips_data and isinstance(self.data, dict) and ip in self.data and "ranges" not in self.data:
-            entry = self.data.get(ip)
-            return entry.get("country_code") if isinstance(entry, dict) else None
-
-        entry = ips_data.get(ip)
+        entry = ips_data.get(ip_str)
         if entry:
             return entry.get("country_code")
             
-        # 2. Check ranges
+        # 3. Check ranges
         ranges = self.data.get("ranges", [])
         if not ranges:
             return None
             
-        ip_num = self._ip_to_int(ip)
-        if ip_num is None:
-            return None
-
-        # Performance Optimization: convert string ranges to integers once in memory
-        if not hasattr(self, "_ranges_int"):
-            self._ranges_int = []
+        # Performance Optimization: convert string ranges to ip objects once
+        if not hasattr(self, "_ranges_objs"):
+            self._ranges_objs = []
             for r in ranges:
                 if len(r) < 3: continue
-                # Handle both integers and dotted-decimal strings
-                start_val = self._ip_to_int(r[0]) if isinstance(r[0], str) else r[0]
-                end_val = self._ip_to_int(r[1]) if isinstance(r[1], str) else r[1]
-                self._ranges_int.append((start_val, end_val, r[2]))
-            # Ensure sorting for binary search
-            self._ranges_int.sort(key=lambda x: x[0])
+                try:
+                    start_obj = ipaddress.ip_address(r[0])
+                    end_obj = ipaddress.ip_address(r[1])
+                    self._ranges_objs.append((start_obj, end_obj, r[2]))
+                except:
+                    continue
+            self._ranges_objs.sort(key=lambda x: x[0])
             
-        # Binary search on optimized ranges
+        # Binary search
         low = 0
-        high = len(self._ranges_int) - 1
+        high = len(self._ranges_objs) - 1
         while low <= high:
             mid = (low + high) // 2
-            start, end, code = self._ranges_int[mid]
-            if start <= ip_num <= end:
-                # IP2Location uses '-' for unknown
-                return code if code != "-" else None
-            elif ip_num < start:
-                high = mid - 1
+            start, end, code = self._ranges_objs[mid]
+            
+            # Check version match before comparing
+            if ip_obj.version == start.version:
+                if start <= ip_obj <= end:
+                    return code if code != "-" else None
+                elif ip_obj < start:
+                    high = mid - 1
+                else:
+                    low = mid + 1
             else:
-                low = mid + 1
+                # If versions don't match, we need to adjust search
+                # Usually IPv4 < IPv6 in sorted lists
+                if ip_obj.version < start.version:
+                    high = mid - 1
+                else:
+                    low = mid + 1
         
         return None
 

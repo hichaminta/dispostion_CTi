@@ -6,6 +6,7 @@ import socket
 import time
 import re
 import requests
+import ipaddress
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 from dotenv import load_dotenv, find_dotenv
@@ -65,8 +66,20 @@ class FallbackEnricher:
             '.zip', '.tar', '.rar', '.7z', '.jar', '.iso', '.lnk', '.gz'
         ]
 
-    def is_valid_enrichment_target(self, value):
+    def is_valid_enrichment_target(self, value, ioc_type="url"):
         if not value or not isinstance(value, str): return False
+        
+        if ioc_type == "ip":
+            try:
+                # Basic validation: is it a valid IP or Network?
+                if '/' in value:
+                    ipaddress.ip_network(value, strict=False)
+                else:
+                    ipaddress.ip_address(value)
+                return True
+            except:
+                return False
+
         val_low = value.lower()
         if any(val_low.endswith(ext) for ext in self.invalid_extensions):
             return False
@@ -74,10 +87,17 @@ class FallbackEnricher:
             return False
         return True
 
-    def dns_lookup(self, value):
-        """Resolves IP for a domain."""
-        logger.info(f"  [DNS] Resolving {value}...")
+    def dns_lookup(self, value, ioc_type="url"):
+        """Resolves IP for a domain or normalizes IP/CIDR."""
         try:
+            # If it's already an IP or CIDR, normalize it
+            if ioc_type == "ip" or re.match(r'^\d+\.\d+\.\d+\.\d+', value) or ':' in value:
+                if '/' in value:
+                    return str(ipaddress.ip_network(value, strict=False).network_address)
+                return str(ipaddress.ip_address(value))
+            
+            # Otherwise, resolve domain
+            logger.info(f"  [DNS] Resolving {value}...")
             hostname = value
             if "://" in value:
                 hostname = urlparse(value).hostname
@@ -86,7 +106,7 @@ class FallbackEnricher:
             ip = socket.gethostbyname(hostname)
             return ip
         except Exception as e:
-            logger.warning(f"DNS Resolution failed for {value}: {e}")
+            logger.warning(f"DNS Resolution/Normalization failed for {value}: {e}")
             return None
 
     def geo_lookup(self, ip):
@@ -197,7 +217,7 @@ class FallbackEnricher:
         
         # Handle "domaine" vs "domain"
         clean_type = "domain" if ioc_type in ["domain", "domaine"] else ioc_type
-        if clean_type not in ["domain", "url"]:
+        if clean_type not in ["domain", "url", "ip"]:
             return ioc
 
         if "ioc_enrichment" not in ioc:
@@ -206,12 +226,22 @@ class FallbackEnricher:
         enr = ioc["ioc_enrichment"]
 
         # 1. DNS & Geo
-        resolved_ip = self.dns_lookup(value)
+        resolved_ip = self.dns_lookup(value, clean_type)
         if resolved_ip:
             if "country" not in enr or not enr["country"]:
                 country = self.geo_lookup(resolved_ip)
                 if country:
                     enr["country"] = country
+                    enr["country_code"] = country # Sync both
+        
+        # Skip web/whois/heuristics for pure IP if not easily reachable
+        if clean_type == "ip":
+            # Just do Geo for IP ranges/IPv6 from Spamhaus
+            now_iso = datetime.now().isoformat()
+            enr["tlp"] = "TLP:CLEAR"
+            enr["enriched_at"] = now_iso
+            enr["passer_par_fallback"] = 1
+            return ioc
 
         # 2. Web Info
         web_info = self.web_lookup(value)
@@ -277,8 +307,8 @@ def run_fallback_enrichment(source_filter=None):
                     ioc_type = ioc.get("type")
                     ioc_value = ioc.get("value")
                     
-                    # Target only URL/Domain/Domaine
-                    if ioc_type not in ["domain", "url", "domaine"]:
+                    # Target URL/Domain/IP
+                    if ioc_type not in ["domain", "url", "domaine", "ip"]:
                         continue
                     
                     enr = ioc.get("ioc_enrichment", {})
@@ -290,8 +320,8 @@ def run_fallback_enrichment(source_filter=None):
                     
                     has_urlscan = enr.get("passer_par_urlscan") == 1
                     
-                    # Target only those already scanned by URLScan (Requirement)
-                    if not has_urlscan:
+                    # Target those scanned by URLScan OR direct IPs (fallback for Spamhaus)
+                    if not has_urlscan and ioc_type != "ip":
                         continue
                     
                     # 2. Check trigger condition:
@@ -309,7 +339,7 @@ def run_fallback_enrichment(source_filter=None):
                         should_fallback = True
                         
                     if should_fallback:
-                        if not enricher.is_valid_enrichment_target(ioc_value):
+                        if not enricher.is_valid_enrichment_target(ioc_value, ioc_type):
                             continue
                             
                         logger.info(f"  [FALLBACK] Triggered for {ioc_value[:40]}...")

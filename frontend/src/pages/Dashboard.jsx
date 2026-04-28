@@ -28,6 +28,19 @@ const SOURCES = [
   { id: 'virustotal',   name: 'VirusTotal',       type: 'Multi-engine Scan',color: 'violet' },
 ];
 
+const PIPELINE_PHASES = [
+  { id: 'collecte',      label: 'COL',  full: 'Collecte',             icon: Database },
+  { id: 'extraction',    label: 'EXT',  full: 'Extraction CVE / IOC', icon: Search },
+  { id: 'geo',           label: 'GEO',  full: 'Geolocalisation',      icon: Globe },
+  { id: 'urlscan',       label: 'URL',  full: 'URLScan',              icon: ScanEye },
+  { id: 'fallback',      label: 'FALL', full: 'Fallback',             icon: Layers },
+  { id: 'cve_enr',       label: 'CVE',  full: 'Enrichissement CVE',   icon: AlertTriangle },
+  { id: 'nlp',           label: 'NLP',  full: 'Analyse NLP CVE',      icon: Cpu },
+  { id: 'vt',            label: 'VT',   full: 'VirusTotal',           icon: Shield },
+  { id: 'norm',          label: 'NORM', full: 'Normalisation',        icon: Activity },
+  { id: 'misp',          label: 'MISP', full: 'Intégration MISP',     icon: Zap },
+];
+
 const COLOR_CLASSES = {
   blue:   'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20',
   purple: 'bg-purple-500/10 border-purple-500/30 text-purple-400 hover:bg-purple-500/20',
@@ -264,17 +277,9 @@ const Dashboard = ({ onSelectRun }) => {
 
   const latestRun = runs.length > 0 ? runs[0] : null;
 
-  // Helper to get source health
+  // Helper to get source health (DEPRECATED)
   const getSourceHealth = (sourceId) => {
-    const sourceRuns = runs.filter(r => 
-      r.source_name.toLowerCase().includes(sourceId.toLowerCase()) || 
-      (sourceId === 'nvd' && r.source_name === 'NVD')
-    );
-    if (sourceRuns.length === 0) return 'neutral';
-    const latest = sourceRuns[0];
-    if (latest.status_global === 'running') return 'running';
-    if (latest.status_global === 'success') return 'healthy';
-    return 'unhealthy';
+    return 'neutral';
   };
 
   return (
@@ -749,32 +754,52 @@ const Dashboard = ({ onSelectRun }) => {
           </div>
         </div>
 
-        {/* ── Sources ─────────────────────────────────────────────────── */}
+        {/* ── Global Sources Operations Grid ─────────────────────────── */}
         <div className="mb-10">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-base font-black text-white flex items-center gap-2 uppercase tracking-widest">
               <Activity className="w-5 h-5 text-brand-400" />
-              Source Health Center
+              Source Operations Center
             </h2>
             <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-               <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_#10b981]" /> Healthy</span>
-               <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_#ef4444]" /> Issue</span>
-               <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" /> Syncing</span>
+               <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_#10b981]" /> Success</span>
+               <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_#ef4444]" /> Failed</span>
+               <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" /> Running</span>
+               <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-slate-700" /> Pending</span>
             </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4">
-            {SOURCES.map(source => (
-              <SourceCard
-                key={source.id}
-                source={source}
-                onRun={() => startRun(source)}
-                onEnrich={() => startEnrichment(source)}
-                onRunStep={(step) => startTargetedRun(source, step)}
-                isRunning={runningSources.has(source.id)}
-                isStarting={isStarting}
-                health={getSourceHealth(source.id)}
-              />
-            ))}
+          
+          <div className="bg-slate-900/40 rounded-3xl border border-white/5 overflow-hidden backdrop-blur-xl shadow-2xl">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-800/30 border-b border-white/5">
+                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest min-w-[200px]">Source</th>
+                    {PIPELINE_PHASES.map(phase => (
+                      <th key={phase.id} className="px-2 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest text-center" title={phase.full}>
+                        <div className="flex flex-col items-center gap-1">
+                          <phase.icon className="w-3 h-3 opacity-40" />
+                          {phase.label}
+                        </div>
+                      </th>
+                    ))}
+                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {SOURCES.map(source => (
+                    <SourceStatusRow 
+                      key={source.id} 
+                      source={source} 
+                      runs={runs}
+                      onRun={() => startRun(source)}
+                      onRunPhase={(phaseName) => startTargetedRun(source, phaseName)}
+                      isStarting={isStarting}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -946,257 +971,127 @@ const PipelineStepper = ({ run }) => {
 };
 
 
-// ── Source Card ───────────────────────────────────────────────────────────────
-const SourceCard = ({ source, onRun, onEnrich, onRunStep, isRunning, isStarting, health }) => {
-  const [showUrlDetails, setShowUrlDetails] = useState(false);
-  
-  const healthColors = {
-    healthy:   'bg-emerald-500 shadow-[0_0_10px_#10b981]',
-    unhealthy: 'bg-red-500 shadow-[0_0_10px_#ef4444]',
-    running:   'bg-brand-500 animate-pulse shadow-[0_0_10px_#0ea5e9]',
-    neutral:   'bg-slate-700'
+const SourceStatusRow = ({ source, runs, onRun, onRunPhase, isStarting }) => {
+  // Trouver le run le plus récent pour cette source
+  const latestRun = runs.find(r => 
+    r.source_name.toLowerCase().includes(source.name.toLowerCase()) || 
+    (source.id === 'nvd' && r.source_name === 'NVD')
+  );
+
+  const getPhaseStatus = (phaseFull) => {
+    if (!latestRun) return 'pending';
+    const step = (latestRun.steps || []).find(s => s.step_name === phaseFull);
+    if (!step) return 'pending';
+    return step.status;
   };
 
-  const STEPS = [
-    "Collecte",
-    "Extraction CVE / IOC",
-    "Geolocalisation",
-    "URLScan_Only",
-    "Fallback",
-    "URLScan", // This is "Both" in backend
-    "Intégration MISP"
-  ];
-  const isNVD = source.id === 'nvd' || source.id === 'alienvault';
+  const isGlobalRunning = latestRun?.status_global === 'running';
 
   return (
-    <div 
-      className={`rounded-2xl border transition-all duration-500 relative overflow-hidden group/card shadow-lg glass-card ${
-        isRunning 
-          ? `bg-slate-900 border-brand-500/50 ring-1 ring-brand-500/30` 
-          : `border-white/5 hover:border-brand-500/40 hover:shadow-brand-500/5`
-      }`}
-    >
-      {/* HUD Elements for active source */}
-      {isRunning && (
-        <>
-          <div className="absolute inset-0 hud-grid opacity-20" />
-          <div className="scan-beam" />
-          <div className="hud-corner-tl hud-corner" />
-          <div className="hud-corner-tr hud-corner" />
-          <div className="hud-corner-bl hud-corner" />
-          <div className="hud-corner-br hud-corner" />
-          <div className="absolute bottom-0 left-0 w-full h-[2px] cyber-loading-bar animate-indeterminate" />
-        </>
-      )}
-
-      {/* Header Info */}
-      <div className="p-4 relative z-10">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${healthColors[health]}`} title={`Status: ${health}`} />
-            <span className="text-slate-500 uppercase tracking-widest font-black text-[8px] opacity-60">{source.type}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className={`w-3 h-3 rounded bg-slate-800 border border-slate-700 flex items-center justify-center`}>
-              <ChevronRight className={`w-2 h-2 text-slate-500 transition-transform ${isRunning ? 'rotate-90 text-brand-400' : ''}`} />
+    <tr className={`group transition-all duration-300 ${isGlobalRunning ? 'bg-brand-500/5 shadow-[inset_0_0_20px_rgba(14,165,233,0.05)]' : 'hover:bg-white/[0.02]'}`}>
+      <td className="px-6 py-5">
+        <div className="flex items-center gap-4">
+          <div className={`w-2 h-2 rounded-full transition-all duration-500 ${
+            isGlobalRunning ? 'bg-brand-500 animate-pulse shadow-[0_0_12px_#0ea5e9]' : 
+            latestRun?.status_global === 'success' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' :
+            latestRun?.status_global === 'failed' ? 'bg-red-500 shadow-[0_0_8px_#ef4444]' : 'bg-slate-700'
+          }`} />
+          <div className="flex flex-col">
+            <div className="text-sm font-black text-white uppercase tracking-tighter group-hover:text-brand-400 transition-colors">
+              {source.name}
+            </div>
+            <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-0.5 font-mono">
+              {source.id.toUpperCase()} • {source.type}
             </div>
           </div>
         </div>
-        <h3 className="text-white font-black text-sm tracking-tight mb-5 group-hover/card:text-brand-400 transition-colors uppercase truncate">{source.name}</h3>
+      </td>
+      
+      {PIPELINE_PHASES.map(phase => {
+        const status = getPhaseStatus(phase.full);
+        const isNVD = source.id === 'nvd' || source.id === 'alienvault';
         
-        {/* Extraction Section */}
-        <div className="space-y-3 mb-5">
-          <p className="text-[9px] text-slate-600 font-extrabold uppercase tracking-widest border-b border-slate-800/60 pb-1.5 mb-2">1. Extraction / Collecte</p>
-          <div className="space-y-2.5">
-            {STEPS.slice(0, 2).map((step, idx) => {
-              if (step === "Collecte" && source.id === "alienvault") return null;
-              return <StepRow key={step} idx={idx} step={step} isRunning={isRunning} onRunStep={() => onRunStep(step)} />;
-            })}
-          </div>
-        </div>
-        
-        {/* Enrichment Section (Skip for NVD/AlienVault) */}
-        {!isNVD && (
-          <div className="bg-brand-500/5 rounded-xl p-3 border border-brand-500/10 mb-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-[9px] text-brand-400 font-black uppercase tracking-widest">2. Enrichissement</p>
+        // Disable certain phases for CVE-only sources if they don't make sense
+        const isDisabled = isNVD && (phase.id === 'urlscan' || phase.id === 'fallback' || phase.id === 'vt');
+
+        return (
+          <td key={phase.id} className="px-1 py-5">
+            <div className="flex justify-center group/phase relative">
               <button
-                onClick={(e) => { e.stopPropagation(); onRunStep('Enrichissement'); }}
-                disabled={isRunning}
-                title="Lancer tout l'enrichissement"
-                className={`flex items-center gap-1.5 px-2 py-1 rounded bg-brand-500/10 border border-brand-500/30 text-brand-400 text-[8px] font-black uppercase tracking-wider hover:bg-brand-500 hover:text-white transition-all ${isRunning ? 'opacity-20 cursor-not-allowed' : 'active:scale-90 shadow-md shadow-brand-500/10'}`}
+                onClick={(e) => { e.stopPropagation(); onRunPhase(phase.full); }}
+                disabled={isGlobalRunning || isStarting || isDisabled}
+                className={`p-1.5 rounded-full transition-all duration-300 ${
+                  isDisabled ? 'opacity-0 cursor-default' : 
+                  (isGlobalRunning || isStarting) ? 'cursor-not-allowed' : 
+                  'hover:bg-brand-500/20 hover:scale-125'
+                }`}
               >
-                <Sparkles size={8} />
-                <span>Tout</span>
-              </button>
-            </div>
-            {/* Standard Enrichment Steps */}
-            <div className="space-y-2.5 mb-4">
-              <div className="flex items-center justify-between group/step">
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] text-slate-700 font-black font-mono w-3">3.</span>
-                  <span className={`text-[11px] font-bold ${isRunning ? 'text-slate-700' : 'text-slate-400 group-hover/step:text-slate-200 transition-colors'}`}>
-                    Geolocalisation
-                  </span>
-                </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onRunStep('Geolocalisation'); }}
-                  disabled={isRunning || isStarting}
-                  className={`p-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50 transition-all ${
-                    (isRunning || isStarting) ? 'opacity-20 cursor-not-allowed' : 'hover:bg-brand-600 hover:border-brand-500 hover:text-white text-slate-600 hover:shadow-[0_0_10px_rgba(14,165,233,0.3)] hover:scale-110'
-                  }`}
-                >
-                  {isStarting ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} className="fill-current" />}
-                </button>
-              </div>
-
-              {/* CVE Enrichment Sub-step */}
-              <div className="flex items-center justify-between group/step">
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] text-slate-700 font-black font-mono w-3">4.</span>
-                  <span className={`text-[11px] font-bold ${isRunning ? 'text-slate-700' : 'text-slate-400 group-hover/step:text-slate-200 transition-colors'}`}>
-                    Enrichissement CVE
-                  </span>
-                </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onRunStep('Enrichissement CVE'); }}
-                  disabled={isRunning || isStarting}
-                  className={`p-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50 transition-all ${
-                    (isRunning || isStarting) ? 'opacity-20 cursor-not-allowed' : 'hover:bg-amber-600 hover:border-amber-500 hover:text-white text-slate-600 hover:shadow-[0_0_10px_rgba(245,158,11,0.3)] hover:scale-110'
-                  }`}
-                >
-                  {isStarting ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} className="fill-current" />}
-                </button>
-              </div>
-
-              {/* NLP CVE Sub-step */}
-              <div className="flex items-center justify-between group/step">
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] text-slate-700 font-black font-mono w-3">5.</span>
-                  <span className={`text-[11px] font-bold ${isRunning ? 'text-slate-700' : 'text-slate-400 group-hover/step:text-slate-200 transition-colors'}`}>
-                    Analyse NLP CVE
-                  </span>
-                </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onRunStep('Analyse NLP CVE'); }}
-                  disabled={isRunning || isStarting}
-                  className={`p-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50 transition-all ${
-                    (isRunning || isStarting) ? 'opacity-20 cursor-not-allowed' : 'hover:bg-indigo-600 hover:border-indigo-500 hover:text-white text-slate-600 hover:shadow-[0_0_10px_rgba(99,102,241,0.3)] hover:scale-110'
-                  }`}
-                >
-                  {isStarting ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} className="fill-current" />}
-                </button>
-              </div>
-
-            </div>
-
-            {/* Specialized URL Enrichment Controls (Expandable) */}
-            <div className="pt-2 border-t border-brand-500/10">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">URL Enrichment</span>
-              </div>
-              
-              <div className="flex flex-col gap-1.5">
-                {/* Master Global Analysis Button */}
-                <div className="flex items-center gap-0.5 bg-brand-500/5 rounded-xl p-0.5 border border-brand-500/10">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onRunStep('URLScan'); }}
-                    disabled={isRunning || isStarting}
-                    title="Lancer l'Analyse URL Complète (URLScan + Fallback)"
-                    className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-all active:scale-95 ${
-                      (isRunning || isStarting) ? 'opacity-20 cursor-not-allowed' : 'hover:bg-brand-500/20 text-brand-400 group/url'
-                    }`}
-                  >
-                    {isStarting ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} className="group-hover/url:animate-pulse" />}
-                    <span className="text-[8px] font-black uppercase tracking-widest">Analyse Complète</span>
-                  </button>
-                  
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setShowUrlDetails(!showUrlDetails); }}
-                    className={`p-1.5 rounded-lg transition-colors ${showUrlDetails ? 'bg-brand-500/20 text-white' : 'text-brand-500/40 hover:text-brand-400'}`}
-                    title={showUrlDetails ? "Cacher les options 'Only'" : "Afficher les options 'Only'"}
-                  >
-                    {showUrlDetails ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-                  </button>
-                </div>
-
-                {/* Sub-options (Only) */}
-                {showUrlDetails && (
-                  <div className="grid grid-cols-2 gap-1.5 mt-1.5 animate-in slide-in-from-top duration-300">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onRunStep('URLScan_Only'); }}
-                      disabled={isRunning || isStarting}
-                      className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-pink-500/10 border border-pink-500/20 text-pink-400 hover:bg-pink-500/20 transition-all active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed text-[7px] font-black uppercase tracking-tighter"
-                    >
-                      {isStarting ? <Loader2 size={10} className="animate-spin" /> : <ScanEye size={10} />}
-                      <span>URLScan Only</span>
-                    </button>
-                    
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onRunStep('Fallback'); }}
-                      disabled={isRunning || isStarting}
-                      className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 hover:bg-orange-500/20 transition-all active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed text-[7px] font-black uppercase tracking-tighter"
-                    >
-                      {isStarting ? <Loader2 size={10} className="animate-spin" /> : <Layers size={10} />}
-                      <span>Fallback Only</span>
-                    </button>
+                <PhaseIndicator status={status} />
+                
+                {/* Play icon overlay on hover */}
+                {!isGlobalRunning && !isStarting && !isDisabled && (
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/phase:opacity-100 transition-opacity">
+                    <Play size={6} className="text-white fill-current ml-0.5" />
                   </div>
                 )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Finalisation Section */}
-        <div className="space-y-3 mb-6">
-          <p className="text-[9px] text-slate-600 font-extrabold uppercase tracking-widest border-b border-slate-800/60 pb-1.5 mb-2">3. Finalisation & Export</p>
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between group/step bg-orange-500/5 p-2.5 rounded-xl border border-orange-500/10">
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] text-orange-500/60 font-black font-mono w-3">7.</span>
-                <span className={`text-[11px] font-bold ${isRunning ? 'text-slate-700' : 'text-orange-400 group-hover/step:text-orange-300 transition-colors'}`}>
-                  Intégration MISP (Direct)
-                </span>
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); onRunStep('Intégration MISP'); }}
-                disabled={isRunning}
-                title="Lancer l'intégration API directe"
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-600/10 border border-orange-500/20 text-orange-400 text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 hover:text-white transition-all ${isRunning ? 'opacity-20 cursor-not-allowed' : 'active:scale-90 shadow-md shadow-orange-500/20'}`}
-              >
-                <Zap size={11} />
-                <span>Intégrer</span>
               </button>
+              
+              {/* Tooltip on hover */}
+              {!isDisabled && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 border border-white/10 rounded text-[8px] font-black uppercase text-white opacity-0 group-hover/phase:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-2xl">
+                  {phase.full}: <span className={
+                    status === 'success' ? 'text-emerald-400' :
+                    status === 'failed' ? 'text-red-400' :
+                    status === 'running' ? 'text-brand-400' : 'text-slate-500'
+                  }>{status}</span>
+                  {!isGlobalRunning && !isStarting && <span className="ml-1 text-slate-500">Click to run</span>}
+                </div>
+              )}
             </div>
-          </div>
-        </div>
+          </td>
+        );
+      })}
 
-        {/* Action Buttons */}
-        <div className="space-y-3 pt-4 border-t border-slate-800/60">
+      <td className="px-6 py-5 text-right">
+        <div className="flex items-center justify-end gap-3">
+          {latestRun && (
+            <span className="text-[10px] font-mono text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity">
+              Last: {latestRun.run_id.split('-')[0]}
+            </span>
+          )}
           <button
-            onClick={() => onRun()}
-            disabled={isRunning}
-            className={`w-full py-3 rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-2 group/btn ${
-              isRunning ? 'bg-slate-900 border border-slate-800 text-slate-700 cursor-not-allowed' :
-              'bg-brand-600/10 hover:bg-brand-600 border border-brand-500/20 hover:border-brand-500 text-brand-400 hover:text-white shadow-lg hover:shadow-brand-500/20 active:scale-95'
+            onClick={onRun}
+            disabled={isGlobalRunning || isStarting}
+            className={`h-9 px-5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2 ${
+              isGlobalRunning 
+                ? 'bg-slate-800 text-slate-600 border border-slate-700' 
+                : 'bg-brand-500/10 hover:bg-brand-500 text-brand-400 hover:text-white border border-brand-500/30 hover:border-brand-400 shadow-lg shadow-brand-500/5'
             }`}
           >
-            {isRunning ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} className="group-hover/btn:animate-pulse" />}
-            <span className="uppercase tracking-widest">Lancer le Pipeline</span>
-          </button>
-
-          <button
-            onClick={() => window.open(`${API_BASE}/results/`, '_blank')}
-            className="w-full py-2.5 rounded-xl text-[11px] font-black bg-slate-800/40 hover:bg-slate-800 text-slate-500 hover:text-slate-300 border border-slate-700/50 hover:border-slate-600 transition-all flex items-center justify-center gap-2 active:scale-95 group/explore"
-          >
-            <FileText size={12} className="group-hover/explore:scale-110 transition-transform" />
-            <span className="uppercase tracking-widest">Explorer les Sources</span>
+            {isGlobalRunning ? <Loader2 size={12} className="animate-spin" /> : <Play size={10} className="fill-current" />}
+            <span>{isGlobalRunning ? 'Syncing' : 'Run'}</span>
           </button>
         </div>
-      </div>
-    </div>
+      </td>
+    </tr>
   );
 };
+
+const PhaseIndicator = ({ status }) => {
+  const map = {
+    running: "bg-brand-500 shadow-[0_0_15px_#0ea5e9] animate-pulse scale-125",
+    success: "bg-emerald-500 shadow-[0_0_10px_#10b981]",
+    failed:  "bg-red-500 shadow-[0_0_10px_#ef4444]",
+    pending: "bg-slate-800 border border-white/5 opacity-30",
+  };
+  
+  return (
+    <div className={`w-2.5 h-2.5 rounded-full transition-all duration-700 ${map[status] || map.pending}`} />
+  );
+};
+
+// ── Source Card (REMOVED) ─────────
+const SourceCard = null;
 
 /**
  * Reusable row for pipeline steps

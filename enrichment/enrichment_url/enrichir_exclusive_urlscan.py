@@ -6,6 +6,7 @@ import argparse
 import time
 import re
 import asyncio
+import ipaddress
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -40,11 +41,23 @@ INVALID_EXTENSIONS = [
     '.zip', '.tar', '.rar', '.7z', '.jar', '.iso', '.lnk', '.gz'
 ]
 
-def is_valid_urlscan_target(value):
+def is_valid_urlscan_target(value, ioc_type="url"):
     """
     Heuristic to skip non-valid web targets (malware names, file names).
     """
     if not value or not isinstance(value, str): return False
+    
+    # If it's an IP, validate it
+    if ioc_type == "ip":
+        try:
+            # Handle CIDR by taking the base IP
+            if '/' in value:
+                return str(ipaddress.ip_network(value, strict=False).network_address)
+            ipaddress.ip_address(value)
+            return value
+        except:
+            return False
+
     val_low = value.lower()
     
     # Skip if it ends with a blacklisted extension
@@ -59,7 +72,7 @@ def is_valid_urlscan_target(value):
     if '.' not in value or len(value) < 5:
         return False
         
-    return True
+    return value
 
 
 class WhitelistChecker:
@@ -248,7 +261,7 @@ def enrich_urlscan(source_filter=None):
                 for ioc in record.get("iocs", []):
                     ioc_type = ioc.get("type")
                     ioc_value = ioc.get("value")
-                    if ioc_type not in ["url", "domain", "domaine"]: continue
+                    if ioc_type not in ["url", "domain", "domaine", "ip"]: continue
 
                     # --- SKIP IF ALREADY MARKED (NEW LOGIC) ---
                     if ioc.get("ioc_enrichment", {}).get("passer_par_urlscan") == 1:
@@ -272,10 +285,14 @@ def enrich_urlscan(source_filter=None):
                     # 2. API CALL (ONLY IF NOT IN DB)
                     if not limit_reached:
                         if source_submissions >= MAX_SUBMISSIONS_PER_SOURCE: continue
-                        if not is_valid_urlscan_target(ioc_value): continue
-                        if checker.is_safe(ioc_value): continue
                         
-                        uuid = urlscan.submit_scan(ioc_value)
+                        # Normalize and validate
+                        target_value = is_valid_urlscan_target(ioc_value, ioc_type)
+                        if not target_value: continue
+                        
+                        if checker.is_safe(target_value): continue
+                        
+                        uuid = urlscan.submit_scan(target_value)
                         if uuid == "LIMIT_REACHED":
                             limit_reached = True
                             logger.warning("!!! [LIMIT] Quota API atteint !!!")
@@ -286,17 +303,17 @@ def enrich_urlscan(source_filter=None):
                                 "status": "DNS_ERROR",
                                 "last_scanned": datetime.now().isoformat()
                             }
-                            registry[ioc_value] = dns_data
+                            registry[target_value] = dns_data
                             save_registry(registry)
                             
                             if apply_urlscan_metadata(ioc, record, dns_data):
                                 record_modified = True
                             
                             dns_errors += 1
-                            logger.warning(f"  [DNS_ERROR] {ioc_value[:30]}... Cached as DOWN")
+                            logger.warning(f"  [DNS_ERROR] {target_value[:30]}... Cached as DOWN")
                             continue
                         elif uuid:
-                            logger.info(f"  [SUBMIT] {ioc_value[:30]}... Poll en cours (60s max)...")
+                            logger.info(f"  [SUBMIT] {target_value[:30]}... Poll en cours (60s max)...")
                             # ACTIVE POLLING
                             attempts = 0
                             while attempts < 12:
