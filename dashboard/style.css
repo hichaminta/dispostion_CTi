@@ -1366,4 +1366,57 @@ tr:last-child td { border-bottom: none; }
     font-size: 0.75rem;
 }
 
+/* Status Badges */
+.status-vt {
+    background: rgba(46, 144, 250, 0.2) !important;
+    color: #4da3ff !important;
+    border: 1px solid rgba(46, 144, 250, 0.3) !important;
+}
+
+.status-heuristic {
+    background: rgba(247, 144, 9, 0.1) !important;
+    color: var(--warning-color) !important;
+}
+
+/* Clickable Intelligence Items */
+.clickable-intel {
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    border-left: 3px solid transparent !important;
+}
+
+.clickable-intel:hover {
+    background: rgba(46, 144, 250, 0.1) !important;
+    border-color: var(--accent-color) !important;
+    transform: translateX(6px);
+    border-left: 3px solid var(--accent-color) !important;
+}
+
+.clickable-intel i {
+    transition: transform 0.2s ease;
+}
+
+.clickable-intel:hover i {
+    transform: translateX(4px);
+    color: var(--accent-color);
+}
+
+.vt-details {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.score-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 0.75rem;
+}
+
+.score-high { color: var(--danger-color); background: rgba(240, 68, 56, 0.1); }
+.score-mid { color: var(--warning-color); background: rgba(247, 144, 9, 0.1); }
+.score-low { color: var(--success-color); background: rgba(18, 183, 106, 0.1); }
+
 

@@ -405,6 +405,24 @@ function renderTable(data) {
             `;
         }
 
+        // VirusTotal Info
+        let vtDisplay = `<span class="scan-status no">No</span>`;
+        const hasVT = (item.iocs || []).some(ioc => ioc.ioc_enrichment?.passer_par_virustotal === 1);
+        const vtMalicious = (item.iocs || []).reduce((acc, ioc) => acc + (ioc.ioc_enrichment?.vt_malicious_count || 0), 0);
+
+        if (hasVT) {
+            let vtClass = "score-low";
+            if (vtMalicious > 5) vtClass = "score-high";
+            else if (vtMalicious > 0) vtClass = "score-mid";
+            
+            vtDisplay = `
+                <div class="urlscan-cell">
+                    <span class="scan-status yes status-vt">VT</span>
+                    <span class="score-badge ${vtClass}">${vtMalicious}</span>
+                </div>
+            `;
+        }
+
         return `
             <tr>
                 <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-secondary)">${item.record_id.substring(0, 10)}...</td>
@@ -422,6 +440,7 @@ function renderTable(data) {
                 <td>${date}</td>
                 <td>${urlscanDisplay}</td>
                 <td>${fallbackDisplay}</td>
+                <td>${vtDisplay}</td>
                 <td>
                     <button class="view-btn action-view-details" data-record-id="${item.record_id}">View Details</button>
                 </td>
@@ -685,6 +704,27 @@ window.viewRaw = (recordId) => {
         fallbackMeta.innerHTML = `<p class="empty-msg">No fallback data available</p>`;
     }
 
+    // VirusTotal Analysis
+    const vtHashList = document.getElementById('vt-hash-list');
+    const vtStatsSummary = document.getElementById('vt-stats-summary');
+    const vtiocs = (item.iocs || []).filter(i => i.ioc_enrichment?.passer_par_virustotal === 1);
+
+    if (vtiocs.length > 0) {
+        vtHashList.innerHTML = vtiocs.map((ioc, idx) => `
+            <div class="context-item clickable-intel" onclick="showVTHashDetails('${item.record_id}', '${ioc.value}')">
+                <span class="context-key">${ioc.type.toUpperCase()}</span>
+                <span class="context-val analysis-val">${ioc.value.substring(0, 16)}...</span>
+                <i data-lucide="chevron-right" size="14"></i>
+            </div>
+        `).join('');
+
+        // Show first one by default
+        window.showVTHashDetails(item.record_id, vtiocs[0].value);
+    } else {
+        vtHashList.innerHTML = `<p class="empty-msg">No VirusTotal data available</p>`;
+        vtStatsSummary.innerHTML = `<p class="empty-msg">No scan data available</p>`;
+    }
+
     // Show Modal
     modalOverlay.classList.remove('hidden');
     
@@ -699,9 +739,47 @@ function getIconForType(type) {
         case 'url': return 'link';
         case 'cve': return 'alert-triangle';
         case 'hash': return 'file-digit';
+        case 'md5': return 'file-digit';
+        case 'sha1': return 'file-digit';
+        case 'sha256': return 'file-digit';
         default: return 'info';
     }
 }
+
+window.showVTHashDetails = (recordId, hashValue) => {
+    const item = window.lastLoadedData.find(d => String(d.record_id) === String(recordId));
+    if (!item) return;
+
+    const ioc = (item.iocs || []).find(i => i.value === hashValue);
+    if (!ioc || !ioc.ioc_enrichment) return;
+
+    const enr = ioc.ioc_enrichment;
+    const vtStatsSummary = document.getElementById('vt-stats-summary');
+    
+    let scoreClass = "score-low";
+    if (enr.vt_malicious_count > 5) scoreClass = "score-high";
+    else if (enr.vt_malicious_count > 0) scoreClass = "score-mid";
+
+    vtStatsSummary.innerHTML = `
+        <div class="vt-details animate-fade-in">
+            <div class="context-item"><span class="context-key">Malicious</span><span class="context-val ${scoreClass}">${enr.vt_malicious_count || 0} / ${enr.vt_total_engines || 0}</span></div>
+            <div class="context-item"><span class="context-key">Reputation</span><span class="context-val">${enr.vt_reputation || 0}</span></div>
+            <div class="context-item"><span class="context-key">Last Scan</span><span class="context-val">${enr.vt_last_analysis ? new Date(enr.vt_last_analysis).toLocaleString() : 'N/A'}</span></div>
+            <div class="context-item"><span class="context-key">Type</span><span class="context-val">${ioc.type.toUpperCase()}</span></div>
+            <div class="context-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                <span class="context-key">Full Hash</span>
+                <span class="context-val" style="word-break: break-all; font-family: monospace; font-size: 0.8rem; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; width: 100%;">${ioc.value}</span>
+            </div>
+            <div class="context-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                <span class="context-key">Tags</span>
+                <div class="badge-container" style="margin-top: 4px;">
+                    ${(enr.vt_tags || []).map(t => `<span class="tag" style="background: rgba(46, 144, 250, 0.1); color: var(--accent-color);">${t}</span>`).join('') || '<span class="empty-msg">No tags</span>'}
+                </div>
+            </div>
+        </div>
+    `;
+    if (window.lucide) window.lucide.createIcons();
+};
 
 // Event Listeners
 function setupEventListeners() {

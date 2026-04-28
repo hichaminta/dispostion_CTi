@@ -9,8 +9,10 @@ class BaseExtractor:
         # Regex patterns
         self.patterns = {
             'ip': r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b',
+            'ipv6': r'\b(?:[a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}\b|\b(?:[a-fA-F0-9]{1,4}:){1,7}:|:[:a-fA-F0-9]{1,7}\b',
             'ip_port': r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?):[0-9]{1,5}\b',
             'ip_range': r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/(?:[1-2]?[0-9]|3[0-2])\b',
+            'ipv6_range': r'\b(?:[a-fA-F0-9]{1,4}:){1,7}[:a-fA-F0-9]{0,7}/\d{1,3}\b',
             'domain': r'\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}\b',
             'url': r'\bhttps?://[^\s<>"]+\b',
             'email': r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b',
@@ -34,7 +36,8 @@ class BaseExtractor:
             "FeodoTracker": ["id"],
             "CINS Army": ["ip", "id"],
             "OpenPhish": ["url", "id"],
-            "VirusTotal": ["id"]
+            "VirusTotal": ["id"],
+            "Spamhaus": ["reference", "ioc_value", "id"]
         }
 
         # Whitelist of benign domains to filter out false positives
@@ -151,9 +154,13 @@ class BaseExtractor:
                 results['iocs'].append({'type': 'hashe', 'value': self.normalize_hash(val)})
 
         # 5. IP extraction (Range, Port, Standard) -> 'ip' type
-        # Check ranges first
+        # Check ranges first (IPv4 & IPv6)
         ip_range_matches = re.findall(self.patterns['ip_range'], text)
         for val in set(ip_range_matches):
+            results['iocs'].append({'type': 'ip', 'value': val.strip()})
+        
+        ipv6_range_matches = re.findall(self.patterns['ipv6_range'], text)
+        for val in set(ipv6_range_matches):
             results['iocs'].append({'type': 'ip', 'value': val.strip()})
             
         # Check IP with ports
@@ -161,9 +168,11 @@ class BaseExtractor:
         for val in set(ip_port_matches):
             results['iocs'].append({'type': 'ip', 'value': val.strip()})
 
-        # Check standard IPs
+        # Check standard IPs (IPv4 & IPv6)
         ip_matches = re.findall(self.patterns['ip'], text)
-        for val in set(ip_matches):
+        ipv6_matches = re.findall(self.patterns['ipv6'], text)
+        
+        for val in set(ip_matches + ipv6_matches):
             norm_ip = self.normalize_ip(val)
             if norm_ip:
                 if self.is_whitelisted(norm_ip): continue
@@ -353,6 +362,21 @@ class BaseExtractor:
         temp_text = json.dumps(item, ensure_ascii=False)
         extracted = self.extract_from_text(temp_text)
         
+        # Ensure structured fields are caught if regex missed them (e.g. compressed IPv6)
+        structured_fields = ['ioc_value', 'indicator', 'value', 'ip', 'domain', 'url']
+        for field in structured_fields:
+            if field in item and item[field]:
+                val = str(item[field])
+                # Only add if not already extracted
+                if not any(ioc['value'] == val for ioc in extracted['iocs']):
+                    # Simple heuristic for type
+                    if '/' in val or re.match(r'^[0-9.]+$', val) or ':' in val:
+                        extracted['iocs'].append({'type': 'ip', 'value': val})
+                    elif '.' in val and '@' not in val:
+                        extracted['iocs'].append({'type': 'domaine', 'value': val})
+                    elif val.startswith('http'):
+                        extracted['iocs'].append({'type': 'url', 'value': val})
+
         record_id = self.get_record_id(source_name, item)
         tags = self.extract_tags(item)
         refs = self.extract_references(item)
