@@ -40,25 +40,10 @@ class MISPClient:
                 self.misp = None
 
     # ------------------------------------------------------------------
-    # Mappage SOC -> MISP
-    # ------------------------------------------------------------------
-
-    def _get_threat_level(self, priority):
-        """Mappe le priority_score SOC (LOW/MEDIUM/HIGH/CRITICAL) vers MISP (1-4)."""
-        p = str(priority).upper()
-        mapping = {
-            "CRITICAL": 1,
-            "HIGH": 1,
-            "MEDIUM": 2,
-            "LOW": 3
-        }
-        return mapping.get(p, 4)
-
-    # ------------------------------------------------------------------
     # Gestion des événements MISP
     # ------------------------------------------------------------------
 
-    def _get_or_create_event_by_info(self, info_string, risk_level="low"):
+    def _get_or_create_event_by_info(self, info_string):
         """
         Recherche un événement existant par son champ 'info' ou en crée un.
         """
@@ -77,7 +62,7 @@ class MISPClient:
         event = MISPEvent()
         event.info = info_string
         event.distribution = 0
-        event.threat_level_id = self._get_threat_level(risk_level)
+        event.threat_level_id = 2
         event.analysis = 0
 
         try:
@@ -91,84 +76,7 @@ class MISPClient:
             return None
 
     # ------------------------------------------------------------------
-    # Push des événements corrélés (Nouveau format)
-    # ------------------------------------------------------------------
-
-    def push_correlated_file(self, json_file_path):
-        """
-        Pousse les événements d'un fichier corrélé (format SOC) vers MISP.
-        """
-        if not self.misp:
-            return False
-
-        try:
-            with open(json_file_path, 'r', encoding='utf-8') as f:
-                events_data = json.load(f)
-        except Exception as e:
-            logger.error(f"Impossible de lire {json_file_path}: {e}")
-            return False
-
-        file_modified = False
-        type_mapping = {
-            "ip": "ip-dst", "url": "url", "domain": "domain", "hostname": "hostname",
-            "sha256": "sha256", "md5": "md5", "sha1": "sha1", "cve": "vulnerability"
-        }
-
-        for event_item in events_data:
-            info_name = event_item.get("event_name")
-            priority = event_item.get("priority_score", "LOW")
-            
-            event_uuid = self._get_or_create_event_by_info(info_name, priority)
-            if not event_uuid: continue
-
-            for ioc in event_item.get("iocs", []):
-                if ioc.get("integre_par_misp") == 1: continue
-
-                misp_type = type_mapping.get(ioc["type"].lower(), ioc["type"])
-                
-                try:
-                    # Construction du commentaire SOC enrichi
-                    comment = f"Priority: {event_item.get('priority_score')} | Action: {event_item.get('soc_action')}"
-                    if event_item.get("attack_type") and event_item.get("attack_type") != "Unknown":
-                        comment += f" | Type: {event_item['attack_type']}"
-                    if event_item.get("threat_context") and event_item.get("threat_context") != "none":
-                        comment += f" | Context: {event_item['threat_context']}"
-                    if event_item.get("epss"):
-                        comment += f" | EPSS: {event_item['epss']}"
-
-                    res = self.misp.add_attribute(event_uuid, {
-                        "type": misp_type,
-                        "value": ioc["value"],
-                        "comment": comment,
-                        "to_ids": True
-                    })
-                    
-                    if isinstance(res, dict) and "errors" not in res:
-                        attr_uuid = res["Attribute"]["uuid"]
-                        # Tags globaux et MITRE
-                        for tag in event_item.get("tags", []):
-                            self.misp.tag(attr_uuid, tag)
-                        for tech in event_item.get("mitre_techniques", []):
-                            if tech != "Unknown":
-                                self.misp.tag(attr_uuid, f"mitre-attack:technique=\"{tech}\"")
-                        
-                        logger.info(f"Poussé (Corrélé) : {ioc['value']}")
-                        ioc["integre_par_misp"] = 1
-                        file_modified = True
-                    elif isinstance(res, dict) and "errors" in res:
-                        if 'A similar attribute already exists' in str(res['errors']):
-                            ioc["integre_par_misp"] = 1
-                            file_modified = True
-                except Exception as e:
-                    logger.error(f"Exception push corrélé pour {ioc['value']}: {e}")
-
-        if file_modified:
-            with open(json_file_path, 'w', encoding='utf-8') as f:
-                json.dump(events_data, f, indent=4)
-        return True
-
-    # ------------------------------------------------------------------
-    # Push d'un fichier JSON classique
+    # Push d'un fichier JSON
     # ------------------------------------------------------------------
 
     def push_event_file(self, json_file_path):
@@ -244,25 +152,24 @@ class MISPClient:
 
     def push_all(self, source_filter=None):
         """
-        Parcourt output_correlation/ et output_misp/ pour pousser les fichiers.
+        Parcourt output_misp/ et pousse tous les fichiers non encore intégrés.
         """
-        # 1. Dossier Corrélation (Prioritaire)
-        corr_dir = os.path.join(BASE_DIR, "output_correlation")
-        if os.path.exists(corr_dir):
-            for f in os.listdir(corr_dir):
-                if f.endswith(".json") and "soc_enriched" in f:
-                    logger.info(f"Synchronisation du fichier enrichi : {f}")
-                    self.push_correlated_file(os.path.join(corr_dir, f))
-
-        # 2. Dossier MISP (Sources individuelles)
         misp_output = os.path.join(BASE_DIR, "output_misp")
-        if os.path.exists(misp_output):
-            for root, dirs, files in os.walk(misp_output):
-                for file in files:
-                    if not file.endswith(".json"): continue
-                    if source_filter and source_filter.lower() not in root.lower() and source_filter.lower() not in file.lower():
-                        continue
-                    self.push_event_file(os.path.join(root, file))
+        if not os.path.exists(misp_output):
+            logger.error(f"Dossier output_misp absent : {misp_output}")
+            return
+
+        for root, dirs, files in os.walk(misp_output):
+            for file in files:
+                if not file.endswith(".json"):
+                    continue
+                
+                # Filtrer par source si demandé
+                if source_filter and source_filter.lower() not in root.lower() and source_filter.lower() not in file.lower():
+                    continue
+                
+                file_path = os.path.join(root, file)
+                self.push_event_file(file_path)
 
 
 if __name__ == "__main__":
