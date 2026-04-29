@@ -12,7 +12,7 @@ const API_BASE = `http://${window.location.hostname}:8000`;
 
 const SOURCE_LOGOS = {
   'AbuseIPDB': 'https://www.abuseipdb.com/favicon.ico',
-  'VirusTotal': 'https://www.virustotal.com/gui/images/favicon.png',
+
   'Spamhaus': 'https://www.spamhaus.org/favicon.ico',
   'URLHaus': 'https://urlhaus.abuse.ch/favicon.ico',
   'ThreatFox': 'https://threatfox.abuse.ch/favicon.ico',

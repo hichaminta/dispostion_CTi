@@ -19,5 +19,5 @@ PULSEDIVE_API_KEY=
 # FeodoTracker  →  https://feodotracker.abuse.ch/
 # URLhaus       →  https://urlhaus.abuse.ch/
 # CINS_URL       →  https://cinsarmy.com/list/ci-badguys.txt
-VIRUSTOTAL_API_KEY=
+
 URLScan_API_KEY=

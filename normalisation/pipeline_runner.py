@@ -48,6 +48,7 @@ def main():
 
 
 
+
     logger.info(f"--- PIPELINE TERMINÉE AVEC SUCCÈS POUR {source_display} ---")
     logger.info("Note : L'intégration MISP n'a pas été lancée comme demandé.")
 

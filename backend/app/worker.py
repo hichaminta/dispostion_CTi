@@ -80,7 +80,6 @@ SOURCE_MAP = {
     "Spamhaus":        {"id": "spamhaus",      "folder": "Spamhaus",                     "extractor": "spamhaus_extractor.py",       "output": "spamhaus_extracted.json"},
     "ThreatFox":       {"id": "threatfox",     "folder": "ThreatFox",                    "extractor": "threatfox_extractor.py",      "output": "threatfox_extracted.json"},
     "URLhaus":         {"id": "urlhaus",       "folder": "url",                          "extractor": "urlhaus_extractor.py",        "output": "urlhaus_extracted.json"},
-    "VirusTotal":      {"id": "virustotal",    "folder": "VirusTotal",                   "extractor": "virustotal_extractor.py",     "output": "virustotal_extracted.json"},
 }
 
 
@@ -413,13 +412,7 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         ok6 = await _run_proc(run_id, "Analyse NLP CVE", [sys.executable, nlp_enrich_script] + source_flag, PROJECT_ROOT)
         await _update_step(run_id, "Analyse NLP CVE", "success" if ok6 else "failed")
 
-        # VirusTotal Enrichment (Stage 7)
-        if _is_run_cancelled(run_id): return
-        await _update_step(run_id, "VirusTotal", "running")
-        await _ws_log(run_id, "VirusTotal", f"[{ts()}] ➔ STAGE 7 : VirusTotal Multi-engine Scan")
-        vt_enrich_script = os.path.join(PROJECT_ROOT, "enrichment", "Virus_total_enrchisment", "enrichir_vt.py")
-        ok7 = await _run_proc(run_id, "VirusTotal", [sys.executable, vt_enrich_script] + source_flag, PROJECT_ROOT)
-        await _update_step(run_id, "VirusTotal", "success" if ok7 else "failed")
+
 
         # ══════════════════════════════════════════════════════════════
         # ÉTAPE 6 : Normalisation
@@ -541,12 +534,7 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
                 nlp_enrich_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_cve", "nlp_enrichir_cve.py")
                 ok6 = await _run_proc(run_id, step_name, [sys.executable, nlp_enrich_script] + source_flag, PROJECT_ROOT)
                 
-                # VirusTotal Enrichment
-                await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 7 : VirusTotal Multi-engine Scan")
-                vt_enrich_script = os.path.join(PROJECT_ROOT, "enrichment", "Virus_total_enrchisment", "enrichir_vt.py")
-                ok7 = await _run_proc(run_id, step_name, [sys.executable, vt_enrich_script] + source_flag, PROJECT_ROOT)
-
-                step_ok = ok2 and ok3 and ok4 and ok5 and ok6 and ok7
+                step_ok = ok2 and ok3 and ok4 and ok5 and ok6
 
         elif step_name == "Enrichissement CVE":
             await _ws_log(run_id, step_name, f"[{ts()}] ➔ Enrichissement CVE via NVD API")
@@ -566,11 +554,7 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
             step_ok = await _run_proc(run_id, step_name, [sys.executable, nlp_enrich_script] + source_flag, PROJECT_ROOT)
             ioc_count, cve_count = _count_ioc_cve(source_name)
 
-        elif step_name == "VirusTotal":
-            await _ws_log(run_id, step_name, f"[{ts()}] ➔ Enrichissement Multi-moteurs VirusTotal")
-            vt_enrich_script = os.path.join(PROJECT_ROOT, "enrichment", "Virus_total_enrchisment", "enrichir_vt.py")
-            step_ok = await _run_proc(run_id, step_name, [sys.executable, vt_enrich_script] + source_flag, PROJECT_ROOT)
-            ioc_count, cve_count = _count_ioc_cve(source_name)
+
 
 
         elif step_name == "Geolocalisation":

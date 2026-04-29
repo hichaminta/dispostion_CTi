@@ -225,17 +225,7 @@
                             <div class="step-action"><i data-lucide="chevron-right"></i></div>
                         </div>
 
-                        <div class="enrich-step glass highlight-step-vt" onclick="triggerEnrichmentStep('VirusTotal')">
-                            <div class="step-number">7</div>
-                            <div class="step-icon-container">
-                                <i data-lucide="shield-check" class="step-lucide-icon text-blue-400"></i>
-                            </div>
-                            <div class="step-info">
-                                <h4>VirusTotal</h4>
-                                <p>Multi-engine Reputation (Hashes)</p>
-                            </div>
-                            <div class="step-action"><i data-lucide="chevron-right"></i></div>
-                        </div>
+
 
                         <div class="enrich-step glass highlight-step-mitre" onclick="triggerEnrichmentStep('MITRE ATT&CK')">
                             <div class="step-number">8</div>
@@ -311,7 +301,7 @@
                                     <th>Collected At</th>
                                     <th>URL Analysis</th>
                                     <th>Heuristics</th>
-                                    <th>VirusTotal</th>
+
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -353,7 +343,7 @@
                 <button class="tab-btn active" onclick="switchTab('overview')"><i data-lucide="layout"></i> Overview</button>
                 <button class="tab-btn" onclick="switchTab('intelligence')"><i data-lucide="zap"></i> Intelligence</button>
                 <button class="tab-btn" onclick="switchTab('context')"><i data-lucide="globe"></i> Context</button>
-                <button class="tab-btn" onclick="switchTab('vt-analysis')"><i data-lucide="shield-check"></i> VirusTotal</button>
+
                 <button class="tab-btn" onclick="switchTab('mitre')"><i data-lucide="target"></i> MITRE ATT&CK</button>
                 <button class="tab-btn" onclick="switchTab('analysis')"><i data-lucide="scan-eye"></i> URL Analysis</button>
                 <button class="tab-btn" onclick="switchTab('raw')"><i data-lucide="code"></i> Raw Data</button>
@@ -446,23 +436,7 @@
                     </div>
                 </div>
 
-                <!-- VirusTotal Tab -->
-                <div id="tab-vt-analysis" class="tab-pane">
-                    <div class="analysis-grid">
-                        <div class="analysis-meta-vault glass">
-                            <div class="tab-section-label"><i data-lucide="file-digit"></i> File Hash reputation</div>
-                            <div id="vt-hash-list" class="analysis-list">
-                                <p class="empty-msg">No VirusTotal hash data available</p>
-                            </div>
-                        </div>
-                        <div class="analysis-meta-vault glass">
-                            <div class="tab-section-label"><i data-lucide="activity"></i> Detection Stats</div>
-                            <div id="vt-stats-summary" class="analysis-list">
-                                <p class="empty-msg">Select a hash to view details</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+
 
                 <!-- MITRE ATT&CK Tab -->
                 <div id="tab-mitre" class="tab-pane">

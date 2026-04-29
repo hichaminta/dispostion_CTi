@@ -64,19 +64,6 @@ def run_enrichment():
     else:
         logger.warning("[STAGE 4] Consolidated CVE script NOT FOUND. Skipping.")
 
-    # ─── STAGE 5: VIRUSTOTAL ENRICHMENT (Reputation & Engines) ───
-    vt_script = os.path.join(base_dir, "Virus_total_enrchisment", "enrichir_vt.py")
-    if os.path.exists(vt_script):
-        logger.info("──────────────────────────────────────────")
-        logger.info("[STAGE 6/6] VirusTotal Enrichment (Multi-engine scan)...")
-        logger.info("──────────────────────────────────────────")
-        try:
-            subprocess.run([sys.executable, vt_script], check=False)
-        except Exception as e:
-            logger.error(f"  [ERROR] Failed to run VirusTotal enrichment stage: {e}")
-    else:
-        logger.warning("[STAGE 6] VirusTotal enrichment script NOT FOUND. Skipping.")
-
     # ─── STAGE 7: MITRE ATT&CK MAPPING (CVEs & IOCs) ───
     mitre_script = os.path.join(base_dir, "mitre_attack", "mitre_mapper.py")
     if os.path.exists(mitre_script):

@@ -25,7 +25,7 @@ const SOURCES = [
   { id: 'spamhaus',     name: 'Spamhaus',         type: 'Drop List',        color: 'green'  },
   { id: 'threatfox',    name: 'ThreatFox',        type: 'IOC Sharing',      color: 'rose'   },
   { id: 'urlhaus',      name: 'URLhaus',          type: 'Malicious URLs',   color: 'amber'  },
-  { id: 'virustotal',   name: 'VirusTotal',       type: 'Multi-engine Scan',color: 'violet' },
+
 ];
 
 const PIPELINE_PHASES = [
@@ -36,7 +36,7 @@ const PIPELINE_PHASES = [
   { id: 'fallback',      label: 'FALL', full: 'Fallback',             icon: Layers },
   { id: 'cve_enr',       label: 'CVE',  full: 'Enrichissement CVE',   icon: AlertTriangle },
   { id: 'nlp',           label: 'NLP',  full: 'Analyse NLP CVE',      icon: Cpu },
-  { id: 'vt',            label: 'VT',   full: 'VirusTotal',           icon: Shield },
+
   { id: 'norm',          label: 'NORM', full: 'Normalisation',        icon: Activity },
   { id: 'misp',          label: 'MISP', full: 'Intégration MISP',     icon: Zap },
 ];
@@ -54,7 +54,7 @@ const COLOR_CLASSES = {
   green:  'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20',
   rose:   'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20',
   amber:  'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20',
-  violet: 'bg-violet-500/10 border-violet-500/30 text-violet-400 hover:bg-violet-500/20',
+
 };
 
 const ArrowConnector = () => (
@@ -458,21 +458,6 @@ const Dashboard = ({ onSelectRun }) => {
                       {isStarting ? <Loader2 size={12} className="animate-spin" /> : <Cpu size={12} />}
                     </div>
                     <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-indigo-400 uppercase">NLP</span>
-                  </button>
-
-                  <ArrowConnector />
-
-                  {/* VirusTotal Enrichment */}
-                  <button
-                    onClick={() => startGlobalStep('VirusTotal')}
-                    disabled={stats?.running_runs > 0 || isStarting}
-                    title="Stage 7: VirusTotal Multi-engine Scan"
-                    className={`flex flex-col items-center gap-1 px-3 py-1 group/step ${isStarting ? 'opacity-40' : ''}`}
-                  >
-                    <div className="w-7 h-7 rounded bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 group-hover/step:bg-violet-500 group-hover/step:text-white transition-all">
-                      {isStarting ? <Loader2 size={12} className="animate-spin" /> : <Shield size={12} />}
-                    </div>
-                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-violet-400 uppercase">VT</span>
                   </button>
 
                   <ArrowConnector />

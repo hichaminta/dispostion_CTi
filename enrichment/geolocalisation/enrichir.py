@@ -26,31 +26,10 @@ logger = logging.getLogger("Enrichir")
 # Paths
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUTPUT_DIR = os.path.join(BASE_DIR, "output_enrichment")
-TRACKING_DIR = os.path.join(BASE_DIR, "enrichment", "tracking")
 GEO_BASE_FILE = os.path.join(os.path.dirname(__file__), "geo_base.json")
 
 # API Configuration
 EXTERNAL_API_URL = "http://ip-api.com/json/{ip}?fields=status,message,countryCode,country"
-
-def get_tracking_file(source):
-    return os.path.join(TRACKING_DIR, f"{source}_tracking.json")
-
-def load_source_tracking(source):
-    if not os.path.exists(TRACKING_DIR):
-        os.makedirs(TRACKING_DIR)
-    path = get_tracking_file(source)
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
-
-def save_source_tracking(source, data):
-    path = get_tracking_file(source)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
 
 def clean_ip_address(ip):
     """
@@ -128,31 +107,6 @@ def enrich_all(source_filter=None):
         source = get_source_from_filename(filename)
         file_path = os.path.join(OUTPUT_DIR, filename)
         
-        # Load source tracking (Unified with NLP)
-        source_data = load_source_tracking(source)
-        
-        # Ensure 'geo' section and all keys exist (Robust Initialization)
-        if "geo" not in source_data or not isinstance(source_data["geo"], dict):
-            source_data["geo"] = {}
-        
-        geo_defaults = {
-            "first_ip_date": None,
-            "last_ip_date": None,
-            "total_ips": 0,
-            "last_run": None,
-            "files_processed": []
-        }
-        for k, v in geo_defaults.items():
-            if k not in source_data["geo"]:
-                source_data["geo"][k] = v
-
-        last_ip_date_str = source_data["geo"].get("last_ip_date")
-        last_ip_date = None
-        if last_ip_date_str:
-            try:
-                last_ip_date = datetime.fromisoformat(last_ip_date_str.replace('Z', '+00:00'))
-            except: pass
-        
         logger.info(f"Processing source: {source} (File: {filename})")
         
         try:
@@ -160,21 +114,10 @@ def enrich_all(source_filter=None):
                 data = json.load(f)
             
             modified = False
-            file_min_date = None
-            file_max_date = None
             
             # --- PHASE 1: COLLECT UNIQUE IPs ---
             unique_raw_ips = set()
             for record in data:
-                # Quick date check to skip already processed records (Efficiency)
-                record_ts_str = record.get("collected_at") or record.get("extracted_at") or record.get("first_seen")
-                if record_ts_str and last_ip_date:
-                    try:
-                        record_ts = datetime.fromisoformat(record_ts_str.replace('Z', '+00:00'))
-                        if record_ts <= last_ip_date:
-                            continue
-                    except: pass
-                
                 for ioc in record.get("iocs", []):
                     if ioc.get("type") == "ip":
                         val = ioc.get("value")
@@ -205,29 +148,12 @@ def enrich_all(source_filter=None):
                         logger.info(f"API result for {clean_ip}: {country_code}. Saving to cache.")
                         geo_mgr.insert_mapping(clean_ip, country_code, country_name, source="ip-api.com", auto_save=True)
                         total_new_geos += 1
-                    else:
-                        # Optional: Negative Cache entry (save as UNKNOWN to avoid retries in this run)
-                        # geo_mgr.insert_mapping(clean_ip, "??", None, source="ip-api.com_failed", auto_save=True)
-                        pass
 
                 if country_code:
                     lookup_cache[raw_ip] = (country_code, country_name)
 
             # --- PHASE 3: APPLY ENRICHMENT ---
             for record in data:
-                record_ts_str = record.get("collected_at") or record.get("extracted_at") or record.get("first_seen")
-                if record_ts_str:
-                    try:
-                        if not file_min_date or record_ts_str < file_min_date: file_min_date = record_ts_str
-                        if not file_max_date or record_ts_str > file_max_date: file_max_date = record_ts_str
-                        
-                        # Skip if record is in the past
-                        if last_ip_date:
-                            record_ts = datetime.fromisoformat(record_ts_str.replace('Z', '+00:00'))
-                            if record_ts <= last_ip_date:
-                                continue
-                    except: pass
-
                 record_modified = False
                 for ioc in record.get("iocs", []):
                     if ioc.get("type") == "ip":
@@ -266,27 +192,15 @@ def enrich_all(source_filter=None):
                                 tags.append(country_code)
                                 record["tags"] = sorted(list(set(tags)))
                                 record_modified = True
+
+                            # Update attributes if country is missing
+                            if "attributes" not in record: record["attributes"] = {}
+                            if not record["attributes"].get("country") and not record["attributes"].get("country_code"):
+                                record["attributes"]["country"] = country_code
+                                record_modified = True
                 
                 if record_modified:
                     modified = True
-            
-            # --- After Loop ---
-            geo_stats = source_data["geo"]
-            if file_min_date:
-                existing_min = geo_stats.get("first_ip_date")
-                if not existing_min or file_min_date < existing_min:
-                    geo_stats["first_ip_date"] = file_min_date
-            if file_max_date:
-                if not geo_stats.get("last_ip_date") or file_max_date > geo_stats["last_ip_date"]:
-                    geo_stats["last_ip_date"] = file_max_date
-            
-            geo_stats["total_ips"] = len(data)
-            geo_stats["last_run"] = datetime.now().isoformat()
-            if filename not in geo_stats.get("files_processed", []):
-                if "files_processed" not in geo_stats: geo_stats["files_processed"] = []
-                geo_stats["files_processed"].append(filename)
-                
-            save_source_tracking(source, source_data)
             
             if modified:
                 with open(file_path, "w", encoding="utf-8") as f:

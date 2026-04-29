@@ -360,7 +360,6 @@ async function loadData() {
 
 const SOURCE_LOGOS = {
     'AbuseIPDB': 'https://www.abuseipdb.com/favicon.ico',
-    'VirusTotal': 'https://www.virustotal.com/gui/images/favicon.png',
     // 'OTX AlienVault': 'https://otx.alienvault.com/assets/favicon.ico',
     // 'AlienVault': 'https://otx.alienvault.com/assets/favicon.ico',
     'Spamhaus': 'https://www.spamhaus.org/favicon.ico',
@@ -469,14 +468,13 @@ function renderTable(data) {
                 <th>Collected At</th>
                 <th>URL Analysis</th>
                 <th>Heuristics</th>
-                <th>VirusTotal</th>
                 <th>Actions</th>
             </tr>
         `;
     }
 
     if (data.length === 0) {
-        const colSpan = viewMode === 'mitre' ? 7 : 9;
+        const colSpan = viewMode === 'mitre' ? 7 : 8;
         tableBody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center; padding: 40px; color: var(--text-secondary);">No records found matching criteria</td></tr>`;
         return;
     }
@@ -558,23 +556,7 @@ function renderTable(data) {
             `;
         }
 
-        // VirusTotal Info
-        let vtDisplay = `<span class="scan-status no">No</span>`;
-        const hasVT = (item.iocs || []).some(ioc => ioc.ioc_enrichment?.passer_par_virustotal === 1);
-        const vtMalicious = (item.iocs || []).reduce((acc, ioc) => acc + (ioc.ioc_enrichment?.vt_malicious_count || 0), 0);
 
-        if (hasVT) {
-            let vtClass = "score-low";
-            if (vtMalicious > 5) vtClass = "score-high";
-            else if (vtMalicious > 0) vtClass = "score-mid";
-            
-            vtDisplay = `
-                <div class="urlscan-cell">
-                    <span class="scan-status yes status-vt">VT</span>
-                    <span class="score-badge ${vtClass}">${vtMalicious}</span>
-                </div>
-            `;
-        }
 
         return `
             <tr>
@@ -592,7 +574,6 @@ function renderTable(data) {
                 <td>${date}</td>
                 <td>${urlscanDisplay}</td>
                 <td>${fallbackDisplay}</td>
-                <td>${vtDisplay}</td>
                 <td>
                     <button class="view-btn action-view-details" data-record-id="${item.record_id}">View Details</button>
                 </td>
@@ -856,26 +837,7 @@ window.viewRaw = (recordId) => {
         fallbackMeta.innerHTML = `<p class="empty-msg">No fallback data available</p>`;
     }
 
-    // VirusTotal Analysis
-    const vtHashList = document.getElementById('vt-hash-list');
-    const vtStatsSummary = document.getElementById('vt-stats-summary');
-    const vtiocs = (item.iocs || []).filter(i => i.ioc_enrichment?.passer_par_virustotal === 1);
 
-    if (vtiocs.length > 0) {
-        vtHashList.innerHTML = vtiocs.map((ioc, idx) => `
-            <div class="context-item clickable-intel" onclick="showVTHashDetails('${item.record_id}', '${ioc.value}')">
-                <span class="context-key">${ioc.type.toUpperCase()}</span>
-                <span class="context-val analysis-val">${ioc.value.substring(0, 16)}...</span>
-                <i data-lucide="chevron-right" size="14"></i>
-            </div>
-        `).join('');
-
-        // Show first one by default
-        window.showVTHashDetails(item.record_id, vtiocs[0].value);
-    } else {
-        vtHashList.innerHTML = `<p class="empty-msg">No VirusTotal data available</p>`;
-        vtStatsSummary.innerHTML = `<p class="empty-msg">No scan data available</p>`;
-    }
 
     // MITRE ATT&CK Mapping
     const mitreList = document.getElementById('mitre-list');

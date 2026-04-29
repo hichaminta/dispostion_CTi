@@ -36,7 +36,7 @@ class BaseExtractor:
             "FeodoTracker": ["id"],
             "CINS Army": ["ip", "id"],
             "OpenPhish": ["url", "id"],
-            "VirusTotal": ["id"],
+
             "Spamhaus": ["reference", "ioc_value", "id"]
         }
 
@@ -51,7 +51,7 @@ class BaseExtractor:
             "apple.com", "apple.net",
             "facebook.com", "facebook.net", "facebook.org",
             "sinkhole.ch", "abuse.ch", "shadowserver.org",
-            "phishtank.com", "abuseipdb.com", "alienvault.com", "virustotal.com",
+            "phishtank.com", "abuseipdb.com", "alienvault.com",
             "pulsedive.com", "openphish.com", "spamhaus.org", "cinsarmy.com",
             "nist.gov",
             "localhost", "example.com", "127.0.0.1"
@@ -347,13 +347,7 @@ class BaseExtractor:
         if item.get('delivery_method'): attrs['delivery_method'] = item.get('delivery_method')
         if item.get('file_size'): attrs['file_size'] = item.get('file_size')
 
-        # --- Handle Nested Attributes (e.g. VirusTotal) ---
-        if 'attributes' in item and isinstance(item['attributes'], dict):
-            vt_attrs = item['attributes']
-            if not attrs.get('reputation'): attrs['reputation'] = vt_attrs.get('reputation')
-            if not attrs.get('status'): attrs['status'] = vt_attrs.get('status')
-            if vt_attrs.get('type_description'): attrs['type_description'] = vt_attrs.get('type_description')
-            if vt_attrs.get('names'): attrs['filenames'] = vt_attrs.get('names')
+
 
         return attrs
 

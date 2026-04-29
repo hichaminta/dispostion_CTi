@@ -63,14 +63,13 @@ def map_record(record):
     # Malware Family
     search_text.append(record.get("attributes", {}).get("malware_family", ""))
     
-    # 2. Check IOC level enrichment (VirusTotal tags, etc.)
+    # 2. Enrich from IOC-specific data
     for ioc in record.get("iocs", []):
         enrichment = ioc.get("ioc_enrichment", {})
-        # VT Tags
-        search_text.extend(enrichment.get("vt_tags", []))
         # Other potential fields
         search_text.append(enrichment.get("threat_type", ""))
         search_text.append(enrichment.get("malware_family", ""))
+        search_text.extend(enrichment.get("vt_tags", []))
     
     # Normalize text
     full_text = " ".join([str(t) for t in search_text if t]).lower()

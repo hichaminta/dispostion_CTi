@@ -70,7 +70,7 @@ async def create_run(run_in: schemas.RunCreate, background_tasks: BackgroundTask
         "status_global": "running"
     }
     db.create_run(new_run)
-    steps = ["Collecte", "Extraction CVE / IOC", "Geolocalisation", "URLScan", "Enrichissement CVE", "Analyse NLP CVE", "VirusTotal", "Normalisation", "Intégration MISP"]
+    steps = ["Collecte", "Extraction CVE / IOC", "Geolocalisation", "URLScan", "Enrichissement CVE", "Analyse NLP CVE", "Normalisation", "Intégration MISP"]
     for step_name in steps:
         db.update_step(external_id, {
             "step_name": step_name,
@@ -151,38 +151,15 @@ async def create_targeted_run(run_in: schemas.RunCreate, step_name: str, backgro
     background_tasks.add_task(worker.execute_targeted_task, external_id, run_in.source_name, step_name)
     return run_obj
 
-@app.get("/stats")
-def get_stats():
-    from datetime import datetime as dt
-    total_ioc = 0
-    total_cve = 0
-    # Process both standard and enriched (standardized has correct full count)
-    if os.path.exists(OUTPUT_DIR):
-        for fn in os.listdir(OUTPUT_DIR):
-            if not fn.endswith(".json"): continue
-            filepath = os.path.join(OUTPUT_DIR, fn)
-            is_cve_only = "nvd" in fn.lower()
-            try:
-                with open(filepath, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                if isinstance(data, list):
-                    for rec in data:
-                        if isinstance(rec, dict):
-                            if not is_cve_only: total_ioc += len(rec.get("iocs", []) or [])
-                            total_cve += len(rec.get("cves", []) or [])
-                elif isinstance(data, dict):
-                    if not is_cve_only: total_ioc += len(data.get("iocs", []) or [])
-                    total_cve += len(data.get("cves", []) or [])
-            except: pass
-    runs = db.get_runs()
-    durations = []
-    for r in runs:
-        ca, ua = r.get("created_at"), r.get("updated_at")
-        if ca and ua:
-            try:
-                d = (dt.fromisoformat(ua) - dt.fromisoformat(ca)).total_seconds()
-                if d > 0: durations.append(d)
-            except: pass
+    # MISP Sync Status
+    misp_tracking_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "misp_integration", "tracking", "misp_tracking.json"))
+    misp_status = None
+    if os.path.exists(misp_tracking_path):
+        try:
+            with open(misp_tracking_path, "r", encoding="utf-8") as f:
+                misp_status = json.load(f)
+        except: pass
+
     res = {
         "total_ioc": total_ioc,
         "total_cve": total_cve,
@@ -190,8 +167,20 @@ def get_stats():
         "success_runs": sum(1 for r in runs if r.get("status_global") == "success"),
         "running_runs": sum(1 for r in runs if r.get("status_global") == "running"),
         "avg_duration_sec": round(sum(durations) / len(durations)) if durations else 0,
+        "misp_sync": misp_status
     }
     return res
+
+@app.get("/api/misp/status")
+def get_misp_status():
+    misp_tracking_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "misp_integration", "tracking", "misp_tracking.json"))
+    if not os.path.exists(misp_tracking_path):
+        return {"error": "Tracking file not found"}
+    try:
+        with open(misp_tracking_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/api/stats/countries")
 def get_country_stats():
