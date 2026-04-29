@@ -77,6 +77,19 @@ def run_enrichment():
     else:
         logger.warning("[STAGE 6] VirusTotal enrichment script NOT FOUND. Skipping.")
 
+    # ─── STAGE 7: MITRE ATT&CK MAPPING (CVEs & IOCs) ───
+    mitre_script = os.path.join(base_dir, "mitre_attack", "mitre_mapper.py")
+    if os.path.exists(mitre_script):
+        logger.info("──────────────────────────────────────────")
+        logger.info("[STAGE 7/7] MITRE ATT&CK Mapping (Consolidating techniques)...")
+        logger.info("──────────────────────────────────────────")
+        try:
+            subprocess.run([sys.executable, mitre_script], check=False)
+        except Exception as e:
+            logger.error(f"  [ERROR] Failed to run MITRE mapping stage: {e}")
+    else:
+        logger.warning("[STAGE 7] MITRE mapping script NOT FOUND. Skipping.")
+
     logger.info("==========================================")
     logger.info("ENRICHMENT PIPELINE COMPLETED.")
     logger.info("==========================================")

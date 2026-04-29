@@ -5,6 +5,7 @@
 const API_BASE = `http://${window.location.hostname}:8000`;
 const API_BASE_EXTRACTED = `${API_BASE}/api/extracted`;
 const API_BASE_ENRICHED = `${API_BASE}/api/enriched`;
+const API_BASE_MITRE = `${API_BASE}/api/mitre`;
 const API_BASE_STATS = `${API_BASE}/api/stats`;
 
 let viewMode = 'extracted'; // 'extracted' or 'enriched'
@@ -13,6 +14,80 @@ let currentSource = null;
 let currentPage = 1;
 const PAGE_SIZE = 50;
 let sources = [];
+
+const MITRE_MATRIX = [
+    { id: 'TA0001', name: 'Initial Access', techniques: ['T1566', 'T1190', 'T1133', 'T1195', 'T1199', 'T1091'] },
+    { id: 'TA0002', name: 'Execution', techniques: ['T1204', 'T1059.001', 'T1059.007', 'T1047', 'T1203', 'T1106'] },
+    { id: 'TA0003', name: 'Persistence', techniques: ['T1547', 'T1136', 'T1098', 'T1574', 'T1543', 'T1037'] },
+    { id: 'TA0004', name: 'Privilege Escalation', techniques: ['T1548', 'T1068', 'T1055', 'T1547', 'T1078', 'T1543'] },
+    { id: 'TA0005', name: 'Defense Evasion', techniques: ['T1497', 'T1027', 'T1070', 'T1218', 'T1112', 'T1202'] },
+    { id: 'TA0006', name: 'Credential Access', techniques: ['T1110', 'T1555', 'T1003', 'T1552', 'T1528', 'T1557'] },
+    { id: 'TA0007', name: 'Discovery', techniques: ['T1083', 'T1082', 'T1057', 'T1012', 'T1049', 'T1016'] },
+    { id: 'TA0008', name: 'Lateral Movement', techniques: ['T1570', 'T1210', 'T1021', 'T1563', 'T1080', 'T1550'] },
+    { id: 'TA0009', name: 'Collection', techniques: ['T1005', 'T1074', 'T1560', 'T1113', 'T1119', 'T1114'] },
+    { id: 'TA0011', name: 'Command & Control', techniques: ['T1071', 'T1105', 'T1008', 'T1090', 'T1573', 'T1102'] },
+    { id: 'TA0010', name: 'Exfiltration', techniques: ['T1041', 'T1020', 'T1011', 'T1048', 'T1052', 'T1567'] },
+    { id: 'TA0040', name: 'Impact', techniques: ['T1486', 'T1489', 'T1490', 'T1491', 'T1565', 'T1531'] }
+];
+
+async function renderMitreMatrix(sourceData = null) {
+    const grid = document.getElementById('mitre-matrix-grid');
+    if (!grid) return;
+
+    let detectedTechs = {};
+    
+    if (sourceData) {
+        // Use provided source data for local view
+        sourceData.forEach(item => {
+            (item.mitre_attack || []).forEach(m => {
+                if (!m.id.startsWith('TA')) {
+                    detectedTechs[m.id] = (detectedTechs[m.id] || 0) + 1;
+                }
+            });
+        });
+    } else {
+        // Fetch global stats from API
+        try {
+            const response = await fetch(`${API_BASE_MITRE}/matrix`);
+            detectedTechs = await response.json();
+        } catch (err) {
+            console.error("Failed to fetch MITRE matrix stats:", err);
+        }
+    }
+
+    const maxCount = Math.max(...Object.values(detectedTechs), 1);
+
+    // 2. Render each tactic column
+    grid.innerHTML = MITRE_MATRIX.map(tactic => {
+        const techniquesHtml = tactic.techniques.map(techId => {
+            const count = detectedTechs[techId] || 0;
+            const isActive = count > 0;
+            
+            // Heatmap intensity (0 to 1)
+            const intensity = isActive ? Math.min(0.2 + (count / maxCount) * 0.8, 1) : 0;
+            const bgColor = isActive ? `rgba(240, 68, 56, ${intensity})` : 'rgba(255, 255, 255, 0.03)';
+            const borderColor = isActive ? `rgba(240, 68, 56, ${intensity + 0.2})` : 'rgba(255, 255, 255, 0.05)';
+
+            return `
+                <div class="technique-cell ${isActive ? 'active' : ''}" 
+                     style="background: ${bgColor}; border-color: ${borderColor};"
+                     title="Technique ${techId} (${count} occurrences)">
+                    <span class="tech-id">${techId}</span>
+                    ${isActive ? `<span class="tech-count">${count}</span>` : ''}
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="tactic-column">
+                <div class="tactic-header">${tactic.name}</div>
+                <div class="tactic-techniques">
+                    ${techniquesHtml}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
 
 // Elements
 const sourceList = document.getElementById('source-list');
@@ -34,8 +109,6 @@ const modalOverlay = document.getElementById('modal-overlay');
 const jsonViewer = document.getElementById('raw-json-viewer');
 const closeModal = document.getElementById('close-modal');
 const countryStatsList = document.getElementById('country-stats-list');
-const scrollUpBtn = document.getElementById('scroll-up');
-const scrollDownBtn = document.getElementById('scroll-down');
 
 // Init
 async function init() {
@@ -58,6 +131,7 @@ window.setMode = async (mode) => {
     // Update UI
     document.getElementById('mode-extracted').classList.toggle('active', mode === 'extracted');
     document.getElementById('mode-enriched').classList.toggle('active', mode === 'enriched');
+    document.getElementById('mode-mitre').classList.toggle('active', mode === 'mitre');
     
     currentSource = null;
     currentPage = 1;
@@ -75,7 +149,11 @@ window.setMode = async (mode) => {
 
 // Load Sources
 async function loadSources() {
-    const api = viewMode === 'extracted' ? API_BASE_EXTRACTED : API_BASE_ENRICHED;
+    let api;
+    if (viewMode === 'extracted') api = API_BASE_EXTRACTED;
+    else if (viewMode === 'enriched') api = API_BASE_ENRICHED;
+    else api = API_BASE_MITRE;
+    
     try {
         const response = await fetch(`${api}/sources`);
         sources = await response.json();
@@ -114,7 +192,11 @@ async function selectSource(sourceId) {
     const srcObj = sources.find(s => s.id === sourceId);
     if (srcObj) {
         currentSourceName.textContent = srcObj.name;
-        currentSourceInfo.textContent = `${viewMode === 'extracted' ? 'Extraction' : 'Enrichment'} results from ${srcObj.file}`;
+        let modeLabel = 'Extraction';
+        if (viewMode === 'enriched') modeLabel = 'Enrichment';
+        else if (viewMode === 'mitre') modeLabel = 'MITRE Test Mapping';
+        
+        currentSourceInfo.textContent = `${modeLabel} results from ${srcObj.file}`;
         fileSizeEl.textContent = formatSize(srcObj.size);
         lastUpdateStat.textContent = new Date(srcObj.last_modified * 1000).toLocaleString();
         
@@ -231,7 +313,12 @@ async function loadData() {
         </tr>
     `).join('');
     
-    const api = viewMode === 'extracted' ? API_BASE_EXTRACTED : API_BASE_ENRICHED;
+    
+    let api;
+    if (viewMode === 'extracted') api = API_BASE_EXTRACTED;
+    else if (viewMode === 'enriched') api = API_BASE_ENRICHED;
+    else api = API_BASE_MITRE;
+    
     const query = new URLSearchParams({
         page: currentPage,
         limit: PAGE_SIZE,
@@ -245,6 +332,15 @@ async function loadData() {
         
         renderTable(result.data);
         updateDashboardStats(result);
+        
+        // Render MITRE Matrix if in mitre mode
+        const matrixContainer = document.getElementById('mitre-matrix-container');
+        if (viewMode === 'mitre') {
+            matrixContainer.classList.remove('hidden');
+            renderMitreMatrix(result.data);
+        } else {
+            matrixContainer.classList.add('hidden');
+        }
     } catch (err) {
         console.error("Error loading data:", err);
         const errorMsg = err.message || "Unknown Error";
@@ -348,8 +444,40 @@ window.setCountryFilter = (country) => {
 };
 
 function renderTable(data) {
+    const tableHead = document.getElementById('table-head');
+    
+    // 1. Update Columns based on mode
+    if (viewMode === 'mitre') {
+        tableHead.innerHTML = `
+            <tr>
+                <th>ID / Record</th>
+                <th>Type</th>
+                <th>Indicator</th>
+                <th>MITRE Tactics</th>
+                <th>MITRE Techniques</th>
+                <th>Collected At</th>
+                <th>Actions</th>
+            </tr>
+        `;
+    } else {
+        tableHead.innerHTML = `
+            <tr>
+                <th>ID / Record</th>
+                <th>Type</th>
+                <th>Indicator</th>
+                <th>Tags</th>
+                <th>Collected At</th>
+                <th>URL Analysis</th>
+                <th>Heuristics</th>
+                <th>VirusTotal</th>
+                <th>Actions</th>
+            </tr>
+        `;
+    }
+
     if (data.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding: 40px; color: var(--text-secondary);">No records found matching criteria</td></tr>';
+        const colSpan = viewMode === 'mitre' ? 7 : 9;
+        tableBody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center; padding: 40px; color: var(--text-secondary);">No records found matching criteria</td></tr>`;
         return;
     }
 
@@ -360,12 +488,6 @@ function renderTable(data) {
         const mainIndicator = ioc ? ioc.value : (cve ? cve.id : item.record_id);
         const type = ioc ? ioc.type : (cve ? 'cve' : 'unknown');
         
-        // Enrichment context
-        let enrichmentBadge = "";
-        if (viewMode === 'enriched' && item.enrichment) {
-            // Keep empty or add other enriched badges if needed
-        }
-
         const tags = (item.tags || []).slice(0, 2).map(t => `<span class="tag">${t}</span>`).join('');
         const date = item.collected_at ? new Date(item.collected_at).toLocaleDateString() : 'N/A';
 
@@ -373,6 +495,38 @@ function renderTable(data) {
         const logoUrl = getSourceLogo(item.source);
         const sourceIcon = logoUrl ? `<div class="source-logo-sm"><img src="${logoUrl}" alt="${item.source}"></div>` : `<i data-lucide="shield" class="source-logo-sm"></i>`;
 
+        if (viewMode === 'mitre') {
+            const mitre = item.mitre_attack || [];
+            
+            // Extract tactics (IDs like TAXXXX)
+            const tactics = mitre.filter(t => t.id.startsWith('TA'))
+                .map(t => `<span class="tag mitre-tactic">${t.name}</span>`).join('');
+                
+            // Extract techniques (IDs like TXXXX)
+            const techniques = mitre.filter(t => !t.id.startsWith('TA'))
+                .map(t => `<span class="tag mitre-tech" title="${t.name}">${t.id}</span>`).join('');
+
+            return `
+                <tr>
+                    <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-secondary)">${item.record_id.substring(0, 10)}...</td>
+                    <td><span class="type-pill ${type}">${type === 'domaine' ? 'DOMAIN' : type.toUpperCase()}</span></td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            ${sourceIcon}
+                            <strong style="color: var(--text-primary); font-size: 0.95rem;">${truncate(mainIndicator, 32)}</strong>
+                        </div>
+                    </td>
+                    <td>${tactics || '<span style="opacity:0.4">-</span>'}</td>
+                    <td>${techniques || '<span style="opacity:0.4">-</span>'}</td>
+                    <td>${date}</td>
+                    <td>
+                        <button class="view-btn action-view-details" data-record-id="${item.record_id}">View Details</button>
+                    </td>
+                </tr>
+            `;
+        }
+
+        // Standard views (Extraction / Enrichment)
         // URLScan Info
         let urlscanDisplay = `<span class="scan-status no">No</span>`;
         const hasUrlScan = (item.iocs || []).some(ioc => ioc.ioc_enrichment?.passer_par_urlscan === 1);
@@ -395,7 +549,6 @@ function renderTable(data) {
         // Fallback Info
         let fallbackDisplay = `<span class="scan-status no">No</span>`;
         const hasFallback = (item.iocs || []).some(ioc => ioc.ioc_enrichment?.passer_par_fallback === 1);
-        const riskFlag = item.attributes?.fallback_enriched ? "Enriched" : null;
 
         if (hasFallback) {
             fallbackDisplay = `
@@ -433,7 +586,6 @@ function renderTable(data) {
                             ${sourceIcon}
                             <strong style="color: var(--text-primary); font-size: 0.95rem;">${truncate(mainIndicator, 32)}</strong>
                         </div>
-                        <div style="display: flex; gap: 4px;">${enrichmentBadge}</div>
                     </div>
                 </td>
                 <td>${tags}${item.tags?.length > 2 ? '...' : ''}</td>
@@ -725,6 +877,22 @@ window.viewRaw = (recordId) => {
         vtStatsSummary.innerHTML = `<p class="empty-msg">No scan data available</p>`;
     }
 
+    // MITRE ATT&CK Mapping
+    const mitreList = document.getElementById('mitre-list');
+    if (item.mitre_attack && item.mitre_attack.length > 0) {
+        mitreList.innerHTML = item.mitre_attack.map(tech => `
+            <div class="mitre-item glass">
+                <div class="mitre-id">${tech.id}</div>
+                <div class="mitre-name">${tech.name}</div>
+                <a href="https://attack.mitre.org/techniques/${tech.id.replace('.', '/')}" target="_blank" class="mitre-link">
+                    <i data-lucide="external-link"></i>
+                </a>
+            </div>
+        `).join('');
+    } else {
+        mitreList.innerHTML = `<p class="empty-msg">No MITRE ATT&CK mapping available for this record</p>`;
+    }
+
     // Show Modal
     modalOverlay.classList.remove('hidden');
     
@@ -812,18 +980,21 @@ function setupEventListeners() {
         modalOverlay.onclick = (e) => { if (e.target === modalOverlay) closeModal.onclick(); };
     }
 
-    // Source List Scroll Controls
-    if (scrollUpBtn && sourceList) {
-        scrollUpBtn.onclick = () => {
-            sourceList.scrollBy({ top: -100, behavior: 'smooth' });
-        };
-    }
-    
-    if (scrollDownBtn && sourceList) {
-        scrollDownBtn.onclick = () => {
-            sourceList.scrollBy({ top: 100, behavior: 'smooth' });
-        };
-    }
+    // Sidebar Monitor Simulation
+    setInterval(() => {
+        const loadBar = document.getElementById('pipeline-load-bar');
+        const latencyVal = document.getElementById('api-latency');
+        
+        if (loadBar) {
+            const randomLoad = Math.floor(Math.random() * (85 - 45 + 1)) + 45;
+            loadBar.style.width = `${randomLoad}%`;
+        }
+        
+        if (latencyVal) {
+            const randomLatency = Math.floor(Math.random() * (40 - 15 + 1)) + 15;
+            latencyVal.textContent = `${randomLatency}ms`;
+        }
+    }, 3000);
 
     // Event Delegation for Table Actions
     if (tableBody) {

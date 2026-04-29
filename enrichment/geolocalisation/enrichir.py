@@ -52,14 +52,28 @@ def save_source_tracking(source, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
+def clean_ip_address(ip):
+    """
+    Robust cleaning for both IPv4 and IPv6, handling CIDR and ports.
+    """
+    if not ip: return ""
+    # 1. Remove CIDR mask
+    clean = ip.split('/')[0].strip()
+    # 2. Handle IPv6 with port: [addr]:port
+    if clean.startswith('['):
+        clean = clean.split(']')[0][1:]
+    # 3. Handle IPv4 with port: addr:port (only one colon and contains dots)
+    elif clean.count(':') == 1 and '.' in clean:
+        clean = clean.split(':')[0]
+    return clean
+
 def fetch_external_geo(ip):
     """
     Fetches geolocation data from ip-api.com.
     Rate limited to avoid being blocked.
     """
     if not ip: return None, None
-    # Normalize IP for API: remove port and CIDR mask
-    clean_ip = ip.split(':')[0].split('/')[0].strip()
+    clean_ip = clean_ip_address(ip)
     
     try:
         url = EXTERNAL_API_URL.format(ip=clean_ip)
@@ -175,7 +189,7 @@ def enrich_all(source_filter=None):
                 
             for raw_ip in sorted(list(unique_raw_ips)):
                 # 1. Normalize and check local DB cache
-                clean_ip = raw_ip.split(':')[0].split('/')[0].strip()
+                clean_ip = clean_ip_address(raw_ip)
                 country_code = geo_mgr.get_country(clean_ip)
                 country_name = None
                 

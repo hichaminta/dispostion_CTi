@@ -32,20 +32,43 @@
                     <button id="mode-enriched" class="mode-btn" onclick="setMode('enriched')">
                         <i data-lucide="zap"></i> Enrichment
                     </button>
+                    <button id="mode-mitre" class="mode-btn" onclick="setMode('mitre')">
+                        <i data-lucide="target"></i> MITRE Test
+                    </button>
                 </div>
             </div>
             
-            <nav class="source-nav">
-                <div class="nav-label">Data Sources</div>
-                <div class="source-list-controls">
-                    <button id="scroll-up" class="scroll-nav-btn"><i data-lucide="chevron-up"></i></button>
-                    <div id="source-list" class="nav-links">
-                        <!-- Loaded dynamically -->
-                        <div class="loading-shimmer"></div>
+
+            <!-- System Monitor -->
+            <div class="sidebar-monitor glass">
+                <div class="nav-label">System Intelligence</div>
+                <div class="monitor-stats">
+                    <div class="monitor-item">
+                        <span class="monitor-label">Pipeline Load</span>
+                        <div class="monitor-bar-container">
+                            <div id="pipeline-load-bar" class="monitor-bar" style="width: 65%"></div>
+                        </div>
                     </div>
-                    <button id="scroll-down" class="scroll-nav-btn"><i data-lucide="chevron-down"></i></button>
+                    <div class="monitor-item">
+                        <span class="monitor-label">API Latency</span>
+                        <span id="api-latency" class="monitor-value">24ms</span>
+                    </div>
+                    <div class="monitor-item">
+                        <span class="monitor-label">Active Nodes</span>
+                        <div class="pulse-indicator">
+                            <span class="pulse-dot"></span>
+                            <span class="monitor-value">12 / 12</span>
+                        </div>
+                    </div>
                 </div>
-            </nav>
+                <div class="monitor-graph">
+                    <div class="graph-bar" style="height: 40%"></div>
+                    <div class="graph-bar" style="height: 60%"></div>
+                    <div class="graph-bar" style="height: 30%"></div>
+                    <div class="graph-bar" style="height: 80%"></div>
+                    <div class="graph-bar" style="height: 50%"></div>
+                </div>
+            </div>
 
             <div class="sidebar-footer">
                 <p>Status: <span id="api-status" class="status-indicator online">Online</span></p>
@@ -81,6 +104,14 @@
             </header>
 
             <section class="viewport">
+                <!-- Horizontal Source Navigation -->
+                <nav class="source-ribbon animate-fade-in">
+                    <div id="source-list" class="source-scroll-container">
+                        <!-- Loaded dynamically -->
+                        <div class="loading-shimmer"></div>
+                    </div>
+                </nav>
+
                 <!-- Dashboard Overview -->
                 <div class="view-header">
                     <div class="header-content">
@@ -206,8 +237,17 @@
                             <div class="step-action"><i data-lucide="chevron-right"></i></div>
                         </div>
 
-                        <div class="enrich-step glass" onclick="triggerEnrichmentStep('Normalisation')">
+                        <div class="enrich-step glass highlight-step-mitre" onclick="triggerEnrichmentStep('MITRE ATT&CK')">
                             <div class="step-number">8</div>
+                            <div class="step-info">
+                                <h4>MITRE ATT&CK</h4>
+                                <p>TTP Mapping & Analysis</p>
+                            </div>
+                            <div class="step-action"><i data-lucide="chevron-right"></i></div>
+                        </div>
+
+                        <div class="enrich-step glass" onclick="triggerEnrichmentStep('Normalisation')">
+                            <div class="step-number">9</div>
                             <div class="step-info">
                                 <h4>Normalisation</h4>
                                 <p>Standardize data for MISP format</p>
@@ -216,7 +256,7 @@
                         </div>
 
                         <div class="enrich-step glass highlight-step-misp" onclick="triggerEnrichmentStep('Intégration MISP')">
-                            <div class="step-number">9</div>
+                            <div class="step-number">10</div>
                             <div class="step-info">
                                 <h4>MISP Export</h4>
                                 <p>Push indicators to MISP API</p>
@@ -236,6 +276,19 @@
                     </div>
                 </div>
 
+                <!-- MITRE Matrix View -->
+                <div id="mitre-matrix-container" class="mitre-matrix-view glass animate-fade-in hidden">
+                    <div class="hud-corner hud-corner-tl"></div>
+                    <div class="hud-corner hud-corner-tr"></div>
+                    <div class="matrix-header">
+                        <h3><i data-lucide="grid"></i> ATT&CK Matrix Heatmap</h3>
+                        <p>Visual representation of adversary tactics and techniques</p>
+                    </div>
+                    <div id="mitre-matrix-grid" class="matrix-grid">
+                        <!-- Matrix columns injected here -->
+                    </div>
+                </div>
+
                 <!-- Data Table Container -->
                 <div class="table-workspace glass">
                     <div class="table-header">
@@ -249,7 +302,7 @@
                     
                     <div class="data-table-wrapper">
                         <table id="results-table">
-                            <thead>
+                            <thead id="table-head">
                                 <tr>
                                     <th>ID / Record</th>
                                     <th>Type</th>
@@ -301,6 +354,7 @@
                 <button class="tab-btn" onclick="switchTab('intelligence')"><i data-lucide="zap"></i> Intelligence</button>
                 <button class="tab-btn" onclick="switchTab('context')"><i data-lucide="globe"></i> Context</button>
                 <button class="tab-btn" onclick="switchTab('vt-analysis')"><i data-lucide="shield-check"></i> VirusTotal</button>
+                <button class="tab-btn" onclick="switchTab('mitre')"><i data-lucide="target"></i> MITRE ATT&CK</button>
                 <button class="tab-btn" onclick="switchTab('analysis')"><i data-lucide="scan-eye"></i> URL Analysis</button>
                 <button class="tab-btn" onclick="switchTab('raw')"><i data-lucide="code"></i> Raw Data</button>
             </nav>
@@ -406,6 +460,22 @@
                             <div id="vt-stats-summary" class="analysis-list">
                                 <p class="empty-msg">Select a hash to view details</p>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MITRE ATT&CK Tab -->
+                <div id="tab-mitre" class="tab-pane">
+                    <div class="mitre-grid">
+                        <div class="mitre-main glass">
+                            <div class="tab-section-label"><i data-lucide="target"></i> Mapped TTPs (Techniques, Tactics & Procedures)</div>
+                            <div id="mitre-list" class="mitre-container">
+                                <p class="empty-msg">No MITRE ATT&CK mapping available for this record</p>
+                            </div>
+                        </div>
+                        <div class="mitre-help glass mt-4">
+                            <div class="tab-section-label"><i data-lucide="info"></i> About MITRE ATT&CK</div>
+                            <p class="mitre-info-text">MITRE ATT&CK® is a globally-accessible knowledge base of adversary tactics and techniques based on real-world observations. This mapping helps understand the "How" and "Why" of the detected threat.</p>
                         </div>
                     </div>
                 </div>

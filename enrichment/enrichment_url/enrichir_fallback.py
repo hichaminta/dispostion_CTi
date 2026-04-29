@@ -70,15 +70,7 @@ class FallbackEnricher:
         if not value or not isinstance(value, str): return False
         
         if ioc_type == "ip":
-            try:
-                # Basic validation: is it a valid IP or Network?
-                if '/' in value:
-                    ipaddress.ip_network(value, strict=False)
-                else:
-                    ipaddress.ip_address(value)
-                return True
-            except:
-                return False
+            return False
 
         val_low = value.lower()
         if any(val_low.endswith(ext) for ext in self.invalid_extensions):
@@ -217,7 +209,7 @@ class FallbackEnricher:
         
         # Handle "domaine" vs "domain"
         clean_type = "domain" if ioc_type in ["domain", "domaine"] else ioc_type
-        if clean_type not in ["domain", "url", "ip"]:
+        if clean_type not in ["domain", "url"]:
             return ioc
 
         if "ioc_enrichment" not in ioc:
@@ -234,14 +226,6 @@ class FallbackEnricher:
                     enr["country"] = country
                     enr["country_code"] = country # Sync both
         
-        # Skip web/whois/heuristics for pure IP if not easily reachable
-        if clean_type == "ip":
-            # Just do Geo for IP ranges/IPv6 from Spamhaus
-            now_iso = datetime.now().isoformat()
-            enr["tlp"] = "TLP:CLEAR"
-            enr["enriched_at"] = now_iso
-            enr["passer_par_fallback"] = 1
-            return ioc
 
         # 2. Web Info
         web_info = self.web_lookup(value)
@@ -308,7 +292,7 @@ def run_fallback_enrichment(source_filter=None):
                     ioc_value = ioc.get("value")
                     
                     # Target URL/Domain/IP
-                    if ioc_type not in ["domain", "url", "domaine", "ip"]:
+                    if ioc_type not in ["domain", "url", "domaine"]:
                         continue
                     
                     enr = ioc.get("ioc_enrichment", {})
@@ -321,7 +305,7 @@ def run_fallback_enrichment(source_filter=None):
                     has_urlscan = enr.get("passer_par_urlscan") == 1
                     
                     # Target those scanned by URLScan OR direct IPs (fallback for Spamhaus)
-                    if not has_urlscan and ioc_type != "ip":
+                    if not has_urlscan:
                         continue
                     
                     # 2. Check trigger condition:

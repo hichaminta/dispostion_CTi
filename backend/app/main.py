@@ -25,6 +25,7 @@ from .database import db
 
 OUTPUT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_cve_ioc"))
 ENRICHMENT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_enrichment"))
+MITRE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_mitre_attack"))
 DASHBOARD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "dashboard"))
 
 app = FastAPI(title="CTI Pipeline Tracker API")
@@ -383,6 +384,109 @@ def get_enriched_data(source_id: str, page: int = 1, limit: int = 50, search: st
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ──────────────────────────────────────────────────────────────────────────────
+# MITRE ENDPOINTS
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/mitre/sources")
+def get_mitre_sources():
+    sources = []
+    if os.path.exists(MITRE_DIR):
+        for src_name, info in worker.SOURCE_MAP.items():
+            mitre_fn = info["output"].replace("_extracted.json", "_mitre.json")
+            filepath = os.path.join(MITRE_DIR, mitre_fn)
+            if os.path.exists(filepath):
+                stats = os.stat(filepath)
+                sources.append({
+                    "id": info["id"],
+                    "name": src_name,
+                    "file": mitre_fn,
+                    "size": stats.st_size,
+                    "last_modified": stats.st_mtime
+                })
+    return sources
+
+@app.get("/api/mitre/data/{source_id}")
+def get_mitre_data(source_id: str, page: int = 1, limit: int = 50, search: str = None, ioc_type: str = None):
+    info = None
+    for src_name, src_info in worker.SOURCE_MAP.items():
+        if src_info["id"] == source_id:
+            info = src_info
+            break
+    
+    if not info:
+        raise HTTPException(status_code=404, detail="Source not found")
+        
+    mitre_fn = info["output"].replace("_extracted.json", "_mitre.json")
+    filepath = os.path.join(MITRE_DIR, mitre_fn)
+    
+    if not os.path.exists(filepath):
+        return {"data": [], "total": 0, "page": page, "limit": limit}
+
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            all_data = json.load(f)
+            
+        # Filter for only records that have mitre_attack mapping
+        all_data = [d for d in all_data if d.get("mitre_attack")]
+
+        # 1. Type Filtering
+        if ioc_type:
+            t_low = ioc_type.lower()
+            if t_low == "cve":
+                all_data = [d for d in all_data if d.get("cves")]
+            else:
+                all_data = [
+                    d for d in all_data 
+                    if any(i.get("type", "").lower() == t_low for i in d.get("iocs", []))
+                ]
+
+        # 2. Search Filtering
+        if search:
+            search_low = search.lower()
+            all_data = [
+                d for d in all_data 
+                if search_low in str(d.get("record_id", "")).lower() or 
+                   any(search_low in str(t).lower() for t in d.get("tags", [])) or
+                   search_low in str(d.get("raw_text", "")).lower()
+            ]
+            
+        total = len(all_data)
+        start = (page - 1) * limit
+        end = start + limit
+        return {
+            "data": all_data[start:end],
+            "total": total,
+            "page": page,
+            "limit": limit
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/mitre/matrix")
+def get_mitre_matrix_stats():
+    """
+    Aggregates technique counts across all MITRE enriched files.
+    Returns a dictionary of {technique_id: count}.
+    """
+    tech_counts = {}
+    if os.path.exists(MITRE_DIR):
+        for fn in os.listdir(MITRE_DIR):
+            if not fn.endswith("_mitre.json"): continue
+            filepath = os.path.join(MITRE_DIR, fn)
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    records = json.load(f)
+                for record in records:
+                    mitre = record.get("mitre_attack", [])
+                    for entry in mitre:
+                        tech_id = entry.get("id")
+                        if tech_id and not tech_id.startswith("TA"):
+                            tech_counts[tech_id] = tech_counts.get(tech_id, 0) + 1
+            except:
+                continue
+    return tech_counts
 
 @app.delete("/runs")
 def clear_runs():
