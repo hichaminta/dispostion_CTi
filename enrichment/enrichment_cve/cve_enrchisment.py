@@ -9,11 +9,12 @@ logger = logging.getLogger("CVE_Enrichment_Orchestrator")
 
 def run_cve_pipeline():
     base_dir = os.path.dirname(os.path.abspath(__file__))
+    args = sys.argv[1:]
     
     # 1. Standard CVE Enrichment (NVD/NIST)
-    enrich_script = os.path.join(base_dir, "enrichir_cve.py")
+    enrich_script = os.path.join(base_dir, "enrichir.py")
     # 2. NLP CVE Analysis (Entities extraction)
-    nlp_script = os.path.join(base_dir, "nlp_enrichir_cve.py")
+    nlp_script = os.path.join(base_dir, "nlp_enrichir.py")
 
     logger.info("### STARTING CONSOLIDATED CVE ENRICHMENT PIPELINE ###")
 
@@ -21,7 +22,7 @@ def run_cve_pipeline():
     if os.path.exists(enrich_script):
         logger.info("--- [STAGE 1] Standard CVE Enrichment (NVD) ---")
         try:
-            subprocess.run([sys.executable, enrich_script], check=False)
+            subprocess.run([sys.executable, enrich_script] + args, check=False)
         except Exception as e:
             logger.error(f"  [ERROR] Failed to run standard CVE enrichment: {e}")
     else:
@@ -31,7 +32,7 @@ def run_cve_pipeline():
     if os.path.exists(nlp_script):
         logger.info("--- [STAGE 2] NLP CVE Analysis (spaCy) ---")
         try:
-            subprocess.run([sys.executable, nlp_script], check=False)
+            subprocess.run([sys.executable, nlp_script] + args, check=False)
         except Exception as e:
             logger.error(f"  [ERROR] Failed to run NLP CVE analysis: {e}")
     else:

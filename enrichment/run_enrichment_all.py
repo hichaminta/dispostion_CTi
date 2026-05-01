@@ -64,6 +64,19 @@ def run_enrichment():
     else:
         logger.warning("[STAGE 4] Consolidated CVE script NOT FOUND. Skipping.")
 
+    # ─── STAGE 5: CLASSIFICATION & SCORING (MITRE, Priority) ───
+    classification_script = os.path.join(base_dir, "classification", "enrichir.py")
+    if os.path.exists(classification_script):
+        logger.info("──────────────────────────────────────────")
+        logger.info("[STAGE 5/6] Intelligence Classification & Scoring...")
+        logger.info("──────────────────────────────────────────")
+        try:
+            subprocess.run([sys.executable, classification_script, "--skip-enriched"], check=False)
+        except Exception as e:
+            logger.error(f"  [ERROR] Failed to run classification stage: {e}")
+    else:
+        logger.warning("[STAGE 5] Classification script NOT FOUND. Skipping.")
+
     # ─── STAGE 7: MITRE ATT&CK MAPPING (CVEs & IOCs) ───
     mitre_script = os.path.join(base_dir, "mitre_attack", "mitre_mapper.py")
     if os.path.exists(mitre_script):
@@ -71,7 +84,7 @@ def run_enrichment():
         logger.info("[STAGE 7/7] MITRE ATT&CK Mapping (Consolidating techniques)...")
         logger.info("──────────────────────────────────────────")
         try:
-            subprocess.run([sys.executable, mitre_script], check=False)
+            subprocess.run([sys.executable, mitre_script, "--skip-mapped"], check=False)
         except Exception as e:
             logger.error(f"  [ERROR] Failed to run MITRE mapping stage: {e}")
     else:

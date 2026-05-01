@@ -396,21 +396,29 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         
         await _update_step(run_id, "URLScan", "success" if (ok3 and ok4) else "failed")
 
-        # CVE Enrichment (Stage 5)
+        # CVE Enrichment (Consolidated: NVD + NLP)
         if _is_run_cancelled(run_id): return
         await _update_step(run_id, "Enrichissement CVE", "running")
-        await _ws_log(run_id, "Enrichissement CVE", f"[{ts()}] ➔ STAGE 5 : NVD CVE Enrichment")
-        cve_enrich_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_cve", "enrichir_cve.py")
-        ok5 = await _run_proc(run_id, "Enrichissement CVE", [sys.executable, cve_enrich_script] + source_flag, PROJECT_ROOT)
-        await _update_step(run_id, "Enrichissement CVE", "success" if ok5 else "failed")
+        await _ws_log(run_id, "Enrichissement CVE", f"[{ts()}] ➔ STAGE 5 : Consolidated CVE Enrichment (NVD & NLP)")
+        cve_orchestrator = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_cve", "cve_enrchisment.py")
+        ok_cve = await _run_proc(run_id, "Enrichissement CVE", [sys.executable, cve_orchestrator] + source_flag, PROJECT_ROOT)
+        await _update_step(run_id, "Enrichissement CVE", "success" if ok_cve else "failed")
 
-        # NLP CVE Analysis (Stage 6)
+        # Intelligence Classification (Stage 7)
         if _is_run_cancelled(run_id): return
-        await _update_step(run_id, "Analyse NLP CVE", "running")
-        await _ws_log(run_id, "Analyse NLP CVE", f"[{ts()}] ➔ STAGE 6 : NLP CVE Entity Extraction")
-        nlp_enrich_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_cve", "nlp_enrichir_cve.py")
-        ok6 = await _run_proc(run_id, "Analyse NLP CVE", [sys.executable, nlp_enrich_script] + source_flag, PROJECT_ROOT)
-        await _update_step(run_id, "Analyse NLP CVE", "success" if ok6 else "failed")
+        await _update_step(run_id, "Classification", "running")
+        await _ws_log(run_id, "Classification", f"[{ts()}] ➔ STAGE 7 : Intelligence Classification & Priority")
+        classif_script = os.path.join(PROJECT_ROOT, "enrichment", "classification", "enrichir.py")
+        ok7 = await _run_proc(run_id, "Classification", [sys.executable, classif_script] + source_flag + ["--skip-enriched"], PROJECT_ROOT)
+        await _update_step(run_id, "Classification", "success" if ok7 else "failed")
+
+        # MITRE ATT&CK Mapping (Stage 8)
+        if _is_run_cancelled(run_id): return
+        await _update_step(run_id, "MITRE Mapping", "running")
+        await _ws_log(run_id, "MITRE Mapping", f"[{ts()}] ➔ STAGE 8 : MITRE ATT&CK Mapping")
+        mitre_script = os.path.join(PROJECT_ROOT, "enrichment", "mitre_attack", "mitre_mapper.py")
+        ok8 = await _run_proc(run_id, "MITRE Mapping", [sys.executable, mitre_script] + source_flag + ["--skip-mapped"], PROJECT_ROOT)
+        await _update_step(run_id, "MITRE Mapping", "success" if ok8 else "failed")
 
 
 
@@ -524,34 +532,34 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
                 ok3 = await _run_proc(run_id, step_name, [sys.executable, url_script] + source_flag, PROJECT_ROOT)
                 ok4 = await _run_proc(run_id, step_name, [sys.executable, fallback_script] + source_flag, PROJECT_ROOT)
                 
-                # CVE Enrichment
-                await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 5 : NVD CVE Enrichment")
-                cve_enrich_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_cve", "enrichir_cve.py")
-                ok5 = await _run_proc(run_id, step_name, [sys.executable, cve_enrich_script] + source_flag, PROJECT_ROOT)
+                # CVE Enrichment (Consolidated)
+                await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 5 : Consolidated CVE Enrichment")
+                cve_orchestrator = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_cve", "cve_enrchisment.py")
+                ok_cve = await _run_proc(run_id, step_name, [sys.executable, cve_orchestrator] + source_flag, PROJECT_ROOT)
                 
-                # NLP Enrichment
-                await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 6 : NLP CVE Entity Extraction")
-                nlp_enrich_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_cve", "nlp_enrichir_cve.py")
-                ok6 = await _run_proc(run_id, step_name, [sys.executable, nlp_enrich_script] + source_flag, PROJECT_ROOT)
-                
-                step_ok = ok2 and ok3 and ok4 and ok5 and ok6
+                # Classification
+                await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 7 : Intelligence Classification")
+                classif_script = os.path.join(PROJECT_ROOT, "enrichment", "classification", "enrichir.py")
+                ok7 = await _run_proc(run_id, step_name, [sys.executable, classif_script] + source_flag + ["--skip-enriched"], PROJECT_ROOT)
+
+                # MITRE Mapping
+                await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 8 : MITRE ATT&CK Mapping")
+                mitre_script = os.path.join(PROJECT_ROOT, "enrichment", "mitre_attack", "mitre_mapper.py")
+                ok8 = await _run_proc(run_id, step_name, [sys.executable, mitre_script] + source_flag + ["--skip-mapped"], PROJECT_ROOT)
+
+                step_ok = ok2 and ok3 and ok4 and ok_cve and ok7 and ok8
 
         elif step_name == "Enrichissement CVE":
-            await _ws_log(run_id, step_name, f"[{ts()}] ➔ Enrichissement CVE via NVD API")
-            cve_enrich_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_cve", "enrichir_cve.py")
-            step_ok = await _run_proc(run_id, step_name, [sys.executable, cve_enrich_script] + source_flag, PROJECT_ROOT)
-            
-            # Chain with NLP for CVE Enrichment step
-            await _ws_log(run_id, step_name, f"[{ts()}] ➔ Analyse NLP automatique...")
-            nlp_enrich_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_cve", "nlp_enrichir_cve.py")
-            await _run_proc(run_id, step_name, [sys.executable, nlp_enrich_script] + source_flag, PROJECT_ROOT)
-            
+            await _ws_log(run_id, step_name, f"[{ts()}] ➔ CVE Enrichment Pipeline (NVD + NLP)")
+            cve_orchestrator = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_cve", "cve_enrchisment.py")
+            step_ok = await _run_proc(run_id, step_name, [sys.executable, cve_orchestrator] + source_flag, PROJECT_ROOT)
             ioc_count, cve_count = _count_ioc_cve(source_name)
 
         elif step_name == "Analyse NLP CVE":
-            await _ws_log(run_id, step_name, f"[{ts()}] ➔ Analyse NLP des descriptions CVE")
-            nlp_enrich_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_cve", "nlp_enrichir_cve.py")
-            step_ok = await _run_proc(run_id, step_name, [sys.executable, nlp_enrich_script] + source_flag, PROJECT_ROOT)
+            # Redirection vers l'orchestrateur consolidé si l'utilisateur clique sur NLP
+            await _ws_log(run_id, step_name, f"[{ts()}] ➔ Redirection vers le pipeline CVE consolidé...")
+            cve_orchestrator = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_cve", "cve_enrchisment.py")
+            step_ok = await _run_proc(run_id, step_name, [sys.executable, cve_orchestrator] + source_flag, PROJECT_ROOT)
             ioc_count, cve_count = _count_ioc_cve(source_name)
 
 

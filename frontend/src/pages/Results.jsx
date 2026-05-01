@@ -5,7 +5,7 @@ import {
   Shield, AlertTriangle, Clock, FileText, Globe, ScanEye, Layers,
   CheckCircle2, AlertCircle, Info, X, Share2, Layout, Code, Monitor,
   ChevronUp, ChevronDown, MapPin, Building, Target, Bug, Link as LinkIcon,
-  PlayCircle, Loader2
+  PlayCircle, Loader2, Sparkles
 } from 'lucide-react';
 
 const API_BASE = `http://${window.location.hostname}:8000`;

@@ -20,6 +20,7 @@ if sys.platform == 'win32':
     except Exception as e:
         print(f"[INIT] Failed to set Proactor policy: {e}")
 
+from datetime import datetime
 from . import schemas, database, websockets, worker
 from .database import db
 
@@ -151,6 +152,20 @@ async def create_targeted_run(run_in: schemas.RunCreate, step_name: str, backgro
     background_tasks.add_task(worker.execute_targeted_task, external_id, run_in.source_name, step_name)
     return run_obj
 
+@app.get("/stats")
+def get_stats():
+    runs = db.get_runs()
+    total_ioc, total_cve = worker._count_ioc_cve("Unified Extraction")
+    
+    durations = []
+    for r in runs:
+        if r.get("status_global") == "success" and r.get("created_at") and r.get("updated_at"):
+            try:
+                start = datetime.fromisoformat(r["created_at"])
+                end = datetime.fromisoformat(r["updated_at"])
+                durations.append((end - start).total_seconds())
+            except: pass
+
     # MISP Sync Status
     misp_tracking_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "misp_integration", "tracking", "misp_tracking.json"))
     misp_status = None
@@ -160,7 +175,7 @@ async def create_targeted_run(run_in: schemas.RunCreate, step_name: str, backgro
                 misp_status = json.load(f)
         except: pass
 
-    res = {
+    return {
         "total_ioc": total_ioc,
         "total_cve": total_cve,
         "total_runs": len(runs),
@@ -169,7 +184,6 @@ async def create_targeted_run(run_in: schemas.RunCreate, step_name: str, backgro
         "avg_duration_sec": round(sum(durations) / len(durations)) if durations else 0,
         "misp_sync": misp_status
     }
-    return res
 
 @app.get("/api/misp/status")
 def get_misp_status():

@@ -115,6 +115,10 @@ class MISPClient:
         }
 
         for event_item in events_data:
+            # Ignorer les événements de vulnérabilité (CVE) comme demandé
+            if event_item.get("event_type") == "vulnerability":
+                continue
+
             info_name = event_item.get("event_name")
             priority = event_item.get("priority_score", "LOW")
             
@@ -136,9 +140,14 @@ class MISPClient:
                     if event_item.get("epss"):
                         comment += f" | EPSS: {event_item['epss']}"
 
+                    # Nettoyage des IPs avec port (ex: 1.1.1.1:80 -> 1.1.1.1)
+                    val = ioc["value"]
+                    if misp_type in ["ip-src", "ip-dst", "ip-src/ip-dst"] and ":" in str(val):
+                        val = str(val).split(":")[0]
+
                     res = self.misp.add_attribute(event_uuid, {
                         "type": misp_type,
-                        "value": ioc["value"],
+                        "value": val,
                         "comment": comment,
                         "to_ids": True
                     })
@@ -244,9 +253,10 @@ class MISPClient:
 
     def push_all(self, source_filter=None):
         """
-        Parcourt output_correlation/ et output_misp/ pour pousser les fichiers.
+        Parcourt uniquement output_correlation/ pour pousser les fichiers consolidés.
+        L'ancien dossier output_misp/ est ignoré pour éviter les doublons et les CVE non filtrés.
         """
-        # 1. Dossier Corrélation (Prioritaire)
+        # 1. Dossier Corrélation (Prioritaire et Unique)
         corr_dir = os.path.join(BASE_DIR, "output_correlation")
         if os.path.exists(corr_dir):
             for f in os.listdir(corr_dir):
@@ -254,15 +264,15 @@ class MISPClient:
                     logger.info(f"Synchronisation du fichier enrichi : {f}")
                     self.push_correlated_file(os.path.join(corr_dir, f))
 
-        # 2. Dossier MISP (Sources individuelles)
-        misp_output = os.path.join(BASE_DIR, "output_misp")
-        if os.path.exists(misp_output):
-            for root, dirs, files in os.walk(misp_output):
-                for file in files:
-                    if not file.endswith(".json"): continue
-                    if source_filter and source_filter.lower() not in root.lower() and source_filter.lower() not in file.lower():
-                        continue
-                    self.push_event_file(os.path.join(root, file))
+        # 2. Dossier MISP (Désactivé pour éviter les doublons et CVE)
+        # misp_output = os.path.join(BASE_DIR, "output_misp")
+        # if os.path.exists(misp_output):
+        #     for root, dirs, files in os.walk(misp_output):
+        #         for file in files:
+        #             if not file.endswith(".json"): continue
+        #             if source_filter and source_filter.lower() not in root.lower() and source_filter.lower() not in file.lower():
+        #                 continue
+        #             self.push_event_file(os.path.join(root, file))
 
 
 if __name__ == "__main__":

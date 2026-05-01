@@ -27,8 +27,7 @@ with Diagram(
 
     # 1. SOURCES
     with Cluster("Sources CTI", graph_attr=cluster_attr):
-        with Cluster("VirusTotal", graph_attr=cluster_attr):
-            vt    = Custom("", "./logos/VT.png")
+
         with Cluster("OTX AlienVault", graph_attr=cluster_attr):
             otx   = Custom("", "./logos/ALienVT.png")
         with Cluster("NVD / NIST", graph_attr=cluster_attr):
@@ -38,7 +37,7 @@ with Diagram(
         with Cluster("PhishTank", graph_attr=cluster_attr):
             phish = Custom("", "./logos/phisingtank.png")
 
-    sources = [vt, otx, nist, abuse, phish]
+    sources = [otx, nist, abuse, phish]
 
     # 2. COLLECTE
     with Cluster("Collecte\nAPI / Scraping", graph_attr=cluster_attr):

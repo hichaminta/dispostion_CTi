@@ -35,8 +35,9 @@ const PIPELINE_PHASES = [
   { id: 'urlscan',       label: 'URL',  full: 'URLScan',              icon: ScanEye },
   { id: 'fallback',      label: 'FALL', full: 'Fallback',             icon: Layers },
   { id: 'cve_enr',       label: 'CVE',  full: 'Enrichissement CVE',   icon: AlertTriangle },
-  { id: 'nlp',           label: 'NLP',  full: 'Analyse NLP CVE',      icon: Cpu },
 
+  { id: 'classif',      label: 'CLASSIF', full: 'Classification',       icon: Sparkles },
+  { id: 'mitre',        label: 'MITRE',full: 'MITRE Mapping',        icon: Shield },
   { id: 'norm',          label: 'NORM', full: 'Normalisation',        icon: Activity },
   { id: 'misp',          label: 'MISP', full: 'Intégration MISP',     icon: Zap },
 ];
@@ -436,28 +437,13 @@ const Dashboard = ({ onSelectRun }) => {
                   <button
                     onClick={() => startGlobalStep('Enrichissement CVE')}
                     disabled={stats?.running_runs > 0 || isStarting}
-                    title="Stage 5: NVD CVE Enrichment"
+                    title="CVE Enrichment (NVD + NLP)"
                     className={`flex flex-col items-center gap-1 px-3 py-1 group/step ${isStarting ? 'opacity-40' : ''}`}
                   >
                     <div className="w-7 h-7 rounded bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 group-hover/step:bg-amber-500 group-hover/step:text-white transition-all">
                       {isStarting ? <Loader2 size={12} className="animate-spin" /> : <AlertTriangle size={12} />}
                     </div>
-                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-amber-400 uppercase">CVE</span>
-                  </button>
-
-                  <ArrowConnector />
-
-                  {/* NLP CVE Analysis */}
-                  <button
-                    onClick={() => startGlobalStep('Analyse NLP CVE')}
-                    disabled={stats?.running_runs > 0 || isStarting}
-                    title="Stage 6: NLP CVE Entity Extraction"
-                    className={`flex flex-col items-center gap-1 px-3 py-1 group/step ${isStarting ? 'opacity-40' : ''}`}
-                  >
-                    <div className="w-7 h-7 rounded bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover/step:bg-indigo-500 group-hover/step:text-white transition-all">
-                      {isStarting ? <Loader2 size={12} className="animate-spin" /> : <Cpu size={12} />}
-                    </div>
-                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-indigo-400 uppercase">NLP</span>
+                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-amber-400 uppercase">CVE Enrichment</span>
                   </button>
 
                   <ArrowConnector />
@@ -523,6 +509,36 @@ const Dashboard = ({ onSelectRun }) => {
                       </button>
                     </div>
                   )}
+
+                  <ArrowConnector />
+
+                  {/* Classification */}
+                  <button
+                    onClick={() => startGlobalStep('Classification')}
+                    disabled={stats?.running_runs > 0 || isStarting}
+                    title="Intelligence Classification & Scoring"
+                    className={`flex flex-col items-center gap-1 px-3 py-1 group/step ${isStarting ? 'opacity-40' : ''}`}
+                  >
+                    <div className="w-7 h-7 rounded bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400 group-hover/step:bg-brand-500 group-hover/step:text-white transition-all">
+                      {isStarting ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                    </div>
+                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-brand-400 uppercase">Classification</span>
+                  </button>
+
+                  <ArrowConnector />
+
+                  {/* MITRE Mapping */}
+                  <button
+                    onClick={() => startGlobalStep('MITRE Mapping')}
+                    disabled={stats?.running_runs > 0 || isStarting}
+                    title="MITRE ATT&CK Technique Mapping"
+                    className={`flex flex-col items-center gap-1 px-3 py-1 group/step ${isStarting ? 'opacity-40' : ''}`}
+                  >
+                    <div className="w-7 h-7 rounded bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 group-hover/step:bg-white group-hover/step:text-black transition-all">
+                      {isStarting ? <Loader2 size={12} className="animate-spin" /> : <Shield size={12} />}
+                    </div>
+                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-white uppercase">MITRE</span>
+                  </button>
                 </div>
               )}
 
@@ -884,9 +900,10 @@ const PIPELINE_STEPS = [
   { name: "Geolocalisation",      icon: Globe     },
   { name: "URLScan",              icon: ScanEye   },
   { name: "Enrichissement CVE",    icon: AlertTriangle },
-  { name: "Analyse NLP CVE",      icon: Cpu           },
-  { name: "Normalisation",        icon: Shield        },
-  { name: "Intégration MISP",     icon: Zap       },
+  { name: "Classification",       icon: Sparkles      },
+  { name: "MITRE Mapping",        icon: Shield        },
+  { name: "Normalisation",        icon: Activity      },
+  { name: "Intégration MISP",     icon: Zap           },
 ];
 
 const PipelineStepper = ({ run }) => {

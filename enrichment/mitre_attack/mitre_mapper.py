@@ -10,10 +10,7 @@ logger = logging.getLogger("MITRE_Mapper")
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 INPUT_DIR = os.path.join(BASE_DIR, "output_enrichment")
-OUTPUT_DIR = os.path.join(BASE_DIR, "output_mitre_attack")
-
-if not os.path.exists(OUTPUT_DIR):
-    os.makedirs(OUTPUT_DIR)
+OUTPUT_DIR = INPUT_DIR  # Update in place in output_enrichment
 
 # Simplified MITRE ATT&CK Mapping
 # Key: keyword or regex, Value: list of (Technique ID, Technique Name)
@@ -95,19 +92,33 @@ def map_record(record):
         return True
     return False
 
-def process_files():
+def process_files(source_filter=None, skip_mapped=False):
     if not os.path.exists(INPUT_DIR):
         logger.error(f"Input directory not found: {INPUT_DIR}")
         return
 
-    files = [f for f in os.listdir(INPUT_DIR) if f.endswith("_enriched.json")]
-    logger.info(f"### MITRE ATT&CK MAPPING STARTED ({len(files)} files) ###")
+    all_files = [f for f in os.listdir(INPUT_DIR) if f.endswith("_enriched.json")]
+    
+    if source_filter:
+        if source_filter.lower() == "unified extraction":
+            files = all_files
+            logger.info(f"### GLOBAL RUN: Unified Extraction Mode ###")
+        else:
+            files = [f for f in all_files if source_filter.lower() in f.lower()]
+            if not files:
+                logger.warning(f"No files found matching source filter: {source_filter}")
+                return
+            logger.info(f"### FILTERED RUN: Source '{source_filter}' ###")
+    else:
+        files = all_files
+        logger.info(f"### MITRE ATT&CK MAPPING STARTED ({len(files)} files) ###")
 
     total_mapped = 0
+    total_skipped = 0
     
     for filename in files:
         file_path = os.path.join(INPUT_DIR, filename)
-        output_path = os.path.join(OUTPUT_DIR, filename.replace("_enriched.json", "_mitre.json"))
+        output_path = file_path # Save back to the same file
         
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -115,8 +126,15 @@ def process_files():
             
             mapped_in_file = 0
             for record in data:
+                # Skip if already mapped and flag is set
+                if skip_mapped and ("mitre_attack" in record or "mitre_mapped" in record.get("tags", [])):
+                    total_skipped += 1
+                    continue
+                    
                 if map_record(record):
                     mapped_in_file += 1
+                    if "mitre_mapped" not in record.get("tags", []):
+                        record.setdefault("tags", []).append("mitre_mapped")
             
             if mapped_in_file > 0:
                 with open(output_path, "w", encoding="utf-8") as f:
@@ -129,7 +147,13 @@ def process_files():
         except Exception as e:
             logger.error(f"Error processing {filename}: {e}")
 
-    logger.info(f"### MITRE ATT&CK MAPPING COMPLETED: {total_mapped} records enriched ###")
+    logger.info(f"### MITRE ATT&CK MAPPING COMPLETED: {total_mapped} records enriched, {total_skipped} skipped ###")
 
 if __name__ == "__main__":
-    process_files()
+    import argparse
+    parser = argparse.ArgumentParser(description="MITRE ATT&CK Mapping Engine")
+    parser.add_argument("-s", "--source", help="Only process a specific source (e.g. feodotracker)")
+    parser.add_argument("--skip-mapped", action="store_true", help="Skip records that already have MITRE tags")
+    args = parser.parse_args()
+    
+    process_files(source_filter=args.source, skip_mapped=args.skip_mapped)

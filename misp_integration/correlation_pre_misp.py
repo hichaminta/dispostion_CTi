@@ -133,62 +133,44 @@ class RiskScorer:
         return min(base_confidence, 100.0)
 
     @staticmethod
-    def classify_cve(description):
-        """Classifies CVE into categories based on description keywords and contextual patterns."""
-        if not description:
-            return "Unknown"
-        
-        desc = description.lower()
-        mapping = {
-            "RCE": ["remote code execution", "rce", "execute arbitrary code", "arbitrary code execution", "overflow", "deserialization"],
-            "Privilege Escalation": ["privilege escalation", "elevation of privilege", "escalate privileges", "root access", "local privilege"],
-            "XSS": ["cross-site scripting", "xss", "inject arbitrary web script"],
-            "SQL Injection": ["sql injection", "sqli", "database query injection"],
-            "DoS": ["denial of service", "dos", "ddos", "exhaustion", "crash", "infinite loop"],
-            "Path Traversal": ["path traversal", "directory traversal", "../"],
-            "LFI/RFI": ["local file inclusion", "remote file inclusion", "lfi", "rfi", "include files"]
-        }
-        
-        for attack_type, keywords in mapping.items():
-            if any(k in desc for k in keywords):
-                return attack_type
-        return "Other"
+    def infer_attack_type(event_type, tags, ioc_list):
+        """Advanced Attack Type Inference (replaces redundant mapping)."""
+        combined_text = " ".join(tags).lower()
+        for ioc in ioc_list:
+            enrich = ioc.get("enrichment", {})
+            combined_text += " " + str(enrich.get("vt_tags", "")).lower()
+            combined_text += " " + str(enrich.get("malware_family", "")).lower()
+            
+        if event_type == "phishing":
+            return "Phishing"
+            
+        if event_type == "malware":
+            malware_types = {
+                "RAT": ["rat", "remcos", "nanocore", "agenttesla", "njrat", "quasarrat", "remote access"],
+                "Botnet": ["botnet", "mirai", "mozi", "emotet", "cobalt strike"],
+                "Stealer": ["stealer", "redline", "lumma", "vidar", "raccoon", "credential stealer"],
+                "Downloader": ["downloader", "guploader", "smoke loader"],
+                "Loader": ["loader", "buer loader", "hancitor"],
+                "PowerShell malware": ["powershell", "ps1", "encodedcommand"]
+            }
+            for mtype, keywords in malware_types.items():
+                if any(k in combined_text for k in keywords):
+                    return mtype
+            return "Malware"
+            
+        return "Unknown"
 
     @staticmethod
-    def get_mitre_mapping(attack_type):
-        """Maps attack types to multiple MITRE ATT&CK techniques and tactics."""
-        mapping = {
-            "RCE": {
-                "techniques": ["T1203", "T1190"], 
-                "tactics": ["Execution", "Initial Access"]
-            },
-            "Privilege Escalation": {
-                "techniques": ["T1068", "T1548"], 
-                "tactics": ["Privilege Escalation"]
-            },
-            "XSS": {
-                "techniques": ["T1189", "T1204.001"], 
-                "tactics": ["Initial Access"]
-            },
-            "SQL Injection": {
-                "techniques": ["T1190", "T1505"], 
-                "tactics": ["Initial Access", "Persistence"]
-            },
-            "DoS": {
-                "techniques": ["T1498", "T1499"], 
-                "tactics": ["Impact"]
-            },
-            "Path Traversal": {
-                "techniques": ["T1083", "T1140"], 
-                "tactics": ["Discovery", "Defense Evasion"]
-            },
-            "LFI/RFI": {
-                "techniques": ["T1190", "T1213"], 
-                "tactics": ["Initial Access", "Collection"]
-            }
+    def get_mitre_bonus(attack_type):
+        """Maps inferred types to MITRE techniques if not already present."""
+        mitre_map = {
+            "RAT": ["T1219", "T1105"],
+            "Botnet": ["T1105", "T1071"],
+            "Stealer": ["T1005", "T1056"],
+            "PowerShell malware": ["T1059.001"],
+            "Phishing": ["T1566"]
         }
-        res = mapping.get(attack_type, {"techniques": ["Unknown"], "tactics": ["Unknown"]})
-        return res
+        return mitre_map.get(attack_type, [])
 
     @staticmethod
     def calculate_cve_score(record):
@@ -262,10 +244,58 @@ class ThreatCorrelator:
     def __init__(self, input_dir, output_dir):
         self.input_dir = input_dir
         self.output_dir = output_dir
+        self.tracking_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "correlation_tracking.json")
+        self.processed_files = self._load_tracking()
         self.events = {}
         
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
+            
+        self._load_existing_events()
+
+    def _load_tracking(self):
+        if os.path.exists(self.tracking_file):
+            try:
+                with open(self.tracking_file, 'r') as f:
+                    return set(json.load(f))
+            except:
+                return set()
+        return set()
+
+    def _save_tracking(self):
+        with open(self.tracking_file, 'w') as f:
+            json.dump(list(self.processed_files), f, indent=4)
+
+    def _load_existing_events(self):
+        """Loads previously correlated events to allow incremental updates."""
+        output_file = os.path.join(self.output_dir, "correlated_events_soc_enriched.json")
+        if not os.path.exists(output_file):
+            return
+
+        try:
+            with open(output_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                for event in data:
+                    group_id = event.get("group_id")
+                    if not group_id: continue
+                    
+                    # Convert lists back to sets for merging
+                    event["tags"] = set(event.get("tags", []))
+                    event["source_list"] = set(event.get("source_list", []))
+                    
+                    # Convert IOC list back to dict
+                    ioc_dict = {}
+                    for ioc in event.get("iocs", []):
+                        val = ioc["value"]
+                        ioc["sources"] = set(ioc.get("sources", []))
+                        ioc["relations"] = set(ioc.get("relations", []))
+                        ioc_dict[val] = ioc
+                    event["iocs"] = ioc_dict
+                    
+                    self.events[group_id] = event
+            logger.info(f"Loaded {len(self.events)} existing events for incremental update.")
+        except Exception as e:
+            logger.error(f"Error loading existing events: {e}")
 
     def extract_brand(self, attributes):
         """Extract brand name for phishing grouping."""
@@ -285,14 +315,20 @@ class ThreatCorrelator:
 
     def process_files(self):
         logger.info("Phase 1: Loading and Grouping Data...")
-        files = [f for f in os.listdir(self.input_dir) if f.endswith('.json')]
+        all_files = [f for f in os.listdir(self.input_dir) if f.endswith('.json')]
+        new_files = [f for f in all_files if f not in self.processed_files]
         
-        for filename in files:
+        if not new_files:
+            logger.info("No new files to process.")
+            return
+
+        for filename in new_files:
             file_path = os.path.join(self.input_dir, filename)
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self._process_records(data)
+                self.processed_files.add(filename)
             except Exception as e:
                 logger.error(f"Error loading {filename}: {str(e)}")
 
@@ -371,34 +407,23 @@ class ThreatCorrelator:
                     "first_seen": collected_at,
                     "last_seen": collected_at
                 }
-                # Apply CVE specific metadata
-                if cves:
-                    cve_id = cves[0] if isinstance(cves[0], str) else cves[0].get('id')
-                    cve_res = RiskScorer.calculate_cve_score(record)
-                    description = attributes.get('description', '')
-                    attack_type = RiskScorer.classify_cve(description)
-                    mitre = RiskScorer.get_mitre_mapping(attack_type)
+                # Apply Inherited Metadata (from output_enrichment)
+                new_event = self.events[group_id]
+                new_event["priority_score"] = record.get("priority_score", "LOW")
+                new_event["attack_type"] = record.get("attack_type", "Unknown")
+                
+                # Merge MITRE data from record
+                for m_item in record.get("mitre_attack", []):
+                    if m_item["id"] not in new_event["mitre_techniques"]:
+                        new_event["mitre_techniques"].append(m_item["id"])
                     
-                    self.events[group_id].update({
-                        "risk_score": cve_res["score"],
-                        "risk_level": cve_res["priority"].lower(),
-                        "priority_score": cve_res["priority"],
-                        "soc_action": cve_res["soc_action"],
-                        "attack_type": attack_type,
-                        "threat_context": cve_res["exploitation_status"],
-                        "epss": cve_res["epss"],
-                        "mitre_techniques": mitre["techniques"],
-                        "mitre_tactics": mitre["tactics"]
-                    })
-                    if cve_res["cvss_missing"]: self.events[group_id]["cvss_missing"] = True
-                    
-                    # Temporal Correlation: tag "recent_threat" if CVE < 30 days
-                    try:
-                        cve_year = str(cve_id).split('-')[1]
-                        current_year = datetime.now().year
-                        if str(cve_year) == str(current_year):
-                            self.events[group_id]["tags"].add("recent_threat")
-                    except: pass
+                # Temporal Correlation: tag "recent_threat" if CVE < 30 days
+                try:
+                    cve_year = str(cve_id).split('-')[1]
+                    current_year = datetime.now().year
+                    if str(cve_year) == str(current_year):
+                        new_event["tags"].add("recent_threat")
+                except: pass
 
             event = self.events[group_id]
             
@@ -547,9 +572,18 @@ class ThreatCorrelator:
             # 6. Confidence Score
             event["confidence_score"] = RiskScorer.calculate_confidence_score(event, event["source_list"])
             
+            # 7. Advanced Attack Classification (Not in output_enrichment)
+            if event["attack_type"] == "Unknown":
+                event["attack_type"] = RiskScorer.infer_attack_type(event["event_type"], event["tags"], event["iocs"])
+            
+            # 8. MITRE Bonus (Inherited + Inferred)
+            bonus_techs = RiskScorer.get_mitre_bonus(event["attack_type"])
+            for bt in bonus_techs:
+                if bt not in event["mitre_techniques"]:
+                    event["mitre_techniques"].append(bt)
+
             # Final Event Score & SOC Actions
             if event["event_type"] == "vulnerability":
-                # CVE scores already set in record processing
                 pass
             else:
                 # Bonus for CVE presence in non-vulnerability event
@@ -578,6 +612,15 @@ class ThreatCorrelator:
                 else:
                     event["priority_score"] = "LOW"
                     event["soc_action"] = "monitor"
+            
+            # Final Tag
+            tags_set = event["tags"] if isinstance(event["tags"], set) else set(event["tags"])
+            if "soc_enriched" not in tags_set:
+                tags_set.add("soc_enriched")
+            event["tags"] = tags_set
+
+            # Store group_id for future re-loading
+            event["group_id"] = group_id
 
             # Deduplicate relations
             unique_relations = []
@@ -589,19 +632,27 @@ class ThreatCorrelator:
                     seen_rels.add(rel_id)
             event["relations"] = unique_relations
             
+            # Final set conversion for JSON serializability
+            event["tags"] = sorted(list(event["tags"]))
+            event["source_list"] = sorted(list(event["source_list"]))
+            
             cleaned_events.append(event)
         
         return cleaned_events
 
     def finalize_and_save(self):
+        if not self.events:
+            logger.info("No events to save.")
+            return
+
         cleaned_events = self._validate_and_clean()
         
-        timestamp_str = datetime.now().strftime('%Y-%m-%d')
-        output_file = os.path.join(self.output_dir, f"correlated_events_{timestamp_str}.json")
+        output_file = os.path.join(self.output_dir, "correlated_events_soc_enriched.json")
         
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(cleaned_events, f, indent=4)
         
+        self._save_tracking()
         logger.info(f"Final Report: Generated {len(cleaned_events)} events in {output_file}")
 
 if __name__ == "__main__":
