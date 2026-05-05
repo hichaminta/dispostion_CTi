@@ -21,7 +21,7 @@ if sys.platform == 'win32':
         print(f"[INIT] Failed to set Proactor policy: {e}")
 
 from datetime import datetime
-from . import schemas, database, websockets, worker
+from . import schemas, database, websockets, worker, leaks_router
 from .database import db
 
 OUTPUT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_cve_ioc"))
@@ -30,8 +30,10 @@ MITRE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", 
 DASHBOARD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "dashboard"))
 
 app = FastAPI(title="CTI Pipeline Tracker API")
+app.include_router(leaks_router.router)
 
 app.mount("/results", StaticFiles(directory=DASHBOARD_DIR, html=True), name="results")
+app.mount("/data", StaticFiles(directory=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))), name="data")
 GEO_STATS_CACHE = {"data": [], "last_updated": 0}
 
 app.add_middleware(
@@ -490,6 +492,77 @@ def get_mitre_matrix_stats():
             except:
                 continue
     return tech_counts
+
+@app.get("/api/settings/ai")
+def get_ai_settings():
+    """Returns current AI provider configuration (keys are masked)."""
+    ENV_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+    config = {
+        "provider": os.getenv("AI_PROVIDER", "gemini"),
+        "gemini_api_key": "",
+        "openai_api_key": "",
+        "openrouter_api_key": "",
+        "openrouter_model": os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001"),
+        "ollama_url": os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate"),
+        "ollama_model": os.getenv("OLLAMA_MODEL", "qwen2.5-coder:1.5b"),
+    }
+    # Mask keys: show only last 4 chars
+    for key_name, env_var in [("gemini_api_key","GEMINI_API_KEY"),("openai_api_key","OPENAI_API_KEY"),("openrouter_api_key","OPENROUTER_API_KEY")]:
+        val = os.getenv(env_var, "")
+        config[key_name] = ("*" * (len(val) - 4) + val[-4:]) if len(val) > 4 else ("*" * len(val))
+    return config
+
+@app.post("/api/settings/ai")
+async def save_ai_settings(body: dict):
+    """Saves AI provider configuration to .env file."""
+    ENV_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+    
+    # Load existing .env content
+    lines = []
+    if os.path.exists(ENV_PATH):
+        with open(ENV_PATH, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    
+    def set_env_var(lines, key, value):
+        """Update or append a key=value line."""
+        for i, line in enumerate(lines):
+            if line.strip().startswith(f"{key}=") or line.strip().startswith(f"{key} ="):
+                lines[i] = f"{key}={value}\n"
+                return lines
+        lines.append(f"{key}={value}\n")
+        return lines
+
+    mapping = {
+        "provider": "AI_PROVIDER",
+        "openrouter_model": "OPENROUTER_MODEL",
+        "ollama_url": "OLLAMA_URL",
+        "ollama_model": "OLLAMA_MODEL",
+    }
+    key_mapping = {
+        "gemini_api_key": "GEMINI_API_KEY",
+        "openai_api_key": "OPENAI_API_KEY",
+        "openrouter_api_key": "OPENROUTER_API_KEY",
+    }
+
+    for field, env_var in mapping.items():
+        if field in body:
+            lines = set_env_var(lines, env_var, body[field])
+
+    for field, env_var in key_mapping.items():
+        val = body.get(field, "")
+        # Only save if it doesn't look like a masked value (all stars)
+        if val and not all(c == '*' for c in val.replace('*', '')):
+            if not (val.startswith("*") and "*" in val and len(val) > 4):
+                lines = set_env_var(lines, env_var, val)
+
+    with open(ENV_PATH, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+    # Reload env vars in memory
+    from dotenv import load_dotenv
+    load_dotenv(ENV_PATH, override=True)
+
+    return {"status": "success", "message": "Configuration AI sauvegardée."}
 
 @app.delete("/runs")
 def clear_runs():

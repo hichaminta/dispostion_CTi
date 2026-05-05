@@ -61,6 +61,7 @@ EXTRACTORS_DIR    = os.path.join(PROJECT_ROOT, "extraction_ioc_cve")
 SCRIPTS_DIR       = os.path.join(PROJECT_ROOT, "scripts")
 OUTPUT_DIR        = os.path.join(PROJECT_ROOT, "output_cve_ioc")
 COLLECTION_SCRIPT = os.path.join(SCRIPTS_DIR, "run_collection_all.py")
+LEAK_INTEGRATION_SCRIPT = os.path.join(PROJECT_ROOT, "leak_data_integration", "main.py")
 ENRICHMENT_DIR    = os.path.join(PROJECT_ROOT, "enrichment")
 
 # Sources CVE-only (pas d'IOCs)
@@ -623,3 +624,26 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
         await _update_step(run_id, step_name, "failed")
         db.update_run(run_id, {"status_global": "failed"})
         await manager.broadcast({"type": "run_complete", "run_id": run_id, "status": "failed"})
+
+async def execute_leak_collection_task(run_id: str):
+    """
+    Lance le collecteur de fuites Telegram.
+    """
+    ts = lambda: datetime.utcnow().strftime("%H:%M:%S")
+    step_name = "Monitoring Telegram"
+    
+    try:
+        await _update_step(run_id, step_name, "running")
+        await _ws_log(run_id, step_name, f"[{ts()}] ═══ DÉMARRAGE MONITORING TELEGRAM ═══")
+        
+        # On lance le script principal de leak_data_integration
+        ok = await _run_proc(run_id, step_name, [sys.executable, LEAK_INTEGRATION_SCRIPT], os.path.dirname(LEAK_INTEGRATION_SCRIPT))
+        
+        await _update_step(run_id, step_name, "success" if ok else "failed")
+        db.update_run(run_id, {"status_global": "success" if ok else "failed"})
+        await manager.broadcast({"type": "run_complete", "run_id": run_id, "status": "success" if ok else "failed"})
+        
+    except Exception as e:
+        logger.error(f"Leak collection error: {e}")
+        await _ws_log(run_id, step_name, f"[{ts()}] ❌ ERREUR : {e}")
+        db.update_run(run_id, {"status_global": "failed"})

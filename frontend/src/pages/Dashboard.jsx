@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import logo from '../assets/logo.png';
 import {
   Play, Shield, Activity, Clock, FileText,
   Database, AlertTriangle, CheckCircle2, Loader2, Zap, Sparkles, Square,
   Download, Search, Cpu, Globe, Languages, ScanEye, Layers, ChevronRight,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, Terminal
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -80,6 +80,13 @@ const Dashboard = ({ onSelectRun }) => {
     coverage: 0,
     topCountries: []
   });
+  
+  // New state for live console
+  const [showConsole, setShowConsole] = useState(false);
+  const [consoleLogs, setConsoleLogs] = useState([]);
+  const [activeConsoleRunId, setActiveConsoleRunId] = useState(null);
+  const [consoleFilter, setConsoleFilter] = useState(null);
+  const logEndRef = useRef(null);
 
   useEffect(() => {
     fetchAll();
@@ -97,6 +104,11 @@ const Dashboard = ({ onSelectRun }) => {
             else next.delete(data.source_id);
             return next;
           });
+        } else if (data.type === "log") {
+          // Si on est en train de suivre ce run (ou si on suit le dernier run par défaut)
+          setConsoleLogs(prev => [...prev.slice(-100), { step: data.step_name, line: data.line, timestamp: new Date() }]);
+        } else if (data.type === "run_complete") {
+          fetchAll();
         }
       } catch (e) {
         console.error("WS parse error:", e);
@@ -108,6 +120,13 @@ const Dashboard = ({ onSelectRun }) => {
       ws.close();
     };
   }, []);
+
+  // Auto-scroll for console
+  useEffect(() => {
+    if (showConsole && logEndRef.current) {
+      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [consoleLogs, showConsole]);
 
   const fetchAll = async () => {
     // Appel des runs (bloquant pour le dashboard principal)
@@ -687,7 +706,93 @@ const Dashboard = ({ onSelectRun }) => {
                 Voir les détails →
               </button>
             </div>
-            <PipelineStepper run={latestRun} />
+            <PipelineStepper 
+              run={latestRun} 
+              onStepClick={(stepName) => {
+                setConsoleFilter(prev => prev === stepName ? null : stepName);
+                setShowConsole(true);
+              }}
+              activeFilter={consoleFilter}
+            />
+            
+            {/* ── Console Terminal (Quick View) ── */}
+            <div className="mt-4 flex flex-wrap gap-3 items-center">
+              <button 
+                onClick={() => {
+                  setShowConsole(!showConsole);
+                  if (!showConsole) setConsoleFilter(null);
+                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                  showConsole ? 'bg-slate-800 text-brand-400 border border-brand-500/30' : 'bg-slate-900/40 text-slate-500 border border-white/5 hover:text-slate-300'
+                }`}
+              >
+                <Terminal className="w-3.5 h-3.5" />
+                {showConsole ? 'Masquer la console' : 'Afficher la console live'}
+                {latestRun?.status_global === 'running' && <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-ping ml-1" />}
+              </button>
+
+              {showConsole && consoleFilter && (
+                <button 
+                  onClick={() => setConsoleFilter(null)}
+                  className="px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest bg-brand-500/20 text-brand-400 border border-brand-500/40 animate-in zoom-in-95"
+                >
+                  Filtre: {consoleFilter} ×
+                </button>
+              )}
+            </div>
+
+            {showConsole && (
+              <div className="mt-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="bg-[#0d1117] rounded-2xl border border-slate-800/80 overflow-hidden shadow-2xl">
+                  <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800/50 bg-slate-900/60">
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-1">
+                        <div className="w-2 h-2 rounded-full bg-red-500/50" />
+                        <div className="w-2 h-2 rounded-full bg-yellow-500/50" />
+                        <div className="w-2 h-2 rounded-full bg-emerald-500/50" />
+                      </div>
+                      <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest ml-2">
+                        Terminal Output {consoleFilter ? `[ ${consoleFilter} ]` : '• Real-time'}
+                      </span>
+                    </div>
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={() => setConsoleLogs([])}
+                        className="text-[9px] font-mono text-slate-600 hover:text-slate-400 uppercase"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                  <div 
+                    className="p-4 font-mono text-[11px] leading-5 overflow-y-auto max-h-[300px] scrollbar-thin scrollbar-thumb-slate-800"
+                  >
+                    {(consoleFilter ? consoleLogs.filter(l => l.step === consoleFilter) : consoleLogs).length === 0 ? (
+                      <div className="py-10 text-center text-slate-700 italic">
+                        {consoleFilter ? `Aucun log pour l'étape "${consoleFilter}" pour le moment.` : "En attente d'activité sur le pipeline..."}
+                      </div>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {(consoleFilter ? consoleLogs.filter(l => l.step === consoleFilter) : consoleLogs).map((log, i) => (
+                          <div key={i} className="flex gap-3">
+                            <span className="text-slate-700 shrink-0">{format(log.timestamp, 'HH:mm:ss')}</span>
+                            {!consoleFilter && <span className="text-brand-500/50 shrink-0 w-20 truncate">[{log.step}]</span>}
+                            <span className={`break-all ${
+                              /✓|OK|success/i.test(log.line) ? 'text-emerald-400' :
+                              /✗|ERROR|failed/i.test(log.line) ? 'text-red-400' :
+                              /⚠|WARN/i.test(log.line) ? 'text-yellow-400' : 'text-slate-300'
+                            }`}>
+                              {log.line}
+                            </span>
+                          </div>
+                        ))}
+                        <div ref={logEndRef} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -906,7 +1011,7 @@ const PIPELINE_STEPS = [
   { name: "Intégration MISP",     icon: Zap           },
 ];
 
-const PipelineStepper = ({ run }) => {
+const PipelineStepper = ({ run, onStepClick, activeFilter }) => {
   const stepMap = {};
   (run?.steps || []).forEach(s => { stepMap[s.step_name] = s; });
 
@@ -931,9 +1036,12 @@ const PipelineStepper = ({ run }) => {
 
           return (
             <React.Fragment key={step.name}>
-              <div className="flex flex-col items-center flex-shrink-0">
+              <button 
+                onClick={() => onStepClick?.(step.name)}
+                className={`flex flex-col items-center flex-shrink-0 group/step transition-transform active:scale-95 ${activeFilter && activeFilter !== step.name ? 'opacity-30' : 'opacity-100'}`}
+              >
                 <div 
-                  className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition-all duration-500 ${iconClass}`}
+                  className={`w-12 h-12 rounded-2xl border flex items-center justify-center transition-all duration-500 ${iconClass} ${activeFilter === step.name ? 'ring-2 ring-brand-500 ring-offset-2 ring-offset-[#05060b]' : ''}`}
                 >
                   {stepData.status === 'running' ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
@@ -953,7 +1061,7 @@ const PipelineStepper = ({ run }) => {
                     {stepData.status === 'planned' ? 'Planned' : stepData.status}
                   </p>
                 </div>
-              </div>
+              </button>
               {!isLast && (
                 <div className="flex-1 min-w-[20px] h-[2px] mx-2 mb-10 bg-slate-800/40 rounded-full relative overflow-hidden">
                   {(stepData.status === 'success') && (

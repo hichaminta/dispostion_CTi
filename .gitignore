@@ -13,3 +13,5 @@ unified_records.jsonl
 temp_ip_data
 temp_sources
 misp-docker
+data
+leak_data_integration/reports

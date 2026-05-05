@@ -1,0 +1,11 @@
+telegram:
+  channels:
+    - "https://t.me/Jabaroot01"
+  backfill_days: 10
+storage:
+  base_path: "./data/leaks"
+  report_path: "./reports"
+
+nlp:
+  min_confidence: 60
+  language_support: ["en", "fr", "ar"]

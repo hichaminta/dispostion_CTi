@@ -1,0 +1,34 @@
+leaks:
+  en:
+    - leak
+    - breach
+    - database
+    - dump
+    - "stealer logs"
+    - "combo list"
+    - "sql injection"
+    - "exposed data"
+  fr:
+    - fuite
+    - "base de données"
+    - dump
+    - piratage
+    - "données exposées"
+    - "accès compromis"
+  ar:
+    - تسريب
+    - اختراق
+    - "قاعدة بيانات"
+    - "بيانات مسربة"
+    - "ملف سري"
+    - "بيانات حساسة"
+
+file_types:
+  - .rar
+  - .zip
+  - .7z
+  - .txt
+  - .csv
+  - .sql
+  - .json
+  - .xlsx

@@ -1,0 +1,9 @@
+telethon
+python-dotenv
+pyyaml
+spacy
+fpdf2
+pandas
+google-genai
+openai
+requests
