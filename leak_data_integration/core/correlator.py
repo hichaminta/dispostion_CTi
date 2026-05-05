@@ -14,15 +14,26 @@ class DailyCorrelator:
 
     async def correlate_day(self, target_date_str=None, force_all=False):
         """Performs correlation with two-pass logic: 1. Before earliest_modified, 2. After last_run."""
-        tracking_data = self._load_tracking()
+        tracking_list = self._load_tracking()
+        if not isinstance(tracking_list, list):
+            tracking_list = []
         
-        # Load boundaries from tracking
+        # Load global boundaries from all channel tracks
         gap_start = None
         gap_end = None
-        try:
-            gap_start = datetime.fromisoformat(tracking_data.get("earliest_modified").replace("Z", "+00:00"))
-            gap_end = datetime.fromisoformat(tracking_data.get("last_run").replace("Z", "+00:00"))
-        except: pass
+        
+        for entry in tracking_list:
+            try:
+                e_mod = entry.get("earliest_modified")
+                l_run = entry.get("last_run")
+                if e_mod and str(e_mod).strip():
+                    dt = datetime.fromisoformat(str(e_mod).strip().replace("Z", "+00:00"))
+                    if gap_start is None or dt < gap_start: gap_start = dt
+                if l_run and str(l_run).strip():
+                    dt = datetime.fromisoformat(str(l_run).strip().replace("Z", "+00:00"))
+                    if gap_end is None or dt > gap_end: gap_end = dt
+            except Exception as e:
+                logger.warning(f"Error parsing tracking entry dates: {e}")
 
         intel_records = self._load_intel()
         
@@ -31,7 +42,7 @@ class DailyCorrelator:
         for r in intel_records:
             try:
                 rec_date = datetime.fromisoformat(r.get('leak_date').replace("Z", "+00:00"))
-                # SKIP if inside the gap, unless force_all is True
+                # SKIP if inside the global gap, unless force_all is True
                 if not force_all and gap_start and gap_end and gap_start <= rec_date <= gap_end:
                     continue
                 to_process.append(r)
@@ -67,10 +78,7 @@ class DailyCorrelator:
         self._write_intel(intel_records)
         logger.info("Deep correlation and global LLM consolidation complete.")
         
-        # Update tracking for intelligence & correlation completion
-        tracking_data["last_correlation_run"] = datetime.now().isoformat()
-        tracking_data["last_intelligence_run"] = tracking_data["last_correlation_run"]
-        self._save_tracking(tracking_data)
+        # Note: Correlation metadata is not saved to tracking.json to respect user format
 
         print("\n[+] Generating final intelligence reports...")
         try:
@@ -84,10 +92,6 @@ class DailyCorrelator:
                 if reporter.generate_pdf_bulletin(intel_id, pdf_path):
                     print(f"  [REPORT] Generated PDF bulletin for {intel_id}")
             print("[+] Report generation completed.")
-            
-            # Update tracking for report generation
-            tracking_data["last_report_run"] = datetime.now().isoformat()
-            self._save_tracking(tracking_data)
         except Exception as e:
             logger.error(f"Failed to generate reports after correlation: {e}")
 
@@ -97,18 +101,19 @@ class DailyCorrelator:
         if os.path.exists(path):
             try:
                 with open(path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    return data if isinstance(data, list) else []
             except Exception as e:
                 logger.warning(f"Failed to load tracking data: {e}")
-                return {}
-        return {}
+                return []
+        return []
 
-    def _save_tracking(self, tracking_data):
+    def _save_tracking(self, tracking_list):
         """Helper to save tracking data after completing stages."""
         path = os.path.join(os.path.dirname(self.intel_file), "..", "tracking.json")
         try:
             with open(path, 'w', encoding='utf-8') as f:
-                json.dump(tracking_data, f, indent=4, ensure_ascii=False)
+                json.dump(tracking_list, f, indent=4, ensure_ascii=False)
         except Exception as e:
             logger.error(f"Failed to save tracking data: {e}")
 

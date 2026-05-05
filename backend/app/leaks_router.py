@@ -396,10 +396,25 @@ async def analyze_csv(path: str):
     if not os.path.exists(abs_path):
         raise HTTPException(status_code=404, detail=f"File not found: {path}")
 
-    # Read a sample of the CSV
+    # ── Read full file for AI (lines taken from original file on disk) ──
+    MAX_SIZE_MB = 500
+    file_size_mb = os.path.getsize(abs_path) / (1024 * 1024)
+    if file_size_mb > MAX_SIZE_MB:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large for AI analysis ({file_size_mb:.1f} MB > {MAX_SIZE_MB} MB limit)"
+        )
+
     try:
-        with open(abs_path, "r", encoding="utf-8", errors="ignore") as f:
-            sample_data = "".join(f.readlines()[:50])
+        raw_lines = []
+        for enc in ("utf-8", "utf-8-sig", "latin-1", "cp1252"):
+            try:
+                with open(abs_path, "r", encoding=enc, errors="ignore") as f:
+                    raw_lines = f.readlines()   # Full file — all original lines
+                break
+            except Exception:
+                continue
+        sample_data = "".join(raw_lines)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading file for analysis: {e}")
 
@@ -408,16 +423,22 @@ async def analyze_csv(path: str):
     INTEGRATION_DIR = os.path.join(PROJECT_ROOT, "leak_data_integration")
     if INTEGRATION_DIR not in sys.path:
         sys.path.insert(0, INTEGRATION_DIR)
-        
+
     from core.analyzer import LeakAnalyzer
     analyzer = LeakAnalyzer()
-    
+
     file_name = os.path.basename(abs_path)
-    text_context = f"File name: {file_name}\nThis is a standalone CSV file uploaded for analysis."
-    
+    total_lines = len(raw_lines)
+    text_context = (
+        f"File name: {file_name}\n"
+        f"File size: {file_size_mb:.2f} MB\n"
+        f"Total lines: {total_lines}\n"
+        f"This is a standalone CSV/TXT file uploaded for security analysis."
+    )
+
     try:
         analysis_result = await analyzer.analyze_leak(text=text_context, file_context=sample_data)
-        return {"status": "success", "analysis": analysis_result}
+        return {"status": "success", "analysis": analysis_result, "meta": {"total_lines": total_lines, "size_mb": round(file_size_mb, 2)}}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI Analysis failed: {e}")
 

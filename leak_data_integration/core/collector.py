@@ -104,7 +104,7 @@ class TelegramCollector:
                         sample_lines = []
                         with open(full_p, 'r', encoding='utf-8', errors='ignore') as f:
                             for i, line in enumerate(f):
-                                if file_size_mb > 10 and i >= 100:
+                                if file_size_mb > 500 and i >= 100:
                                     line_count = "100+ (Volumineux)"
                                     break
                                 if isinstance(line_count, int):
@@ -132,41 +132,56 @@ class TelegramCollector:
         await self.client.start(phone=self.phone)
         logger.info("Connected to Telegram!")
 
-        # === Determine scan boundaries ===
-        env_start_date = self.tracking_data.get("start_date", "2026-04-08")
-        try:
-            since_date = datetime.strptime(env_start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        except:
-            since_date = datetime(2026, 4, 8, tzinfo=timezone.utc)
-
-        # === Load skip interval from tracking.json ===
-        gap_start = None
-        gap_end = None
-
-        earliest_str = self.tracking_data.get("earliest_modified")
-        last_run_str = self.tracking_data.get("last_run")
-
-        if earliest_str and last_run_str:
-            try:
-                gap_start = datetime.fromisoformat(earliest_str).astimezone(timezone.utc)
-                gap_end = datetime.fromisoformat(last_run_str).astimezone(timezone.utc)
-            except Exception as e:
-                logger.warning(f"Could not parse tracking dates: {e}")
-
-        # === Display strategy ===
         print("\n" + "="*50)
         print("   CTI PLATFORM - COLLECTION STRATEGY")
-        print(f"   > Start Date : {since_date.date()}")
-        if gap_start and gap_end:
-            print(f"   > SKIP ZONE  : {gap_start.date()} -> {gap_end.date()}")
-        else:
-            print("   > SKIP ZONE  : None (Full scan)")
         print("="*50 + "\n")
+
+        tracking_list = self.tracking_data if isinstance(self.tracking_data, list) else []
+        self.tracking_data = tracking_list # Ensure internal state is the list
 
         for channel_url in self.channels:
             try:
                 entity = await self.client.get_entity(channel_url)
                 channel_name = getattr(entity, 'title', channel_url)
+                
+                # Find specific tracking for this channel
+                channel_track = next((t for t in tracking_list if t.get("group_name") in [channel_name, channel_url.split('/')[-1]]), None)
+                
+                if not channel_track:
+                    # Create default entry if not found
+                    channel_track = {
+                        "group_name": channel_name,
+                        "start_date": "2026-05-05",
+                        "earliest_modified": None,
+                        "last_run": None
+                    }
+                    tracking_list.append(channel_track)
+
+                since_date_str = channel_track.get("start_date", "2026-05-05")
+                try:
+                    since_date = datetime.strptime(since_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                except:
+                    since_date = datetime(2026, 5, 5, tzinfo=timezone.utc)
+
+                gap_start = None
+                gap_end = None
+                earliest_str = channel_track.get("earliest_modified")
+                last_run_str = channel_track.get("last_run")
+
+                if earliest_str and last_run_str:
+                    try:
+                        gap_start = datetime.fromisoformat(earliest_str).astimezone(timezone.utc)
+                        gap_end = datetime.fromisoformat(last_run_str).astimezone(timezone.utc)
+                    except:
+                        pass
+
+                print(f"   [*] Channel: {channel_name}")
+                print(f"   > Start Date : {since_date.date()}")
+                if gap_start and gap_end:
+                    print(f"   > SKIP ZONE  : {gap_start.date()} -> {gap_end.date()}")
+                else:
+                    print("   > SKIP ZONE  : None (Full scan)")
+                
                 logger.info(f"Monitoring: {channel_name}")
 
                 processed_count = 0
@@ -194,12 +209,12 @@ class TelegramCollector:
                     await self.process_message(message=message, channel_entity=entity)
                     processed_count += 1
 
-                    # Update tracking boundaries
+                    # Update tracking boundaries for this channel
                     if not gap_start or m_date < gap_start:
-                        self.tracking_data["earliest_modified"] = m_date.isoformat()
+                        channel_track["earliest_modified"] = m_date.isoformat()
                         gap_start = m_date
                     if not gap_end or m_date > gap_end:
-                        self.tracking_data["last_run"] = m_date.isoformat()
+                        channel_track["last_run"] = m_date.isoformat()
                         gap_end = m_date
 
                 logger.info(f"Done. Processed: {processed_count}, Skipped: {skipped_count}")
@@ -274,7 +289,7 @@ class TelegramCollector:
                             sample_lines = []
                             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                                 for i, line in enumerate(f):
-                                    if file_size_mb > 10 and i >= 100:
+                                    if file_size_mb > 500 and i >= 100:
                                         line_count = "100+ (Volumineux)"
                                         break
                                     if isinstance(line_count, int):
