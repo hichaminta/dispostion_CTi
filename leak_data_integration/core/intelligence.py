@@ -23,6 +23,15 @@ class IntelligenceAgent:
             return None
 
         # 2. Map the structured data
+        extracted_files = metadata.get("extracted_files", [])
+        main_file = metadata.get("file_path")
+        if main_file and main_file not in extracted_files:
+            extracted_files.append(main_file)
+
+        if not extracted_files:
+            logger.info(f"Skipping saving leak {metadata.get('id')} because it has no extracted file (user requirement).")
+            return None
+
         purified_record = {
             "intel_id": f"INTEL-{datetime.now().strftime('%Y%m%d')}-{analysis_data.get('targets', ['Unknown'])[0][:3].upper()}-{metadata.get('id')}",
             "timestamp": datetime.now().isoformat(),
@@ -37,7 +46,7 @@ class IntelligenceAgent:
             },
             "extracted_data": analysis_data.get("entities", {}),
             "file_references": [],
-            "extracted_files": metadata.get("extracted_files", []),
+            "extracted_files": extracted_files,
             "summary_fr": analysis_data.get("summary", "Aucun résumé")
         }
 

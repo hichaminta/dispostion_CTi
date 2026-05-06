@@ -122,7 +122,7 @@ class TelegramCollector:
             logger.error(f"Extraction failed: {e}")
             return None, []
 
-    async def start(self):
+    async def start(self, start_date_override=None):
         logger.info("Starting Telegram Collector...")
 
         ai_ready = await self.analyzer.test_connection()
@@ -144,8 +144,12 @@ class TelegramCollector:
                 entity = await self.client.get_entity(channel_url)
                 channel_name = getattr(entity, 'title', channel_url)
                 
-                # Find specific tracking for this channel
-                channel_track = next((t for t in tracking_list if t.get("group_name") in [channel_name, channel_url.split('/')[-1]]), None)
+                # Find specific tracking for this channel (Flexible matching)
+                channel_track = next((t for t in tracking_list if 
+                    (channel_name and channel_name.lower() in t.get("group_name", "").lower()) or 
+                    (t.get("group_name") and t.get("group_name", "").lower() in channel_name.lower()) or
+                    channel_url.split('/')[-1].lower() in t.get("group_name", "").lower()
+                ), None)
                 
                 if not channel_track:
                     # Create default entry if not found
@@ -157,10 +161,19 @@ class TelegramCollector:
                     }
                     tracking_list.append(channel_track)
 
-                since_date_str = channel_track.get("start_date", "2026-05-05")
-                try:
-                    since_date = datetime.strptime(since_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-                except:
+                # Use override if provided, otherwise use tracking data
+                since_date_str = start_date_override or channel_track.get("start_date", "2026-05-05")
+                since_date = None
+                
+                # Try parsing different formats
+                for fmt in ["%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%d"]:
+                    try:
+                        since_date = datetime.strptime(since_date_str, fmt)
+                        break
+                    except:
+                        continue
+                
+                if not since_date:
                     since_date = datetime(2026, 5, 5, tzinfo=timezone.utc)
 
                 gap_start = None
@@ -170,15 +183,19 @@ class TelegramCollector:
 
                 if earliest_str and last_run_str:
                     try:
-                        gap_start = datetime.fromisoformat(earliest_str).astimezone(timezone.utc)
-                        gap_end = datetime.fromisoformat(last_run_str).astimezone(timezone.utc)
+                        gap_start = datetime.fromisoformat(earliest_str).astimezone()
+                        gap_end = datetime.fromisoformat(last_run_str).astimezone()
                     except:
                         pass
 
+                # Store initial gap boundaries to avoid skipping messages processed in the SAME run
+                initial_gap_start = gap_start
+                initial_gap_end = gap_end
+
                 print(f"   [*] Channel: {channel_name}")
                 print(f"   > Start Date : {since_date.date()}")
-                if gap_start and gap_end:
-                    print(f"   > SKIP ZONE  : {gap_start.date()} -> {gap_end.date()}")
+                if initial_gap_start and initial_gap_end:
+                    print(f"   > SKIP ZONE  : {initial_gap_start.strftime('%H:%M')} -> {initial_gap_end.strftime('%H:%M')}")
                 else:
                     print("   > SKIP ZONE  : None (Full scan)")
                 
@@ -189,17 +206,17 @@ class TelegramCollector:
 
                 # Process newest to oldest (default Telethon behavior) to avoid offset_date quirks
                 async for message in self.client.iter_messages(entity):
-                    m_date = message.date.astimezone(timezone.utc)
+                    m_date = message.date.astimezone()
 
                     # Stop entirely if we go back further than the start date
-                    if m_date < since_date:
+                    if m_date.replace(tzinfo=None) < since_date.replace(tzinfo=None):
                         break
                     
-                    # === SKIP WALL: Ignore anything inside the tracking interval ===
-                    if gap_start and gap_end and gap_start <= m_date <= gap_end:
+                    # === SKIP WALL: Ignore anything inside the INITIAL tracking interval ===
+                    if initial_gap_start and initial_gap_end and initial_gap_start <= m_date <= initial_gap_end:
                         skipped_count += 1
                         if skipped_count % 10 == 1:
-                            print(f"   [SKIP] {m_date.date()} is inside tracking interval. Skipping...")
+                            print(f"   [SKIP] {m_date.strftime('%H:%M')} is inside initial tracking interval. Skipping...")
                         continue
 
                     # === PROCESS NEW/OLD MESSAGES OUTSIDE THE GAP ===
@@ -217,9 +234,22 @@ class TelegramCollector:
                         channel_track["last_run"] = m_date.isoformat()
                         gap_end = m_date
 
+                # Finalize tracking for this channel run
+                # On met à jour le curseur même si 0 messages ont été traités
+                # cela évite de re-scanner les mêmes messages au prochain run.
+                now_local = datetime.now()
+                
+                if gap_end:
+                    # On utilise la date du message le plus récent trouvé
+                    channel_track["last_run"] = gap_end.isoformat()
+                    channel_track["start_date"] = gap_end.strftime("%Y-%m-%d")
+                else:
+                    # Si aucun message n'a été traité (tous sautés ou aucun nouveau),
+                    # on avance quand même le last_run à "maintenant" pour marquer le succès du scan.
+                    channel_track["last_run"] = now_local.isoformat()
+
                 logger.info(f"Done. Processed: {processed_count}, Skipped: {skipped_count}")
-                if processed_count > 0:
-                    self._save_tracking()
+                self._save_tracking() # Always save to update state
 
             except Exception as e:
                 logger.error(f"Error for {channel_url}: {e}")
@@ -262,21 +292,31 @@ class TelegramCollector:
                 download_dir = os.path.join(target_dir, "downloads")
                 os.makedirs(download_dir, exist_ok=True)
                 
-                # Real-time progress display
-                async def download_progress(current, total):
-                    if total > 0:
-                        percent = current / total * 100
-                        mb_current = current / (1024 * 1024)
-                        mb_total = total / (1024 * 1024)
-                        # \r overwrites the current line to create a live progress bar
-                        print(f"\r    [+] Téléchargement : {mb_current:.1f} MB / {mb_total:.1f} MB ({percent:.1f}%)", end="", flush=True)
-
-                print(f"    [+] Début du téléchargement du fichier rattaché...")
-                file_path = await message.download_media(file=download_dir, progress_callback=download_progress)
-                print() # New line after the progress bar finishes
+                # Check file size before download
+                file_size = message.file.size if message.file else 0
+                max_size = 200 * 1024 * 1024 # 200 MB
                 
-                if file_path:
-                    leak_record["metadata"]["file_path"] = os.path.relpath(file_path, base_storage_path)
+                if file_size > max_size:
+                    logger.warning(f"File too large ({file_size / (1024*1024):.1f} MB). Skipping download.")
+                    print(f"    [!] Fichier trop volumineux ({file_size / (1024*1024):.1f} MB) > Limite 200 MB. Skip.")
+                    leak_record["metadata"]["file_path"] = "SKIPPED_TOO_LARGE"
+                else:
+                    # Real-time progress display
+                    async def download_progress(current, total):
+                        if total > 0:
+                            percent = current / total * 100
+                            mb_current = current / (1024 * 1024)
+                            mb_total = total / (1024 * 1024)
+                            # \r overwrites the current line to create a live progress bar
+                            print(f"\r    [+] Téléchargement : {mb_current:.1f} MB / {mb_total:.1f} MB ({percent:.1f}%)", end="", flush=True)
+
+                    print(f"    [+] Début du téléchargement du fichier rattaché...")
+                    file_path = await message.download_media(file=download_dir, progress_callback=download_progress)
+                    print() # New line after the progress bar finishes
+                    
+                    if file_path:
+                        leak_record["metadata"]["file_path"] = os.path.relpath(file_path, base_storage_path)
+                        # ... extraction and sampling ...
                     if file_path.lower().endswith(('.zip', '.ziip', '.rar')):
                         extracted_context, extracted_paths = self._extract_and_get_context(file_path, download_dir)
                         if extracted_context:
@@ -308,7 +348,7 @@ class TelegramCollector:
         # === HEURISTIC OVERRIDE: If it's an archive file in this channel, it's 100% a leak ===
         is_archive = False
         if leak_record["metadata"]["file_path"]:
-            if leak_record["metadata"]["file_path"].lower().endswith(('.zip', '.ziip', '.rar', '.dbf', '.sql')):
+            if leak_record["metadata"]["file_path"].lower().endswith(('.zip', '.ziip', '.rar', '.dbf', '.sql', '.xlsx', '.xls', '.xlsm', '.csv')):
                 is_archive = True
         
         # If the LLM says it's not a leak, but we have a suspicious archive file, we KEEP it.

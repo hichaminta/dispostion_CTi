@@ -625,7 +625,7 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
         db.update_run(run_id, {"status_global": "failed"})
         await manager.broadcast({"type": "run_complete", "run_id": run_id, "status": "failed"})
 
-async def execute_leak_collection_task(run_id: str):
+async def execute_leak_collection_task(run_id: str, channels: list = None, start_date: str = None):
     """
     Lance le collecteur de fuites Telegram.
     """
@@ -636,8 +636,13 @@ async def execute_leak_collection_task(run_id: str):
         await _update_step(run_id, step_name, "running")
         await _ws_log(run_id, step_name, f"[{ts()}] ═══ DÉMARRAGE MONITORING TELEGRAM ═══")
         
-        # On lance le script principal de leak_data_integration
-        ok = await _run_proc(run_id, step_name, [sys.executable, LEAK_INTEGRATION_SCRIPT], os.path.dirname(LEAK_INTEGRATION_SCRIPT))
+        cmd = [sys.executable, LEAK_INTEGRATION_SCRIPT]
+        if channels:
+            cmd.extend(["--channels", ",".join(channels)])
+        if start_date:
+            cmd.extend(["--start-date", start_date])
+            
+        ok = await _run_proc(run_id, step_name, cmd, os.path.dirname(LEAK_INTEGRATION_SCRIPT))
         
         await _update_step(run_id, step_name, "success" if ok else "failed")
         db.update_run(run_id, {"status_global": "success" if ok else "failed"})

@@ -7,9 +7,12 @@ import uuid
 from dotenv import load_dotenv
 load_dotenv()
 from . import worker, database, schemas
+import yaml
 
 router = APIRouter(prefix="/api/leaks", tags=["leaks"])
 db = database.db
+
+SETTINGS_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "leak_data_integration", "config", "settings.yaml"))
 
 # Purified Intelligence path
 INTEL_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "leak_data_integration", "results", "leaks_intel.json"))
@@ -19,7 +22,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 SESSION_PATH = os.path.join(PROJECT_ROOT, "telegram_leak_session")
 
 @router.post("/start")
-async def start_leak_collection(background_tasks: BackgroundTasks):
+async def start_leak_collection(background_tasks: BackgroundTasks, channels: List[str] = None, start_date: str = None):
     external_id = str(uuid.uuid4())
     new_run = {
         "run_id": external_id,
@@ -38,7 +41,7 @@ async def start_leak_collection(background_tasks: BackgroundTasks):
         "logs": [],
     })
     
-    background_tasks.add_task(worker.execute_leak_collection_task, external_id)
+    background_tasks.add_task(worker.execute_leak_collection_task, external_id, channels, start_date)
     return {"status": "success", "run_id": external_id}
 
 # Global client store for auth (temporary)
@@ -126,6 +129,55 @@ async def get_telegram_status():
     except Exception as e:
         return {"connected": False, "reason": str(e)}
 
+@router.get("/channels")
+async def get_telegram_channels():
+    if not os.path.exists(SETTINGS_FILE):
+        return []
+    try:
+        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        return config.get("telegram", {}).get("channels", [])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/channels")
+async def add_telegram_channel(url: str):
+    if not os.path.exists(SETTINGS_FILE):
+        raise HTTPException(status_code=404, detail="Settings file not found")
+    try:
+        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        
+        if "telegram" not in config: config["telegram"] = {}
+        if "channels" not in config["telegram"]: config["telegram"]["channels"] = []
+        
+        if url not in config["telegram"]["channels"]:
+            config["telegram"]["channels"].append(url)
+            with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+                yaml.dump(config, f, default_flow_style=False)
+        
+        return {"status": "success", "channels": config["telegram"]["channels"]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/channels")
+async def remove_telegram_channel(url: str):
+    if not os.path.exists(SETTINGS_FILE):
+        raise HTTPException(status_code=404, detail="Settings file not found")
+    try:
+        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        
+        if "telegram" in config and "channels" in config["telegram"]:
+            if url in config["telegram"]["channels"]:
+                config["telegram"]["channels"].remove(url)
+                with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+                    yaml.dump(config, f, default_flow_style=False)
+        
+        return {"status": "success", "channels": config.get("telegram", {}).get("channels", [])}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 LEAKS_DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "leaks"))
 
 @router.get("/")
@@ -160,7 +212,22 @@ def get_leaks():
 
 @router.get("/stats")
 def get_leak_stats():
-    leaks = get_leaks()
+    # Use purified intel for stats as it's consolidated and verified
+    leaks = []
+    if os.path.exists(INTEL_FILE):
+        try:
+            with open(INTEL_FILE, "r", encoding="utf-8") as f:
+                leaks = json.load(f)
+        except Exception as e:
+            print(f"Error reading {INTEL_FILE}: {e}")
+    
+    # If intel is empty, fallback to raw leaks for backward compatibility or empty state
+    if not leaks:
+        leaks = get_leaks()
+        is_intel = False
+    else:
+        is_intel = True
+
     stats = {
         "total": len(leaks),
         "by_severity": {"low": 0, "medium": 0, "high": 0, "critical": 0},
@@ -169,10 +236,16 @@ def get_leak_stats():
     }
     
     for leak in leaks:
-        analysis = leak.get("analysis", {})
-        severity = analysis.get("severity", "low")
-        leak_type = analysis.get("leak_type", "unknown")
-        channel = leak.get("channel", "unknown")
+        if is_intel:
+            metadata = leak.get("leak_metadata", {})
+            severity = metadata.get("severity", "low").lower()
+            leak_type = metadata.get("leak_type", "unknown")
+            channel = leak.get("source_channel", "unknown")
+        else:
+            analysis = leak.get("analysis", {})
+            severity = analysis.get("severity", "low").lower()
+            leak_type = analysis.get("leak_type", "unknown")
+            channel = leak.get("channel", "unknown")
         
         stats["by_severity"][severity] = stats["by_severity"].get(severity, 0) + 1
         stats["by_type"][leak_type] = stats["by_type"].get(leak_type, 0) + 1
@@ -259,6 +332,55 @@ def view_csv(path: str):
                 continue
         raise HTTPException(status_code=500, detail="Could not decode text file")
 
+    # ── Excel files: parse using pandas ─────────────────────────────
+    if ext in [".xlsx", ".xls"]:
+        try:
+            import pandas as pd
+            df = pd.read_excel(abs_path).head(200)
+            
+            # Infer column types
+            col_types = {}
+            for col in df.columns:
+                series = df[col].dropna()
+                if series.empty:
+                    col_types[str(col)] = "empty"; continue
+                try:
+                    pd.to_numeric(series); col_types[str(col)] = "number"; continue
+                except: pass
+                try:
+                    pd.to_datetime(series, errors="raise")
+                    col_types[str(col)] = "date"; continue
+                except: pass
+                col_types[str(col)] = "text"
+
+            # Sanitize for JSON
+            import math
+            def sanitize(val):
+                if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+                    return None
+                if isinstance(val, (datetime, pd.Timestamp)):
+                    return val.isoformat()
+                return val
+
+            records = [
+                {str(k): sanitize(v) for k, v in row.items()}
+                for row in df.to_dict(orient="records")
+            ]
+
+            payload = {
+                "type": "csv", # Keep type as csv for the frontend to use the same component
+                "data": records,
+                "columns": [str(c) for c in df.columns],
+                "col_types": col_types,
+                "detected_sep": "n/a",
+                "encoding": "binary/excel",
+                "total_rows": len(df),
+            }
+            from fastapi.responses import JSONResponse
+            return JSONResponse(content=payload)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error reading Excel file: {str(e)}")
+
     # ── CSV files: auto-detect separator + parse ──────────────────────
     try:
         import pandas as pd
@@ -335,14 +457,14 @@ def view_csv(path: str):
             return val
 
         records = [
-            {k: sanitize(v) for k, v in row.items()}
+            {str(k): sanitize(v) for k, v in row.items()}
             for row in df.to_dict(orient="records")
         ]
 
         payload = {
             "type": "csv",
             "data": records,
-            "columns": list(df.columns),
+            "columns": [str(c) for c in df.columns],
             "col_types": col_types,
             "detected_sep": detected_sep if detected_sep != "\t" else "\\t",
             "encoding": used_enc,

@@ -27,7 +27,11 @@ import {
   TrendingUp,
   PieChart,
   SortAsc,
-  SortDesc
+  SortDesc,
+  Settings,
+  Plus,
+  Trash2,
+  Globe
 } from 'lucide-react';
 import { format } from 'date-fns';
 import CSVReader from './CSVReader';
@@ -117,15 +121,23 @@ const Leaks = ({ onBack }) => {
   const [activeRunId, setActiveRunId] = useState(null);
   const [viewingCSV, setViewingCSV] = useState(null);
   const [viewingBulletin, setViewingBulletin] = useState(null);
+  const [showStartConfig, setShowStartConfig] = useState(false);
+  const [selectedChannelsForRun, setSelectedChannelsForRun] = useState([]);
+  const [startDateForRun, setStartDateForRun] = useState('');
   // Graphical options
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
   const [showCharts, setShowCharts] = useState(false);
   const [sortBy, setSortBy] = useState('date_desc'); // 'date_desc' | 'date_asc' | 'severity'
+  const [channels, setChannels] = useState([]);
+  const [showChannelMgr, setShowChannelMgr] = useState(false);
+  const [newChannelUrl, setNewChannelUrl] = useState('');
+  const [addingChannel, setAddingChannel] = useState(false);
 
   useEffect(() => {
     fetchLeaks();
     fetchStats();
     checkTgStatus();
+    fetchChannels();
   }, []);
 
   useEffect(() => {
@@ -216,10 +228,56 @@ const Leaks = ({ onBack }) => {
     }
   };
 
-  const handleStartMonitoring = async () => {
+  const fetchChannels = async () => {
     try {
-      const res = await axios.post(`${API_BASE}/api/leaks/start`);
+      const res = await axios.get(`${API_BASE}/api/leaks/channels`);
+      setChannels(res.data);
+    } catch (e) {
+      console.error("Fetch channels error:", e);
+    }
+  };
+
+  const handleAddChannel = async () => {
+    if (!newChannelUrl) return;
+    setAddingChannel(true);
+    try {
+      await axios.post(`${API_BASE}/api/leaks/channels?url=${encodeURIComponent(newChannelUrl)}`);
+      setNewChannelUrl('');
+      fetchChannels();
+      fetchStats(); // Update channel count
+    } catch (e) {
+      alert("Failed to add channel: " + e.message);
+    } finally {
+      setAddingChannel(false);
+    }
+  };
+
+  const handleRemoveChannel = async (url) => {
+    if (!window.confirm(`Supprimer le canal ${url} ?`)) return;
+    try {
+      await axios.delete(`${API_BASE}/api/leaks/channels?url=${encodeURIComponent(url)}`);
+      fetchChannels();
+      fetchStats();
+    } catch (e) {
+      alert("Failed to remove channel: " + e.message);
+    }
+  };
+
+  const handleStartMonitoring = async (config = null) => {
+    try {
+      const params = new URLSearchParams();
+      if (config) {
+        if (config.channels && config.channels.length > 0) {
+          config.channels.forEach(c => params.append('channels', c));
+        }
+        if (config.startDate) {
+          params.append('start_date', config.startDate);
+        }
+      }
+      
+      const res = await axios.post(`${API_BASE}/api/leaks/start?${params.toString()}`);
       setActiveRunId(res.data.run_id);
+      setShowStartConfig(false);
       alert("Monitoring started! Check the Live Activity panel below.");
     } catch (e) {
       alert("Failed to start monitoring: " + e.message);
@@ -344,7 +402,10 @@ const Leaks = ({ onBack }) => {
               ))}
             </div>
             <button 
-              onClick={handleStartMonitoring}
+              onClick={() => {
+                setSelectedChannelsForRun(channels); // Default to all
+                setShowStartConfig(true);
+              }}
               disabled={loading}
               className="flex items-center gap-2 px-4 py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-black uppercase tracking-widest text-[10px] transition-all shadow-lg shadow-brand-600/20 active:scale-95 disabled:opacity-50"
             >
@@ -357,6 +418,13 @@ const Leaks = ({ onBack }) => {
             >
               <FileText className="w-4 h-4 text-brand-400" />
               Generate Bulletin
+            </button>
+            <button 
+              onClick={() => setShowChannelMgr(true)}
+              className="flex items-center gap-2 px-4 py-3 bg-slate-900/60 border border-white/5 hover:border-brand-500/30 text-white rounded-xl font-black uppercase tracking-widest text-[10px] transition-all active:scale-95"
+            >
+              <Globe className="w-4 h-4 text-purple-400" />
+              Canaux
             </button>
             <button 
               onClick={fetchLeaks}
@@ -762,21 +830,7 @@ const Leaks = ({ onBack }) => {
                   </div>
                 </div>
 
-                {/* Raw Content Card */}
-                <div className="bg-slate-900/60 border border-white/5 p-6 rounded-3xl backdrop-blur-xl">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      <Terminal className="w-4 h-4" />
-                      Intercepted Message
-                    </h3>
-                    <button className="p-2 hover:bg-white/5 rounded-lg text-slate-500 hover:text-white transition-colors">
-                      <Share2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="bg-black/40 rounded-2xl p-4 border border-white/5 max-h-[300px] overflow-y-auto custom-scrollbar font-mono text-[11px] leading-relaxed text-slate-400">
-                    {selectedLeak.message}
-                  </div>
-                </div>
+
 
                 {/* Entities/Artifacts Card */}
                 {(selectedLeak.file_references?.length > 0 || selectedLeak.extracted_files?.length > 0) && (
@@ -816,7 +870,7 @@ const Leaks = ({ onBack }) => {
                         <div key={`ext-${i}`} className="flex items-center justify-between p-3 bg-brand-500/5 rounded-xl border border-brand-500/10 group hover:border-brand-500/30 transition-all">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded bg-slate-800 flex items-center justify-center text-brand-400">
-                              {file.toLowerCase().includes('.csv') ? <FileSpreadsheet className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+                              {(file.toLowerCase().includes('.csv') || file.toLowerCase().includes('.xlsx') || file.toLowerCase().includes('.xls')) ? <FileSpreadsheet className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
                             </div>
                             <div className="max-w-[150px]">
                               <p className="text-[10px] font-bold text-white truncate">{file.split('\\').pop()}</p>
@@ -824,11 +878,11 @@ const Leaks = ({ onBack }) => {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {file.toLowerCase().includes('.csv') && (
+                            {(file.toLowerCase().includes('.csv') || file.toLowerCase().includes('.xlsx') || file.toLowerCase().includes('.xls')) && (
                               <button 
                                 onClick={() => setViewingCSV(file)}
                                 className="p-2 bg-brand-500/10 text-brand-400 hover:bg-brand-500 hover:text-white rounded-lg transition-all"
-                                title="View CSV"
+                                title="View Data"
                               >
                                 <ExternalLink className="w-3.5 h-3.5" />
                               </button>
@@ -972,6 +1026,157 @@ const Leaks = ({ onBack }) => {
         </div>
       )}
 
+        {/* ── Channel Management Modal ── */}
+        {showChannelMgr && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-[#05060b]/80 backdrop-blur-sm" onClick={() => setShowChannelMgr(false)} />
+            <div className="relative w-full max-w-xl bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="p-6 border-b border-white/5 flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-500/20 rounded-lg">
+                    <Globe className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Gestion des Canaux Telegram</h3>
+                </div>
+                <button onClick={() => setShowChannelMgr(false)} className="text-slate-500 hover:text-white transition-colors">
+                  <AlertCircle className="w-6 h-6 rotate-45" />
+                </button>
+              </div>
+
+              <div className="p-6">
+                {/* Add New Channel */}
+                <div className="flex gap-2 mb-8">
+                  <input 
+                    type="text" 
+                    placeholder="Lien du canal (ex: https://t.me/channel_name)"
+                    value={newChannelUrl}
+                    onChange={(e) => setNewChannelUrl(e.target.value)}
+                    className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500/50 transition-all"
+                  />
+                  <button 
+                    onClick={handleAddChannel}
+                    disabled={addingChannel || !newChannelUrl}
+                    className="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white px-4 py-3 rounded-xl transition-all active:scale-95 flex items-center gap-2"
+                  >
+                    {addingChannel ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    <span className="text-[10px] font-black uppercase tracking-widest">Ajouter</span>
+                  </button>
+                </div>
+
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">Canaux Actifs ({channels.length})</p>
+                  {channels.length === 0 ? (
+                    <div className="text-center py-10 bg-black/20 rounded-2xl border border-white/5">
+                      <p className="text-xs text-slate-600 italic">Aucun canal configuré</p>
+                    </div>
+                  ) : (
+                    channels.map((url, i) => (
+                      <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-white/10 transition-all">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-all">
+                            <Terminal className="w-4 h-4" />
+                          </div>
+                          <span className="text-xs font-bold text-slate-300 truncate max-w-[300px]">{url}</span>
+                        </div>
+                        <button 
+                          onClick={() => handleRemoveChannel(url)}
+                          className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+              
+              <div className="p-4 bg-black/20 text-center">
+                <p className="text-[8px] text-slate-600 font-mono uppercase tracking-[0.2em]">
+                  Les modifications sont appliquées immédiatement au collecteur
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Start Monitoring Configuration Modal ── */}
+        {showStartConfig && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-[#05060b]/90 backdrop-blur-md" onClick={() => setShowStartConfig(false)} />
+            <div className="relative w-full max-w-lg bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="p-6 border-b border-white/5 flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-brand-500/20 rounded-lg">
+                    <Zap className="w-5 h-5 text-brand-400" />
+                  </div>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Configuration du Scan</h3>
+                </div>
+                <button onClick={() => setShowStartConfig(false)} className="text-slate-500 hover:text-white transition-colors">
+                  <AlertCircle className="w-6 h-6 rotate-45" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6">
+                {/* Channel Selection */}
+                <div>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3">Sélection des Canaux</p>
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                    {channels.map((url, i) => (
+                      <label key={i} className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:border-brand-500/30 cursor-pointer transition-all">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedChannelsForRun.includes(url)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedChannelsForRun([...selectedChannelsForRun, url]);
+                            } else {
+                              setSelectedChannelsForRun(selectedChannelsForRun.filter(u => u !== url));
+                            }
+                          }}
+                          className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-brand-500 focus:ring-brand-500/20"
+                        />
+                        <span className="text-xs text-slate-300 truncate">{url}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Start Date Selection */}
+                <div>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3">Date et Heure de début (Backfill)</p>
+                  <input 
+                    type="datetime-local" 
+                    value={startDateForRun}
+                    onChange={(e) => setStartDateForRun(e.target.value)}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-300 focus:outline-none focus:border-brand-500/50 transition-all"
+                  />
+                  <p className="text-[9px] text-slate-600 mt-2 italic">Laissez vide pour utiliser l'historique par défaut (tracking.json)</p>
+                </div>
+              </div>
+
+              <div className="p-6 bg-black/20 flex gap-4">
+                <button 
+                  onClick={() => setShowStartConfig(false)}
+                  className="flex-1 py-3 border border-white/10 text-slate-400 hover:text-white rounded-xl font-black uppercase tracking-widest text-[10px] transition-all"
+                >
+                  Annuler
+                </button>
+                <button 
+                  onClick={() => handleStartMonitoring({
+                    channels: selectedChannelsForRun,
+                    startDate: startDateForRun
+                  })}
+                  disabled={selectedChannelsForRun.length === 0}
+                  className="flex-1 py-3 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-xl font-black uppercase tracking-widest text-[10px] transition-all shadow-lg shadow-brand-600/20"
+                >
+                  Lancer le Scan
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       <style dangerouslySetInnerHTML={{ __html: `
         .custom-scrollbar::-webkit-scrollbar {
           width: 4px;
@@ -986,6 +1191,7 @@ const Leaks = ({ onBack }) => {
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background: rgba(14, 165, 233, 0.3);
+          border-radius: 10px;
         }
         .glass-panel {
           backdrop-filter: blur(12px);

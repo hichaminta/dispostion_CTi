@@ -37,23 +37,41 @@ class DailyCorrelator:
 
         intel_records = self._load_intel()
         
-        # Identify records to process (Pass 1: Before Gap, Pass 2: After Gap)
+        # Identify records to process: New ones, uncorrelated ones, or today's records
         to_process = []
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        
         for r in intel_records:
-            try:
-                rec_date = datetime.fromisoformat(r.get('leak_date').replace("Z", "+00:00"))
-                # SKIP if inside the global gap, unless force_all is True
-                if not force_all and gap_start and gap_end and gap_start <= rec_date <= gap_end:
-                    continue
-                to_process.append(r)
-            except:
-                to_process.append(r) # Process if date format is unknown
+            # 1. Delete if no files (user request: un leak sans liaison de file pas un vrai leak supprimer)
+            if not r.get("extracted_files") and not r.get("file_references"):
+                # Mark it to not be processed, and it will be removed during cleanup
+                continue
 
-        if not to_process and not force_all:
-            logger.info("No records outside of tracking interval to correlate.")
-            # Still perform global correlation on existing records just in case
-            await self._perform_global_correlation(intel_records)
+            # Always process if it lacks deep correlation
+            if not r.get("deep_correlation"):
+                to_process.append(r)
+                continue
+            
+            # Always process records from today to ensure they are merged/consolidated
+            if today_str in str(r.get("leak_date", "")):
+                if r not in to_process:
+                    to_process.append(r)
+                continue
+            
+            # If force_all is enabled, process everything
+            if force_all:
+                if r not in to_process:
+                    to_process.append(r)
+
+        # Remove records without files from intel_records
+        original_count = len(intel_records)
+        intel_records = [r for r in intel_records if r.get("extracted_files") or r.get("file_references")]
+        if len(intel_records) < original_count:
+            logger.info(f"Removed {original_count - len(intel_records)} records without files.")
             self._write_intel(intel_records)
+
+        if not to_process:
+            logger.info("No new or uncorrelated records to process.")
             return
 
         print(f"\n[Correlator] Analyzing {len(to_process)} records...")
@@ -168,8 +186,10 @@ class DailyCorrelator:
                 normalized.append(norm_t)
             r["leak_metadata"]["target_organization"] = list(set(normalized))
             
-        # 2. Group by Target Organization
+        # 2. Group by Target Organization (Case-insensitive and partial matching)
         groups = {}
+        canonical_map = {} # Maps a target string to its canonical group key
+        
         for r in all_records:
             targets = r["leak_metadata"]["target_organization"]
             if not targets or "Unknown" in targets:
@@ -179,7 +199,22 @@ class DailyCorrelator:
             else:
                 # Group by the organization name
                 for t in targets:
-                    groups.setdefault(t, []).append(r["intel_id"])
+                    t_lower = t.lower().strip()
+                    
+                    # Check if we already have a canonical group for this or similar name
+                    found_group = None
+                    for existing_t in canonical_map.keys():
+                        if t_lower == existing_t or t_lower in existing_t or existing_t in t_lower:
+                            # Avoid merging too broad terms like "the" or "inc"
+                            if len(t_lower) > 3 and len(existing_t) > 3:
+                                found_group = canonical_map[existing_t]
+                                break
+                    
+                    if found_group:
+                        groups[found_group].append(r["intel_id"])
+                    else:
+                        groups[t_lower] = [r["intel_id"]]
+                        canonical_map[t_lower] = t_lower
                     
         # 3. Filter groups that have more than 1 record
         groups_to_merge = [ids for ids in groups.values() if len(set(ids)) > 1]
@@ -256,6 +291,29 @@ class DailyCorrelator:
                             print(f"    - Sample extracted ({len(sample_text)} chars)")
                     except Exception as e: 
                         print(f"    - Failed to read sample: {e}")
+                elif abs_path.lower().endswith(('.xlsx', '.xls')):
+                    try:
+                        import pandas as pd
+                        df = pd.read_excel(abs_path)
+                        sample_text = df.head(50).to_string()[:2000]
+                        samples.append(f"--- Excel File: {os.path.basename(abs_path)} ---\n{sample_text}")
+                        print(f"    - Excel sample extracted via pandas ({len(sample_text)} chars)")
+                    except ImportError:
+                        # Fallback to reading sharedStrings if openpyxl/pandas not available
+                        try:
+                            import zipfile
+                            import xml.etree.ElementTree as ET
+                            with zipfile.ZipFile(abs_path, 'r') as z:
+                                strings_xml = z.read('xl/sharedStrings.xml')
+                                root = ET.fromstring(strings_xml)
+                                strings = [elem.text for elem in root.iter('{http://schemas.openxmlformats.org/spreadsheetml/2006/main}t') if elem.text]
+                                sample_text = " ".join(strings[:200])[:1500]
+                                samples.append(f"--- Excel File Strings: {os.path.basename(abs_path)} ---\n{sample_text}")
+                                print(f"    - Excel strings extracted ({len(sample_text)} chars)")
+                        except Exception as e:
+                            print(f"    - Failed to read Excel sample (try installing pandas/openpyxl): {e}")
+                    except Exception as e:
+                        print(f"    - Failed to read Excel sample: {e}")
         
         if not samples:
             print(f"    - No text samples could be extracted for {record['intel_id']}")

@@ -14,14 +14,30 @@ from core.collector import TelegramCollector
 from core.correlator import DailyCorrelator
 
 async def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Data Leak Detection & Tracking Platform")
+    parser.add_argument("--channels", type=str, help="Comma-separated list of channel URLs")
+    parser.add_argument("--start-date", type=str, help="Start date for collection (YYYY-MM-DD)")
+    args = parser.parse_args()
+
     print("====================================================")
     print("   DATA LEAK DETECTION & TRACKING PLATFORM         ")
     print("====================================================")
     
     config_path = os.path.join(INTEL_DIR, "config", "settings.yaml")
+    
+    # Overrides from command line
+    channels = args.channels.split(",") if args.channels else None
+    
     collector = TelegramCollector(config_path=config_path)
+    
+    # Apply overrides
+    if channels:
+        collector.channels = channels
+        print(f"[!] Overriding channels: {channels}")
+    
     try:
-        await collector.start()
+        await collector.start(start_date_override=args.start_date)
     except KeyboardInterrupt:
         print("\n[!] Stopping collector...")
     except Exception as e:

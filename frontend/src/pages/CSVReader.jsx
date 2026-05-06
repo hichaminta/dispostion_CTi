@@ -98,6 +98,7 @@ const CSVReader = ({ filePath, onBack }) => {
 
   const fileName = filePath?.split(/[\\/]/).pop() || filePath;
   const isText   = fileName?.toLowerCase().endsWith('.txt');
+  const isExcel  = fileName?.toLowerCase().endsWith('.xlsx') || fileName?.toLowerCase().endsWith('.xls');
 
   const fetchFile = async (sep = manualSep) => {
     setLoading(true);
@@ -172,7 +173,7 @@ const CSVReader = ({ filePath, onBack }) => {
           <div className="flex items-center gap-3 flex-wrap">
 
             {/* Separator chooser (CSV only) */}
-            {!isText && (
+            {!isText && !isExcel && (
               <div className="relative">
                 <button
                   onClick={() => setShowSepMenu(v => !v)}
@@ -250,15 +251,17 @@ const CSVReader = ({ filePath, onBack }) => {
         {/* ── Metadata bar ──────────────────────────────────────────────────── */}
         {result && result.type === 'csv' && (
           <div className="flex flex-wrap items-center gap-3 mb-6 px-4 py-3 bg-slate-900/30 border border-white/5 rounded-2xl backdrop-blur-md">
-            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
-              <Cpu className="w-3.5 h-3.5 text-brand-400" />
-              <span className="text-slate-500">Séparateur détecté :</span>
-              <span className="px-2 py-0.5 bg-brand-500/20 border border-brand-500/30 text-brand-300 rounded font-mono">
-                {result.detected_sep === '\\t' ? 'TAB' : result.detected_sep === ' ' ? 'SPACE' : result.detected_sep}
-                {' — '}{SEP_LABEL[result.detected_sep] || result.detected_sep}
-              </span>
-            </div>
-            <div className="w-px h-4 bg-white/10" />
+            {!isExcel && (
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+                <Cpu className="w-3.5 h-3.5 text-brand-400" />
+                <span className="text-slate-500">Séparateur détecté :</span>
+                <span className="px-2 py-0.5 bg-brand-500/20 border border-brand-500/30 text-brand-300 rounded font-mono">
+                  {result.detected_sep === '\\t' ? 'TAB' : result.detected_sep === ' ' ? 'SPACE' : result.detected_sep}
+                  {' — '}{SEP_LABEL[result.detected_sep] || result.detected_sep}
+                </span>
+              </div>
+            )}
+            {!isExcel && <div className="w-px h-4 bg-white/10" />}
             <div className="text-[10px] font-mono text-slate-500">
               Encodage : <span className="text-slate-300">{result.encoding}</span>
             </div>

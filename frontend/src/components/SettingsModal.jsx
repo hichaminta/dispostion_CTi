@@ -92,93 +92,6 @@ const SecretInput = ({ label, value, onChange, placeholder }) => {
   );
 };
 
-// Usage panel for OpenRouter
-const OpenRouterUsage = ({ apiKey }) => {
-  const [usage, setUsage] = useState(null);
-  const [loadingUsage, setLoadingUsage] = useState(false);
-
-  const fetchUsage = async () => {
-    if (!apiKey || apiKey.startsWith('*')) return;
-    setLoadingUsage(true);
-    try {
-      const res = await fetch('https://openrouter.ai/api/v1/auth/key', {
-        headers: { Authorization: `Bearer ${apiKey}` }
-      });
-      const data = await res.json();
-      setUsage(data?.data || data);
-    } catch {
-      setUsage(null);
-    } finally {
-      setLoadingUsage(false);
-    }
-  };
-
-  useEffect(() => { fetchUsage(); }, []);
-
-  const used = usage?.usage ?? 0;
-  const limit = usage?.limit ?? null;
-  const free = usage?.is_free_tier;
-  const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
-
-  return (
-    <div className="bg-violet-500/5 border border-violet-500/20 rounded-2xl p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-violet-400" />
-          <span className="text-[10px] font-black text-violet-400 uppercase tracking-widest">Consommation API</span>
-        </div>
-        <button onClick={fetchUsage} disabled={loadingUsage} className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors rounded-lg hover:bg-white/5">
-          <RefreshCw className={`w-3 h-3 ${loadingUsage ? 'animate-spin' : ''}`} />
-        </button>
-      </div>
-
-      {loadingUsage ? (
-        <div className="flex items-center gap-2 py-2">
-          <Loader2 className="w-4 h-4 text-violet-400 animate-spin" />
-          <span className="text-xs text-slate-500">Récupération des données...</span>
-        </div>
-      ) : usage ? (
-        <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-slate-900/60 rounded-xl p-3 text-center">
-              <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Utilisé</p>
-              <p className="text-sm font-black text-white">${used.toFixed(4)}</p>
-            </div>
-            <div className="bg-slate-900/60 rounded-xl p-3 text-center">
-              <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Limite</p>
-              <p className="text-sm font-black text-white">{limit ? `$${limit}` : '∞'}</p>
-            </div>
-            <div className="bg-slate-900/60 rounded-xl p-3 text-center">
-              <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest mb-1">Tier</p>
-              <p className={`text-sm font-black ${free ? 'text-emerald-400' : 'text-violet-400'}`}>{free ? 'Free' : 'Payant'}</p>
-            </div>
-          </div>
-          {limit && (
-            <div>
-              <div className="flex justify-between text-[9px] text-slate-600 mb-1">
-                <span>Utilisation</span>
-                <span>{pct}%</span>
-              </div>
-              <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-700 ${pct > 80 ? 'bg-red-500' : pct > 50 ? 'bg-orange-500' : 'bg-violet-500'}`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      ) : (
-        <p className="text-[10px] text-slate-600 italic">
-          {apiKey && !apiKey.startsWith('*')
-            ? 'Impossible de récupérer les données (clé invalide ou réseau).'
-            : 'Sauvegardez une clé API valide pour voir la consommation.'}
-        </p>
-      )}
-    </div>
-  );
-};
-
 const SettingsModal = ({ onClose }) => {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -339,8 +252,6 @@ const SettingsModal = ({ onClose }) => {
                     />
                   </div>
 
-                  {/* Usage Panel */}
-                  <OpenRouterUsage apiKey={config.openrouter_api_key} />
                 </div>
               )}
 
