@@ -79,8 +79,8 @@ body {
 }
 
 @keyframes grid-pulse {
-  0%, 100% { opacity: 0.15; }
-  50% { opacity: 0.3; }
+  0%, 100% { opacity: 0.06; }
+  50% { opacity: 0.12; }
 }
 
 @keyframes neon-pulse {
@@ -98,11 +98,11 @@ body {
 }
 
 .hud-grid {
-  background-image: 
-    linear-gradient(rgba(14, 165, 233, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(14, 165, 233, 0.05) 1px, transparent 1px);
-  background-size: 30px 30px;
-  animation: grid-pulse 6s infinite ease-in-out;
+  background-image:
+    linear-gradient(rgba(14, 165, 233, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14, 165, 233, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  animation: grid-pulse 8s infinite ease-in-out;
 }
 
 .cyber-loading-bar {

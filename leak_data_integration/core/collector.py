@@ -6,7 +6,28 @@ from datetime import datetime, timezone
 from telethon import TelegramClient
 from dotenv import load_dotenv
 
-load_dotenv()
+
+def _detect_encoding(file_path):
+    """Detect file encoding via BOM for UTF-16/UTF-32, fallback to utf-8."""
+    with open(file_path, 'rb') as f:
+        raw = f.read(4)
+    if raw[:2] == b'\xff\xfe' and raw[2:4] != b'\x00\x00':
+        return 'utf-16'
+    if raw[:2] == b'\xfe\xff':
+        return 'utf-16-be'
+    if raw[:4] in (b'\xff\xfe\x00\x00', b'\x00\x00\xfe\xff'):
+        return 'utf-32'
+    if raw[:3] == b'\xef\xbb\xbf':
+        return 'utf-8-sig'
+    return 'utf-8'
+
+# Path logic for consistent sessions and config
+CORE_DIR = os.path.dirname(os.path.abspath(__file__))
+INTEL_DIR = os.path.dirname(CORE_DIR)
+ROOT_DIR = os.path.dirname(INTEL_DIR)
+
+# Load .env from project root
+load_dotenv(os.path.join(ROOT_DIR, ".env"))
 
 from .analyzer import LeakAnalyzer
 from .intelligence import IntelligenceAgent
@@ -16,8 +37,11 @@ logger = logging.getLogger("TelegramCollector")
 
 
 class TelegramCollector:
-    def __init__(self, config_path="config/settings.yaml"):
+    def __init__(self, config_path=None):
         import yaml
+        if config_path is None:
+            config_path = os.path.join(INTEL_DIR, "config", "settings.yaml")
+            
         self.api_id = os.getenv("TELEGRAM_API_ID")
         self.api_hash = os.getenv("TELEGRAM_API_HASH")
         self.phone = os.getenv("TELEGRAM_PHONE")
@@ -34,18 +58,15 @@ class TelegramCollector:
 
         self.channels = self.config.get('telegram', {}).get('channels', [])
 
-        session_path = os.path.join(os.getcwd(), "telegram_leak_session")
+        # Ensure session path is absolute and stable (in project root)
+        session_path = os.path.join(ROOT_DIR, "telegram_leak_session")
         self.client = TelegramClient(session_path, self.api_id, self.api_hash)
 
         self.analyzer = LeakAnalyzer()
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.intel_agent = IntelligenceAgent(base_dir)
+        self.intel_agent = IntelligenceAgent(INTEL_DIR)
 
-        # Tracking file
-        integration_dir = os.path.dirname(os.path.abspath(__file__))
-        # Go up one level from 'core' to 'leak_data_integration'
-        integration_dir = os.path.dirname(integration_dir)
-        self.tracking_file = os.path.join(integration_dir, "tracking.json")
+        # Tracking file in leak_data_integration folder
+        self.tracking_file = os.path.join(INTEL_DIR, "tracking.json")
         self.tracking_data = self._load_tracking()
 
     def _load_tracking(self):
@@ -102,7 +123,8 @@ class TelegramCollector:
                         file_size_mb = os.path.getsize(full_p) / (1024 * 1024)
                         line_count = 0
                         sample_lines = []
-                        with open(full_p, 'r', encoding='utf-8', errors='ignore') as f:
+                        enc = _detect_encoding(full_p)
+                        with open(full_p, 'r', encoding=enc, errors='ignore') as f:
                             for i, line in enumerate(f):
                                 if file_size_mb > 500 and i >= 100:
                                     line_count = "100+ (Volumineux)"
@@ -111,7 +133,7 @@ class TelegramCollector:
                                     line_count += 1
                                 if i < 100:
                                     sample_lines.append(line)
-                        
+
                         context_parts.append(f"--- File: {file} (Size: {file_size_mb:.2f} MB, Total Lines: {line_count}) ---\n" + "".join(sample_lines))
                     except Exception as e:
                         logger.error(f"Error reading extracted file {file}: {e}")
@@ -327,7 +349,8 @@ class TelegramCollector:
                             file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
                             line_count = 0
                             sample_lines = []
-                            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            enc = _detect_encoding(file_path)
+                            with open(file_path, 'r', encoding=enc, errors='ignore') as f:
                                 for i, line in enumerate(f):
                                     if file_size_mb > 500 and i >= 100:
                                         line_count = "100+ (Volumineux)"
@@ -336,7 +359,7 @@ class TelegramCollector:
                                         line_count += 1
                                     if i < 100:
                                         sample_lines.append(line)
-                            
+
                             file_sample = f"[METADATA]\nFile Size: {file_size_mb:.2f} MB\nTotal Lines: {line_count}\n\n[SAMPLE (First 100 lines)]\n" + "".join(sample_lines)
                         except Exception as e:
                             logger.error(f"Error sampling direct file {file_path}: {e}")
@@ -348,23 +371,24 @@ class TelegramCollector:
         # === HEURISTIC OVERRIDE: If it's an archive file in this channel, it's 100% a leak ===
         is_archive = False
         if leak_record["metadata"]["file_path"]:
-            if leak_record["metadata"]["file_path"].lower().endswith(('.zip', '.ziip', '.rar', '.dbf', '.sql', '.xlsx', '.xls', '.xlsm', '.csv')):
+            if leak_record["metadata"]["file_path"].lower().endswith(('.zip', '.ziip', '.rar', '.dbf', '.sql', '.xlsx', '.xls', '.xlsm', '.csv', '.txt', '.log')):
                 is_archive = True
         
         # If the LLM says it's not a leak, but we have a suspicious archive file, we KEEP it.
         if not analysis.get("is_leak", False) and not is_archive:
-            logger.info(f"Skipping message {message.id} (Not a leak)")
-            if leak_record["metadata"]["file_path"]:
-                try:
-                    full_path = os.path.join(base_storage_path, leak_record["metadata"]["file_path"])
-                    if os.path.exists(full_path):
-                        os.remove(full_path)
-                        import shutil
-                        extracted_dir = full_path + "_extracted"
-                        if os.path.exists(extracted_dir):
-                            shutil.rmtree(extracted_dir)
-                except:
-                    pass
+            logger.info(f"Skipping record {message.id} (Marked as non-leak by AI)")
+            # [MODIFICATION PFE] On ne supprime plus les fichiers physiquement pour éviter les faux négatifs
+            # if leak_record["metadata"]["file_path"]:
+            #     try:
+            #         full_path = os.path.join(base_storage_path, leak_record["metadata"]["file_path"])
+            #         if os.path.exists(full_path):
+            #             os.remove(full_path)
+            #             import shutil
+            #             extracted_dir = full_path + "_extracted"
+            #             if os.path.exists(extracted_dir):
+            #                 shutil.rmtree(extracted_dir)
+            #     except:
+            #         pass
             return False
 
         # Force analysis to say it's a leak if our heuristic caught it

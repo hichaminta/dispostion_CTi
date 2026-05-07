@@ -4,8 +4,8 @@ telegram:
     - "https://t.me/+Lv3LYdpVyJc5ZTM0"
   backfill_days: 10
 storage:
-  base_path: "./data/leaks"
-  report_path: "./reports"
+  base_path: "../data/leaks"
+  report_path: "../reports"
 
 nlp:
   min_confidence: 60

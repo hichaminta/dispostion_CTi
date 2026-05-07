@@ -153,15 +153,16 @@ class LeakAnalyzer:
                 context_str = f"\nFile Sample: {file_context[:1000]}" if file_context else ""
                 prompt = f"""
                 Analyze the following data leak message and associated file content.
-                Your task is to identify CORPORATE and BUSINESS data leaks.
+                Your task is to identify CORPORATE, BUSINESS, or GOVERNMENT data leaks.
                 
                 CRITERIA:
-                1. IS A LEAK IF: Contains enterprise data, company employee lists, corporate credentials, business databases, PII from customers (Nom, Prénom, CIN, Téléphone, Adresse, etc.).
-                2. IS NOT A LEAK IF: Purely political news, religious content, public propaganda, general chat, or generic system messages without data exfiltration.
+                1. IS A LEAK IF: Contains enterprise data, company employee lists, corporate credentials, business databases, PII from customers (Nom, Prénom, CIN, Téléphone, Adresse, etc.), or any structured data that looks like a database export.
+                2. SENSITIVITY: If a file sample is provided, be EXTRA SENSITIVE. If you see emails, names, numbers, or structured lines, mark it as a leak (is_leak: true).
+                3. IS NOT A LEAK IF: Purely political news, religious content, public propaganda, general chat, or generic system messages WITHOUT any attached files or data patterns.
                 
                 SPECIAL INSTRUCTIONS:
-                - POLITICAL FILTER: If the message contains political rhetoric BUT also includes a database or credentials, IT IS A LEAK. However, the 'summary' should focus ONLY on the data leak part, not the political statement.
-                - CORRELATION: If a file sample is provided, your primary task is to correlate it with the message text. Determine if the file content confirms, contradicts, or enriches the claims made in the Telegram message.
+                - FILE CONTENT IS KEY: Even if the Telegram message is vague, if the 'File Sample' contains structured data (CSVs, logs, SQL), it IS A LEAK.
+                - POLITICAL FILTER: If the message contains political rhetoric BUT also includes a database or credentials, IT IS A LEAK. Focus the summary on the DATA.
                 - OUTPUT: Respond ONLY in valid JSON format with these keys:
                 {{
                     "is_leak": boolean,

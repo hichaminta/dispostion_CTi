@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import logo from '../assets/logo.png';
 import {
   Play, Shield, Activity, Clock, FileText,
   Database, AlertTriangle, CheckCircle2, Loader2, Zap, Sparkles, Square,
@@ -312,23 +311,23 @@ const Dashboard = ({ onSelectRun }) => {
 
       {/* ── Top Global Cyber Loading Bar ── */}
       {loading && (
-        <div className="fixed top-0 left-0 w-full h-1.5 z-[100] bg-[#0a0d1a] border-b border-brand-500/20">
-          <div className="absolute top-0 h-full cyber-loading-bar animate-indeterminate shadow-[0_0_15px_#0ea5e9]" />
+        <div className="fixed top-14 left-0 w-full h-0.5 z-40 bg-slate-900/80">
+          <div className="absolute top-0 h-full cyber-loading-bar shadow-[0_0_10px_#0ea5e9]" />
         </div>
       )}
 
       <div className="max-w-[1600px] mx-auto">
 
         {/* ── Header ─────────────────────────────────────────────────── */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
-          <div className="flex flex-col items-start gap-2">
-            <img src={logo} alt="BlueSec Logo" className="h-7 w-auto object-contain drop-shadow-lg" />
-            <div className="flex items-center gap-2 mt-2 bg-slate-900/60 border border-slate-800 rounded-full px-3 py-1 backdrop-blur-md shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-1.5">
               <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-              <p className="text-slate-300 font-bold tracking-widest uppercase text-[9px]">Plateforme Active • Monitoring Temps Réel</p>
+              <span className="text-slate-300 font-semibold text-xs">Plateforme Active</span>
             </div>
+            <span className="text-xs text-slate-600 font-mono hidden sm:block">auto-refresh 5s</span>
           </div>
-          <div className="flex flex-col items-end gap-3">
+          <div className="flex flex-col items-end gap-2">
             {/* HUD Pipeline Control Panel */}
             <div className="flex items-center gap-0 bg-slate-900/40 border border-white/10 rounded-2xl p-2 shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-xl relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.02] to-transparent pointer-events-none" />
@@ -365,7 +364,7 @@ const Dashboard = ({ onSelectRun }) => {
                 }`}>
                   {isStarting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                 </div>
-                <span className={`text-[9px] font-bold uppercase tracking-wider transition-colors ${
+                <span className={`text-xs font-medium uppercase tracking-wide transition-colors ${
                   stats?.running_runs > 0 ? 'text-slate-600' : 'text-slate-500 group-hover:text-cyan-400'
                 }`}>Collecte</span>
               </button>
@@ -390,7 +389,7 @@ const Dashboard = ({ onSelectRun }) => {
                 }`}>
                   <Search className="w-3.5 h-3.5" />
                 </div>
-                <span className={`text-[9px] font-bold uppercase tracking-wider transition-colors ${
+                <span className={`text-xs font-medium uppercase tracking-wide transition-colors ${
                   stats?.running_runs > 0 ? 'text-slate-600' : 'text-slate-500 group-hover:text-violet-400'
                 }`}>Extraction</span>
               </button>
@@ -417,8 +416,8 @@ const Dashboard = ({ onSelectRun }) => {
                     <Sparkles className="w-3.5 h-3.5" />
                   </div>
                   <div className="flex flex-col items-start leading-none">
-                    <span className="text-[10px] font-black uppercase tracking-widest">Enrichir</span>
-                    <span className="text-[8px] text-amber-500/50 uppercase font-mono mt-1">Unified Stage</span>
+                    <span className="text-xs font-bold uppercase tracking-widest">Enrichir</span>
+                    <span className="text-[10px] text-amber-500/60 uppercase font-mono mt-1">Unified Stage</span>
                   </div>
                 </button>
                 
@@ -447,7 +446,7 @@ const Dashboard = ({ onSelectRun }) => {
                     <div className="w-7 h-7 rounded bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover/step:bg-emerald-500 group-hover/step:text-white transition-all">
                       {isStarting ? <Loader2 size={12} className="animate-spin" /> : <Globe size={12} />}
                     </div>
-                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-emerald-400 uppercase">Geo</span>
+                    <span className="text-[11px] font-medium text-slate-500 group-hover/step:text-emerald-400 uppercase">Geo</span>
                   </button>
 
                   <ArrowConnector />
@@ -462,7 +461,7 @@ const Dashboard = ({ onSelectRun }) => {
                     <div className="w-7 h-7 rounded bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 group-hover/step:bg-amber-500 group-hover/step:text-white transition-all">
                       {isStarting ? <Loader2 size={12} className="animate-spin" /> : <AlertTriangle size={12} />}
                     </div>
-                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-amber-400 uppercase">CVE Enrichment</span>
+                    <span className="text-[11px] font-medium text-slate-500 group-hover/step:text-amber-400 uppercase">CVE Enrichment</span>
                   </button>
 
                   <ArrowConnector />
@@ -482,7 +481,7 @@ const Dashboard = ({ onSelectRun }) => {
                       <div className={`w-7 h-7 rounded bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400 group-hover/gs:bg-brand-500 group-hover/gs:text-white transition-all`}>
                         {isStarting ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                       </div>
-                      <span className="text-[10px] uppercase font-black tracking-widest">URL Enrichment</span>
+                      <span className="text-xs uppercase font-bold tracking-widest">URL Enrichment</span>
                     </button>
                     
                     <button
@@ -509,7 +508,7 @@ const Dashboard = ({ onSelectRun }) => {
                         <div className="w-8 h-8 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 group-hover/step:bg-pink-500/30 transition-all">
                           {isStarting ? <Loader2 size={14} className="animate-spin" /> : <ScanEye size={14} />}
                         </div>
-                        <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-pink-400 uppercase">URLScan</span>
+                        <span className="text-[11px] font-medium text-slate-500 group-hover/step:text-pink-400 uppercase">URLScan</span>
                       </button>
 
                       <ArrowConnector />
@@ -524,7 +523,7 @@ const Dashboard = ({ onSelectRun }) => {
                         <div className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 group-hover/step:bg-orange-500/30 transition-all">
                           {isStarting ? <Loader2 size={14} className="animate-spin" /> : <Layers size={14} />}
                         </div>
-                        <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-orange-400 uppercase">Fallback</span>
+                        <span className="text-[11px] font-medium text-slate-500 group-hover/step:text-orange-400 uppercase">Fallback</span>
                       </button>
                     </div>
                   )}
@@ -541,7 +540,7 @@ const Dashboard = ({ onSelectRun }) => {
                     <div className="w-7 h-7 rounded bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400 group-hover/step:bg-brand-500 group-hover/step:text-white transition-all">
                       {isStarting ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                     </div>
-                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-brand-400 uppercase">Classification</span>
+                    <span className="text-[11px] font-medium text-slate-500 group-hover/step:text-brand-400 uppercase">Classification</span>
                   </button>
 
                   <ArrowConnector />
@@ -556,7 +555,7 @@ const Dashboard = ({ onSelectRun }) => {
                     <div className="w-7 h-7 rounded bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 group-hover/step:bg-white group-hover/step:text-black transition-all">
                       {isStarting ? <Loader2 size={12} className="animate-spin" /> : <Shield size={12} />}
                     </div>
-                    <span className="text-[8px] font-bold text-slate-600 group-hover/step:text-white uppercase">MITRE</span>
+                    <span className="text-[11px] font-medium text-slate-500 group-hover/step:text-white uppercase">MITRE</span>
                   </button>
                 </div>
               )}
@@ -581,7 +580,7 @@ const Dashboard = ({ onSelectRun }) => {
                 }`}>
                   <Shield className="w-3.5 h-3.5" />
                 </div>
-                <span className={`text-[9px] font-bold uppercase tracking-wider transition-colors ${
+                <span className={`text-xs font-medium uppercase tracking-wide transition-colors ${
                   stats?.running_runs > 0 ? 'text-slate-600' : 'text-slate-500 group-hover:text-emerald-400'
                 }`}>Normaliser</span>
               </button>
@@ -606,7 +605,7 @@ const Dashboard = ({ onSelectRun }) => {
                 }`}>
                   {stats?.running_runs > 0 ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
                 </div>
-                <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${
+                <span className={`text-xs font-bold uppercase tracking-widest transition-colors ${
                   stats?.running_runs > 0 ? 'text-slate-600' : 'text-slate-500 group-hover:text-orange-400'
                 }`}>Intégrer MISP</span>
               </button>
@@ -635,10 +634,6 @@ const Dashboard = ({ onSelectRun }) => {
               </button>
             </div>
 
-            {/* Subtle label below */}
-            <p className="text-[9px] text-slate-600 font-mono tracking-wider pr-2">
-              PIPELINE GLOBAL — TOUTES SOURCES
-            </p>
           </div>
         </div>
 
@@ -751,8 +746,8 @@ const Dashboard = ({ onSelectRun }) => {
                         <div className="w-2 h-2 rounded-full bg-yellow-500/50" />
                         <div className="w-2 h-2 rounded-full bg-emerald-500/50" />
                       </div>
-                      <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest ml-2">
-                        Terminal Output {consoleFilter ? `[ ${consoleFilter} ]` : '• Real-time'}
+                      <span className="text-xs font-mono text-slate-400 ml-2">
+                        Terminal Output {consoleFilter ? `[ ${consoleFilter} ]` : '— Real-time'}
                       </span>
                     </div>
                     <div className="flex gap-3">
@@ -830,7 +825,7 @@ const Dashboard = ({ onSelectRun }) => {
                         </div>
                       )}
                    </div>
-                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter truncate w-full text-center">{item.country}</span>
+                   <span className="text-xs font-semibold text-slate-400 uppercase truncate w-full text-center">{item.country}</span>
                    <span className="text-sm font-mono font-bold text-cyber-blue">{item.count}</span>
                 </div>
               )) : (
@@ -867,7 +862,7 @@ const Dashboard = ({ onSelectRun }) => {
               <Activity className="w-5 h-5 text-brand-400" />
               Source Operations Center
             </h2>
-            <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            <div className="flex items-center gap-4 text-xs font-semibold text-slate-500">
                <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_#10b981]" /> Success</span>
                <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_#ef4444]" /> Failed</span>
                <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" /> Running</span>
@@ -880,16 +875,16 @@ const Dashboard = ({ onSelectRun }) => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-800/30 border-b border-white/5">
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest min-w-[200px]">Source</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider min-w-[200px]">Source</th>
                     {PIPELINE_PHASES.map(phase => (
-                      <th key={phase.id} className="px-2 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest text-center" title={phase.full}>
+                      <th key={phase.id} className="px-2 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center" title={phase.full}>
                         <div className="flex flex-col items-center gap-1">
                           <phase.icon className="w-3 h-3 opacity-40" />
                           {phase.label}
                         </div>
                       </th>
                     ))}
-                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Actions</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -953,7 +948,7 @@ const Dashboard = ({ onSelectRun }) => {
                   const cve = (run.steps || []).reduce((a, s) => a + (s.cve_count || 0), 0);
                   return (
                     <tr key={run.id} className="hover:bg-slate-800/20 transition-colors group">
-                      <td className="px-5 py-3 font-mono text-[11px] text-slate-500">
+                      <td className="px-5 py-3 font-mono text-xs text-slate-500">
                         {run.run_id.split('-')[0].toUpperCase()}
                       </td>
                       <td className="px-5 py-3">
@@ -1052,13 +1047,13 @@ const PipelineStepper = ({ run, onStepClick, activeFilter }) => {
                   )}
                 </div>
                 <div className="mt-3 text-center w-28 px-2">
-                  <p className={`text-[10px] font-black uppercase tracking-widest truncate ${
+                  <p className={`text-xs font-semibold uppercase tracking-wide truncate ${
                     stepData.status === 'running' ? 'text-brand-400' :
                     stepData.status === 'success' ? 'text-emerald-400' :
                     stepData.status === 'failed'  ? 'text-red-400'    : 'text-slate-500'
                   }`}>{step.name}</p>
-                  <p className="text-[8px] font-mono font-bold text-slate-600 uppercase mt-1 opacity-60">
-                    {stepData.status === 'planned' ? 'Planned' : stepData.status}
+                  <p className="text-[11px] font-mono text-slate-600 uppercase mt-1">
+                    {stepData.status === 'planned' ? 'planned' : stepData.status}
                   </p>
                 </div>
               </button>
@@ -1110,7 +1105,7 @@ const SourceStatusRow = ({ source, runs, onRun, onRunPhase, isStarting }) => {
             <div className="text-sm font-black text-white uppercase tracking-tighter group-hover:text-brand-400 transition-colors">
               {source.name}
             </div>
-            <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-0.5 font-mono">
+            <div className="text-xs text-slate-500 mt-0.5">
               {source.id.toUpperCase()} • {source.type}
             </div>
           </div>
@@ -1236,18 +1231,7 @@ const StatCard = ({ icon, label, value, sub, color, loading }) => {
   };
   return (
     <div className={`bg-gradient-to-br backdrop-blur-md ${colorBg[color]} border rounded-2xl p-6 relative overflow-hidden group transition-all duration-500 hover:-translate-y-0.5`}>
-      {loading && <div className="absolute inset-0 hud-grid" />}
       {loading && <div className="scan-beam" />}
-      
-      {/* Corner Brackets */}
-      {loading && (
-        <>
-          <div className="hud-corner hud-corner-tl" />
-          <div className="hud-corner hud-corner-tr" />
-          <div className="hud-corner hud-corner-bl" />
-          <div className="hud-corner hud-corner-br" />
-        </>
-      )}
 
       <div className="relative z-10">
         <div className="flex items-center gap-2 mb-3">
@@ -1261,9 +1245,9 @@ const StatCard = ({ icon, label, value, sub, color, loading }) => {
               <div className="h-3 w-12 bg-slate-800/50 rounded" />
             </div>
           )
-          : <div className="text-2xl font-extrabold text-white tracking-tight">{value}</div>
+          : <div className="text-3xl font-bold text-white tracking-tight">{value}</div>
         }
-        {!loading && <p className="text-[10px] text-slate-600 mt-1 font-mono">{sub}</p>}
+        {!loading && <p className="text-xs text-slate-500 mt-1">{sub}</p>}
       </div>
     </div>
   );
@@ -1280,7 +1264,7 @@ const StatusBadge = ({ status }) => {
   };
   const { cls, pulse } = map[status] || map.pending;
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wider ${cls} ${pulse ? 'animate-pulse' : ''}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border text-xs font-semibold uppercase tracking-wide ${cls} ${pulse ? 'animate-pulse' : ''}`}>
       {status}
     </span>
   );
@@ -1323,7 +1307,7 @@ const PhaseCard = ({ title, subtitle, icon, color, sources, onAction, isRunning 
         </div>
 
         <div className="flex flex-col gap-3">
-          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Sélectionner la Source</label>
+          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">Sélectionner la Source</label>
           <div className="flex gap-2">
             <select 
               value={selectedSourceId}

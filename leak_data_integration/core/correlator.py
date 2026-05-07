@@ -98,20 +98,6 @@ class DailyCorrelator:
         
         # Note: Correlation metadata is not saved to tracking.json to respect user format
 
-        print("\n[+] Generating final intelligence reports...")
-        try:
-            from .reporter import LeakReporter
-            reporter = LeakReporter(self.intel_file)
-            reports_dir = os.path.join(os.path.dirname(self.intel_file), "..", "reports")
-            os.makedirs(reports_dir, exist_ok=True)
-            for r in intel_records:
-                intel_id = r["intel_id"]
-                pdf_path = os.path.join(reports_dir, f"bulletin_{intel_id}.pdf")
-                if reporter.generate_pdf_bulletin(intel_id, pdf_path):
-                    print(f"  [REPORT] Generated PDF bulletin for {intel_id}")
-            print("[+] Report generation completed.")
-        except Exception as e:
-            logger.error(f"Failed to generate reports after correlation: {e}")
 
     def _load_tracking(self):
         """Helper to load tracking for correlation logic."""

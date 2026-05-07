@@ -5,87 +5,97 @@ import Results from './pages/Results';
 import Leaks from './pages/Leaks';
 import CSVAnalyzer from './pages/CSVAnalyzer';
 import SettingsModal from './components/SettingsModal';
-import { Settings } from 'lucide-react';
+import { Settings, Activity, MessageSquare, BarChart2, FileText, ChevronLeft } from 'lucide-react';
+import logo from './assets/logo.png';
+
+const NAV_ITEMS = [
+  { id: 'monitor',      label: 'Monitor',  icon: Activity   },
+  { id: 'leaks',        label: 'Leaks',    icon: MessageSquare },
+  { id: 'results',      label: 'Results',  icon: BarChart2  },
+  { id: 'csv_analyzer', label: 'CSV AI',   icon: FileText, accent: true },
+];
 
 function App() {
   const [selectedRunId, setSelectedRunId] = useState(null);
-  const [view, setView] = useState('monitor'); // 'monitor', 'results', or 'leaks'
+  const [view, setView] = useState('monitor');
   const [showSettings, setShowSettings] = useState(false);
 
-  // If a run is selected, show details regardless of current view
-  if (selectedRunId) {
-    return (
-      <div className="min-h-screen bg-[#0f1021] text-slate-200">
-        <RunDetail 
-          runId={selectedRunId} 
-          onBack={() => setSelectedRunId(null)} 
-        />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-[#0f1021] text-slate-200 flex flex-col">
-      {/* Floating Nav Bar */}
-      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 p-1 bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl flex items-center gap-1">
-        <button 
-          onClick={() => setView('monitor')}
-          className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${view === 'monitor' ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20' : 'text-slate-500 hover:text-slate-300'}`}
-        >
-          Monitor
-        </button>
-        <button 
-          onClick={() => setView('leaks')}
-          className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${view === 'leaks' ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20' : 'text-slate-500 hover:text-slate-300'}`}
-        >
-          Leaks
-        </button>
-        <button 
-          onClick={() => setView('results')}
-          className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${view === 'results' ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20' : 'text-slate-500 hover:text-slate-300'}`}
-        >
-          Results
-        </button>
-        <button 
-          onClick={() => setView('csv_analyzer')}
-          className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${view === 'csv_analyzer' ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20' : 'text-slate-500 hover:text-slate-300'}`}
-        >
-          CSV AI
-        </button>
+    <div className="min-h-screen bg-[#05060b] text-slate-200 flex flex-col">
 
-        {/* Divider */}
-        <div className="w-px h-5 bg-white/10 mx-1" />
+      {/* ── Top Navigation Bar ───────────────────────────────────────── */}
+      <header className="fixed top-0 left-0 right-0 z-50 h-14 bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/80 flex items-center px-6 gap-6 shadow-lg shadow-black/30">
 
-        {/* Settings Button */}
+        {/* Logo + brand */}
+        <div className="flex items-center gap-3 shrink-0">
+          <img src={logo} alt="BlueSec" className="h-6 w-auto drop-shadow-sm" />
+          <div className="w-px h-5 bg-slate-700" />
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+            <span className="text-xs font-semibold text-slate-400">CTI Platform</span>
+          </div>
+        </div>
+
+        {/* Nav links — replaced by back button when viewing a run detail */}
+        {selectedRunId ? (
+          <button
+            onClick={() => setSelectedRunId(null)}
+            className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-slate-200 transition-colors px-3 py-1.5 rounded-lg hover:bg-slate-800/60"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Back to Monitor
+          </button>
+        ) : (
+          <nav className="flex items-center gap-1">
+            {NAV_ITEMS.map(({ id, label, icon: Icon, accent }) => (
+              <button
+                key={id}
+                onClick={() => setView(id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  view === id
+                    ? accent
+                      ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
+                      : 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            ))}
+          </nav>
+        )}
+
+        {/* Settings */}
         <button
           onClick={() => setShowSettings(true)}
-          title="Paramètres AI"
-          className={`p-2 rounded-xl transition-all ${showSettings ? 'bg-brand-500/20 text-brand-400 border border-brand-500/30' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
+          className={`ml-auto flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+            showSettings
+              ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+          }`}
         >
           <Settings className="w-4 h-4" />
+          <span className="hidden sm:inline">Settings</span>
         </button>
-      </div>
+      </header>
 
-      {/* Settings Modal */}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
-      {view === 'monitor' ? (
-        <Dashboard 
-          onSelectRun={(id) => setSelectedRunId(id)} 
-        />
-      ) : view === 'leaks' ? (
-        <Leaks 
-          onBack={() => setView('monitor')}
-        />
-      ) : view === 'csv_analyzer' ? (
-        <CSVAnalyzer 
-          onBack={() => setView('monitor')}
-        />
-      ) : (
-        <Results 
-          onBack={() => setView('monitor')}
-        />
-      )}
+      {/* ── Page content (offset below fixed nav) ──────────────────── */}
+      <div className="flex-1 pt-14">
+        {selectedRunId ? (
+          <RunDetail runId={selectedRunId} onBack={() => setSelectedRunId(null)} />
+        ) : view === 'monitor' ? (
+          <Dashboard onSelectRun={(id) => setSelectedRunId(id)} />
+        ) : view === 'leaks' ? (
+          <Leaks onBack={() => setView('monitor')} />
+        ) : view === 'csv_analyzer' ? (
+          <CSVAnalyzer onBack={() => setView('monitor')} />
+        ) : (
+          <Results onBack={() => setView('monitor')} />
+        )}
+      </div>
     </div>
   );
 }

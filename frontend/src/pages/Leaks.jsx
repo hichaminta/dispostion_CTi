@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
+import logo from '../assets/logo.png';
 import { 
   ShieldAlert, 
   Terminal, 
@@ -31,7 +32,11 @@ import {
   Settings,
   Plus,
   Trash2,
-  Globe
+  Globe,
+  ChevronDown,
+  ChevronUp,
+  Activity,
+  Users
 } from 'lucide-react';
 import { format } from 'date-fns';
 import CSVReader from './CSVReader';
@@ -119,7 +124,7 @@ const Leaks = ({ onBack }) => {
   const [authStep, setAuthStep] = useState(1); // 1: Phone, 2: Code
   const [logs, setLogs] = useState([]);
   const [activeRunId, setActiveRunId] = useState(null);
-  const [viewingCSV, setViewingCSV] = useState(null);
+  const [viewingFile, setViewingFile] = useState(null);
   const [viewingBulletin, setViewingBulletin] = useState(null);
   const [showStartConfig, setShowStartConfig] = useState(false);
   const [selectedChannelsForRun, setSelectedChannelsForRun] = useState([]);
@@ -132,6 +137,7 @@ const Leaks = ({ onBack }) => {
   const [showChannelMgr, setShowChannelMgr] = useState(false);
   const [newChannelUrl, setNewChannelUrl] = useState('');
   const [addingChannel, setAddingChannel] = useState(false);
+  const [expandedChannels, setExpandedChannels] = useState({});
 
   useEffect(() => {
     fetchLeaks();
@@ -141,24 +147,41 @@ const Leaks = ({ onBack }) => {
   }, []);
 
   useEffect(() => {
-    let interval;
-    if (activeRunId) {
-      interval = setInterval(() => {
-        fetchLogs(activeRunId);
-      }, 3000);
-    }
-    return () => clearInterval(interval);
+    if (!activeRunId) return;
+    const logInterval  = setInterval(() => fetchLogs(activeRunId), 3000);
+    const leakInterval = setInterval(() => fetchLeaks(), 10000);
+    return () => {
+      clearInterval(logInterval);
+      clearInterval(leakInterval);
+    };
   }, [activeRunId]);
 
   const fetchLogs = async (runId) => {
     try {
-      const res = await axios.get(`${API_BASE}/api/runs/${runId}/logs?step=Monitoring%20Telegram`);
-      if (res.data && res.data.logs) {
-        setLogs(res.data.logs.slice(-10).reverse());
+      const [logsRes, statusRes] = await Promise.all([
+        axios.get(`${API_BASE}/api/runs/${runId}/logs?step=Monitoring%20Telegram`),
+        axios.get(`${API_BASE}/runs/${runId}`).catch(() => null),
+      ]);
+
+      if (logsRes.data?.logs) {
+        setLogs(logsRes.data.logs.slice(-20).reverse());
+      }
+
+      // Auto-stop quand le run est terminé
+      const runStatus = statusRes?.data?.status_global;
+      if (runStatus && runStatus !== 'running') {
+        setActiveRunId(null);
+        fetchLeaks(); // rafraîchir la liste des leaks
       }
     } catch (e) {
       console.error("Failed to fetch logs", e);
     }
+  };
+
+  const handleStopMonitoring = () => {
+    setActiveRunId(null);
+    setLogs([]);
+    fetchLeaks();
   };
 
   const checkTgStatus = async () => {
@@ -284,6 +307,37 @@ const Leaks = ({ onBack }) => {
     }
   };
 
+  const extractChannelName = (url) => {
+    try {
+      const path = new URL(url).pathname.replace('/', '');
+      return path.startsWith('+') ? path : `@${path}`;
+    } catch {
+      return url;
+    }
+  };
+
+  const getChannelStats = (url) => {
+    const urlLower = url.toLowerCase();
+    const channelLeaks = leaks.filter(l => {
+      const sc = l.source_channel?.toLowerCase() || '';
+      return urlLower.includes(sc) || sc.split(/[~_-]/)[0].length > 2 && urlLower.includes(sc.split(/[~_-]/)[0]);
+    });
+    const bySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
+    const typeCount = {};
+    let lastDate = null;
+    channelLeaks.forEach(l => {
+      const sev = l.leak_metadata?.severity?.toLowerCase();
+      if (sev && sev in bySeverity) bySeverity[sev]++;
+      const type = l.leak_metadata?.leak_type;
+      if (type) typeCount[type] = (typeCount[type] || 0) + 1;
+      const d = l.leak_date || l.timestamp;
+      if (d && (!lastDate || new Date(d) > new Date(lastDate))) lastDate = d;
+    });
+    const topType = Object.entries(typeCount).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const total = channelLeaks.length;
+    return { total, bySeverity, lastDate: lastDate?.split('T')[0], topType };
+  };
+
   const filteredLeaks = useMemo(() => {
     let result = leaks.filter(leak => {
       const matchesSearch =
@@ -344,8 +398,8 @@ const Leaks = ({ onBack }) => {
     }
   };
 
-  if (viewingCSV) {
-    return <CSVReader filePath={viewingCSV} onBack={() => setViewingCSV(null)} />;
+  if (viewingFile) {
+    return <CSVReader filePath={viewingFile} onBack={() => setViewingFile(null)} />;
   }
 
   return (
@@ -361,27 +415,30 @@ const Leaks = ({ onBack }) => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-brand-500/20 rounded-lg border border-brand-500/30">
-                <ShieldAlert className="w-6 h-6 text-brand-400" />
-              </div>
+              <img src={logo} alt="BlueSec" className="h-8 w-auto drop-shadow-lg" />
               <h1 className="text-3xl font-black text-white tracking-tight uppercase">
                 Leak <span className="text-brand-500 italic">Intelligence</span>
               </h1>
-              {/* Telegram Status Dot */}
-              <div className="flex items-center gap-2 px-3 py-1 bg-slate-900/60 rounded-full border border-white/5 backdrop-blur-md">
-                <div className={`w-2 h-2 rounded-full ${tgStatus.loading ? 'bg-slate-500 animate-pulse' : tgStatus.connected ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500'}`} />
-                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                  {tgStatus.loading ? 'Checking TG...' : tgStatus.connected ? 'TG Connected' : 'TG Disconnected'}
-                </span>
-                {!tgStatus.connected && !tgStatus.loading && (
-                  <button 
-                    onClick={() => setShowAuth(true)}
-                    className="ml-2 text-[8px] font-black text-brand-400 hover:text-white uppercase underline underline-offset-2"
-                  >
-                    Connect
-                  </button>
-                )}
-              </div>
+              {/* Telegram Status Badge */}
+              {tgStatus.loading ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/60 rounded-full border border-white/5">
+                  <div className="w-2 h-2 rounded-full bg-slate-500 animate-pulse" />
+                  <span className="text-xs text-slate-500">Vérification...</span>
+                </div>
+              ) : tgStatus.connected ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 rounded-full border border-emerald-500/30">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+                  <span className="text-xs font-semibold text-emerald-400">Telegram connecté</span>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowAuth(true)}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 rounded-full border border-red-500/40 transition-all group"
+                >
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  <span className="text-xs font-semibold text-red-400 group-hover:text-red-300">Déconnecté — Cliquer pour connecter</span>
+                </button>
+              )}
             </div>
             <p className="text-slate-400 text-sm font-medium flex items-center gap-2">
               <BrainCircuit className="w-4 h-4 text-purple-400" />
@@ -413,13 +470,6 @@ const Leaks = ({ onBack }) => {
               Start Monitoring
             </button>
             <button 
-              onClick={handleGenerateBulletin}
-              className="flex items-center gap-2 px-4 py-3 bg-slate-900/60 border border-white/5 hover:border-brand-500/30 text-white rounded-xl font-black uppercase tracking-widest text-[10px] transition-all active:scale-95"
-            >
-              <FileText className="w-4 h-4 text-brand-400" />
-              Generate Bulletin
-            </button>
-            <button 
               onClick={() => setShowChannelMgr(true)}
               className="flex items-center gap-2 px-4 py-3 bg-slate-900/60 border border-white/5 hover:border-brand-500/30 text-white rounded-xl font-black uppercase tracking-widest text-[10px] transition-all active:scale-95"
             >
@@ -435,6 +485,30 @@ const Leaks = ({ onBack }) => {
             </button>
           </div>
         </div>
+
+        {/* ── Bannière Telegram déconnecté ──────────────────────────── */}
+        {!tgStatus.connected && !tgStatus.loading && (
+          <div className="flex items-center justify-between gap-4 mb-6 px-5 py-4 bg-red-500/8 border border-red-500/25 rounded-2xl">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-red-400">Session Telegram non connectée</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Connectez votre compte Telegram pour activer le monitoring des canaux.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowAuth(true)}
+              className="shrink-0 flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-400 text-white rounded-xl text-sm font-semibold transition-all active:scale-95"
+            >
+              <Zap className="w-4 h-4" />
+              Connecter Telegram
+            </button>
+          </div>
+        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
@@ -577,27 +651,52 @@ const Leaks = ({ onBack }) => {
           </div>
         )}
 
-        {/* Live Activity Feed */}
+        {/* ── Live Activity Feed ─────────────────────────────────────── */}
         {activeRunId && (
-          <div className="mb-8 animate-in slide-in-from-top duration-500">
-            <div className="bg-slate-900/60 border border-white/5 rounded-3xl p-6 backdrop-blur-xl shadow-2xl">
-              <div className="flex items-center justify-between mb-4">
+          <div className="mb-8 animate-in slide-in-from-top duration-400">
+            <div className="bg-slate-900/60 border border-emerald-500/20 rounded-2xl overflow-hidden backdrop-blur-xl shadow-xl">
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-3 bg-emerald-500/5 border-b border-emerald-500/15">
                 <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                  <h3 className="text-xs font-black text-white uppercase tracking-widest">Live Activity Feed</h3>
+                  <div className="flex gap-1">
+                    <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.6)]" />
+                  </div>
+                  <span className="text-xs font-semibold text-emerald-400">Collecte en cours...</span>
+                  <span className="text-xs text-slate-600 font-mono hidden sm:block">run/{activeRunId?.slice(0,8)}</span>
                 </div>
-                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Run ID: {activeRunId}</span>
+                <button
+                  onClick={handleStopMonitoring}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-xs font-semibold transition-all active:scale-95"
+                >
+                  <div className="w-2 h-2 rounded-sm bg-red-400" />
+                  Arrêter le suivi
+                </button>
               </div>
-              <div className="bg-black/40 rounded-2xl p-4 font-mono text-[11px] h-40 overflow-y-auto custom-scrollbar border border-white/5">
+
+              {/* Logs */}
+              <div className="p-4 font-mono text-xs h-36 overflow-y-auto custom-scrollbar">
                 {logs.length > 0 ? (
-                  logs.map((log, idx) => (
-                    <div key={idx} className="mb-1 flex gap-3 animate-in fade-in duration-300">
-                      <span className="text-brand-500/50 shrink-0">[{new Date().toLocaleTimeString()}]</span>
-                      <span className="text-slate-300">{log.message}</span>
-                    </div>
-                  ))
+                  <div className="space-y-1">
+                    {logs.map((log, idx) => (
+                      <div key={idx} className="flex gap-3 animate-in fade-in duration-200">
+                        <span className="text-emerald-500/40 shrink-0 tabular-nums">
+                          {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </span>
+                        <span className={`break-all ${
+                          /erreur|error|fail/i.test(log.message) ? 'text-red-400' :
+                          /nouveau|new|found|trouvé/i.test(log.message) ? 'text-emerald-400' :
+                          'text-slate-400'
+                        }`}>{log.message}</span>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
-                  <div className="text-slate-600 italic">En attente des premières données...</div>
+                  <div className="flex items-center gap-3 h-full">
+                    <Loader2 className="w-4 h-4 text-emerald-500 animate-spin shrink-0" />
+                    <span className="text-slate-600 italic">En attente des premières données Telegram...</span>
+                  </div>
                 )}
               </div>
             </div>
@@ -620,10 +719,10 @@ const Leaks = ({ onBack }) => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           {/* List Section */}
-          <div className={`lg:col-span-2 overflow-y-auto max-h-[700px] pr-2 custom-scrollbar ${
+          <div className={`lg:col-span-2 overflow-y-auto max-h-[calc(100vh-260px)] pr-2 custom-scrollbar ${
             viewMode === 'grid'
-              ? 'grid grid-cols-1 sm:grid-cols-2 gap-4 content-start'
-              : 'flex flex-col gap-4'
+              ? 'grid grid-cols-1 sm:grid-cols-2 gap-3 content-start'
+              : 'flex flex-col gap-3'
           }`}>
             {loading ? (
               <div className="flex flex-col items-center justify-center py-20 bg-slate-900/20 rounded-3xl border border-white/5">
@@ -631,62 +730,129 @@ const Leaks = ({ onBack }) => {
                 <p className="text-slate-500 font-mono text-xs uppercase tracking-widest">Initialisation de la matrice de données...</p>
               </div>
             ) : filteredLeaks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 bg-slate-900/20 rounded-3xl border border-white/5">
-                <AlertCircle className="w-10 h-10 text-slate-700 mb-4" />
-                <p className="text-slate-500 font-mono text-xs uppercase tracking-widest">Aucune donnée détectée dans ce secteur</p>
+              <div className="flex flex-col items-center justify-center py-16 bg-slate-900/20 rounded-3xl border border-white/5 text-center px-8">
+                {search || filter !== 'all' ? (
+                  <>
+                    <Search className="w-10 h-10 text-slate-700 mb-4" />
+                    <p className="text-white font-semibold mb-1">Aucun résultat</p>
+                    <p className="text-slate-500 text-sm mb-4">Aucun leak ne correspond à vos filtres actuels.</p>
+                    <button
+                      onClick={() => { setSearch(''); setFilter('all'); }}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-all"
+                    >
+                      Réinitialiser les filtres
+                    </button>
+                  </>
+                ) : !tgStatus.connected ? (
+                  <>
+                    <AlertTriangle className="w-10 h-10 text-red-500/40 mb-4" />
+                    <p className="text-white font-semibold mb-1">Telegram non connecté</p>
+                    <p className="text-slate-500 text-sm mb-4">
+                      Connectez votre session Telegram pour lancer la collecte.
+                    </p>
+                    <button
+                      onClick={() => setShowAuth(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-400 text-white rounded-xl text-sm font-semibold transition-all active:scale-95"
+                    >
+                      <Zap className="w-4 h-4" />
+                      Connecter Telegram
+                    </button>
+                  </>
+                ) : channels.length === 0 ? (
+                  <>
+                    <Globe className="w-10 h-10 text-slate-700 mb-4" />
+                    <p className="text-white font-semibold mb-1">Aucun canal configuré</p>
+                    <p className="text-slate-500 text-sm mb-4">
+                      Ajoutez des canaux Telegram à surveiller pour démarrer la collecte.
+                    </p>
+                    <button
+                      onClick={() => setShowChannelMgr(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-semibold transition-all active:scale-95"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Ajouter des canaux
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Database className="w-10 h-10 text-slate-700 mb-4" />
+                    <p className="text-white font-semibold mb-1">Aucune fuite collectée</p>
+                    <p className="text-slate-500 text-sm mb-4">
+                      Lancez le monitoring pour collecter les leaks depuis vos canaux Telegram.
+                    </p>
+                    <button
+                      onClick={() => { setSelectedChannelsForRun(channels); setShowStartConfig(true); }}
+                      className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-semibold transition-all active:scale-95"
+                    >
+                      <Zap className="w-4 h-4" />
+                      Lancer le monitoring
+                    </button>
+                  </>
+                )}
               </div>
             ) : (
               filteredLeaks.map((leak) => (
-                <div 
+                <div
                   key={leak.intel_id}
                   onClick={() => setSelectedLeak(leak)}
-                  className={`p-5 rounded-2xl border transition-all cursor-pointer group relative overflow-hidden ${selectedLeak?.intel_id === leak.intel_id ? 'bg-brand-500/10 border-brand-500/40 shadow-lg shadow-brand-500/5' : 'bg-slate-900/40 border-white/5 hover:border-white/10 hover:bg-slate-900/60'}`}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer group ${
+                    selectedLeak?.intel_id === leak.intel_id
+                      ? 'bg-brand-500/10 border-brand-500/40 shadow-lg shadow-brand-500/5'
+                      : 'bg-slate-900/40 border-white/5 hover:border-white/15 hover:bg-slate-900/60'
+                  }`}
                 >
-                  <div className="flex justify-between items-start gap-4 mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center border border-white/5 text-slate-400 group-hover:text-brand-400 transition-colors">
-                        <Terminal className="w-5 h-5" />
+                  {/* ── Ligne 1 : icône + canal + badge ── */}
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="w-9 h-9 shrink-0 rounded-xl bg-slate-800 flex items-center justify-center border border-white/5 text-slate-400 group-hover:text-brand-400 transition-colors mt-0.5">
+                        <Terminal className="w-4 h-4" />
                       </div>
-                      <div>
-                        <h3 className="text-white font-bold text-sm flex items-center gap-2">
+                      <div className="min-w-0">
+                        <span className="text-white font-semibold text-sm truncate block">
                           @{leak.source_channel}
-                          <span className="text-[10px] text-slate-500 font-mono">#{leak.intel_id}</span>
-                        </h3>
-                        <p className="text-slate-500 text-[10px] font-medium flex items-center gap-2">
-                          <Calendar className="w-3 h-3 text-brand-400" />
-                          {leak.leak_date?.split('T')[0]}
-                          <span className="text-slate-700">|</span>
-                          <Clock className="w-3 h-3" />
-                          {format(new Date(leak.timestamp), 'HH:mm')}
-                        </p>
+                        </span>
+                        <span className="text-xs text-slate-500 font-mono bg-slate-800/60 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                          #{leak.intel_id}
+                        </span>
                       </div>
                     </div>
                     <SeverityBadge severity={leak.leak_metadata?.severity} />
                   </div>
 
-                  <p className="text-slate-300 text-xs line-clamp-3 leading-relaxed mb-4 font-medium italic">
-                    "{leak.summary_fr}"
-                  </p>
-
-                  <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                    <div className="flex items-center gap-1.5">
-                      <BrainCircuit className="w-3.5 h-3.5 text-purple-400" />
-                      <span className="text-white">{leak.leak_metadata?.leak_type || 'Unknown'}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <ShieldCheck className="w-3.5 h-3.5 text-brand-400" />
-                      <span className="text-white">{leak.leak_metadata?.target_organization?.[0] || 'Global'}</span>
-                    </div>
-                    {leak.file_references?.length > 0 && (
-                      <div className="flex items-center gap-1.5 text-emerald-400">
-                        <FileText className="w-3.5 h-3.5" />
-                        {leak.file_references.length} Proof Files
-                      </div>
-                    )}
+                  {/* ── Ligne 2 : date + heure ── */}
+                  <div className="flex items-center gap-2 text-xs text-slate-500 mb-3 pl-12">
+                    <Calendar className="w-3.5 h-3.5 text-brand-400/70 shrink-0" />
+                    <span>{leak.leak_date?.split('T')[0]}</span>
+                    <span className="text-slate-700">·</span>
+                    <Clock className="w-3.5 h-3.5 shrink-0" />
+                    <span>{format(new Date(leak.timestamp), 'HH:mm')}</span>
                   </div>
 
-                  <div className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <ChevronRight className="w-5 h-5 text-brand-400" />
+                  {/* ── Ligne 3 : résumé ── */}
+                  {leak.summary_fr && (
+                    <p className="text-slate-400 text-xs leading-relaxed line-clamp-2 mb-3 pl-12">
+                      {leak.summary_fr}
+                    </p>
+                  )}
+
+                  {/* ── Ligne 4 : tags metadata ── */}
+                  <div className="flex items-center gap-3 pl-12 flex-wrap">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                      <BrainCircuit className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                      <span>{leak.leak_metadata?.leak_type || 'Unknown'}</span>
+                    </div>
+                    {leak.leak_metadata?.target_organization?.[0] && (
+                      <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                        <ShieldCheck className="w-3.5 h-3.5 text-brand-400 shrink-0" />
+                        <span>{leak.leak_metadata.target_organization[0]}</span>
+                      </div>
+                    )}
+                    {leak.file_references?.length > 0 && (
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-400">
+                        <FileText className="w-3.5 h-3.5 shrink-0" />
+                        <span>{leak.file_references.length} fichier{leak.file_references.length > 1 ? 's' : ''}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))
@@ -878,11 +1044,15 @@ const Leaks = ({ onBack }) => {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {(file.toLowerCase().includes('.csv') || file.toLowerCase().includes('.xlsx') || file.toLowerCase().includes('.xls')) && (
+                            {(file.toLowerCase().endsWith('.csv') || 
+                              file.toLowerCase().endsWith('.xlsx') || 
+                              file.toLowerCase().endsWith('.xls') ||
+                              file.toLowerCase().endsWith('.txt') ||
+                              file.toLowerCase().endsWith('.log')) && (
                               <button 
-                                onClick={() => setViewingCSV(file)}
+                                onClick={() => setViewingFile(file)}
                                 className="p-2 bg-brand-500/10 text-brand-400 hover:bg-brand-500 hover:text-white rounded-lg transition-all"
-                                title="View Data"
+                                title="View Content"
                               >
                                 <ExternalLink className="w-3.5 h-3.5" />
                               </button>
@@ -920,77 +1090,115 @@ const Leaks = ({ onBack }) => {
 
       </div>
 
-      {/* Auth Modal */}
+      {/* ── Auth Modal Telegram ─────────────────────────────────────── */}
       {showAuth && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowAuth(false)} />
-          <div className="bg-slate-900 border border-white/10 p-8 rounded-3xl w-full max-w-md relative z-10 shadow-2xl animate-in zoom-in duration-300">
-            <h2 className="text-xl font-black text-white uppercase tracking-tight mb-2">Connect Telegram</h2>
-            <p className="text-slate-500 text-xs mb-8 uppercase font-mono tracking-widest">
-              {authStep === 1 ? 'Enter your phone number' : 'Enter verification code'}
-            </p>
+          <div className="bg-slate-900 border border-white/10 rounded-3xl w-full max-w-md relative z-10 shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
 
-            {authStep === 1 ? (
-              <div className="space-y-4">
-                <div className="relative group">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-bold">+</span>
-                  <input 
-                    type="text" 
-                    placeholder="2126XXXXXXXX (or leave empty for .env)"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full bg-black/40 border border-white/5 rounded-2xl py-4 pl-8 pr-4 text-sm focus:outline-none focus:border-brand-500/50 transition-all font-mono"
-                  />
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-white/8">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-brand-500/15 border border-brand-500/30 flex items-center justify-center">
+                  <svg viewBox="0 0 24 24" className="w-5 h-5 text-brand-400 fill-current">
+                    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.01 9.47c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.088 14.38l-2.95-.924c-.642-.2-.654-.642.136-.953l11.527-4.445c.537-.194 1.006.131.761.19z"/>
+                  </svg>
                 </div>
-                <p className="text-[10px] text-slate-500 italic">
-                  Note: Si vous laissez vide, le numéro défini dans votre fichier .env sera utilisé.
-                </p>
-                <button 
-                  onClick={handleSendCode}
-                  className="w-full py-4 bg-brand-600 hover:bg-brand-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-xl shadow-brand-600/20"
-                >
-                  Send Verification Code
-                </button>
+                <div>
+                  <h2 className="text-base font-bold text-white">Connexion Telegram</h2>
+                  <p className="text-xs text-slate-500">
+                    {authStep === 1 ? 'Étape 1 — Numéro de téléphone' : 'Étape 2 — Code de vérification'}
+                  </p>
+                </div>
               </div>
-            ) : (
-              <div className="space-y-6">
-                <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl text-center">
-                  <p className="text-emerald-400 text-[10px] font-black uppercase tracking-widest mb-1">Code envoyé !</p>
-                  <p className="text-slate-400 text-[10px]">Vérifiez votre application Telegram sur <strong>+{phone}</strong></p>
-                </div>
-                
-                <div className="space-y-2">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Collez le code ici :</p>
-                  <input 
-                    type="text" 
-                    placeholder="XXXXX"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    className="w-full bg-black border-2 border-brand-500/30 rounded-2xl py-5 px-4 text-center text-3xl font-black tracking-[0.5em] text-white focus:outline-none focus:border-brand-500 transition-all shadow-[0_0_20px_rgba(14,165,233,0.1)]"
-                  />
-                </div>
+              <button onClick={() => setShowAuth(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-all">
+                <AlertCircle className="rotate-45 w-5 h-5" />
+              </button>
+            </div>
 
-                <button 
-                  onClick={handleVerifyCode}
-                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-xl shadow-emerald-600/20 active:scale-95"
-                >
-                  Authorize Session
-                </button>
-                <button 
-                  onClick={() => setAuthStep(1)}
-                  className="w-full py-2 text-slate-500 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all"
-                >
-                  Back to Phone Number
-                </button>
-              </div>
-            )}
-            
-            <button 
-              onClick={() => setShowAuth(false)}
-              className="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors"
-            >
-              <AlertCircle className="rotate-45 w-6 h-6" />
-            </button>
+            {/* Stepper */}
+            <div className="flex px-6 pt-5 gap-2">
+              {[1, 2].map(s => (
+                <div key={s} className={`h-1 flex-1 rounded-full transition-all duration-500 ${authStep >= s ? 'bg-brand-500' : 'bg-slate-800'}`} />
+              ))}
+            </div>
+
+            <div className="p-6">
+              {authStep === 1 ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-400 block mb-2">Numéro de téléphone</label>
+                    <input
+                      type="text"
+                      placeholder="+2126XXXXXXXX"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSendCode()}
+                      autoFocus
+                      className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-sm font-mono text-white focus:outline-none focus:border-brand-500/60 focus:bg-black/60 transition-all placeholder:text-slate-600"
+                    />
+                    <p className="text-xs text-slate-600 mt-2 italic">
+                      Laissez vide pour utiliser le numéro défini dans le fichier <code className="text-slate-500">.env</code>.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleSendCode}
+                    className="w-full py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-brand-600/20 active:scale-95"
+                  >
+                    Envoyer le code de vérification
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {/* Info envoi */}
+                  <div className="flex items-start gap-3 p-4 bg-sky-500/8 border border-sky-500/20 rounded-xl">
+                    <div className="w-8 h-8 rounded-lg bg-sky-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                      <svg viewBox="0 0 24 24" className="w-4 h-4 text-sky-400 fill-current">
+                        <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.01 9.47c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.088 14.38l-2.95-.924c-.642-.2-.654-.642.136-.953l11.527-4.445c.537-.194 1.006.131.761.19z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-sky-400">Code envoyé sur Telegram</p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Ouvrez votre application Telegram sur <span className="text-white font-mono">{phone || 'votre téléphone'}</span> et copiez le code reçu.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Code input */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-400 block mb-2">Code de vérification</label>
+                    <input
+                      type="text"
+                      placeholder="• • • • •"
+                      value={code}
+                      onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      onKeyDown={(e) => e.key === 'Enter' && code.length >= 5 && handleVerifyCode()}
+                      autoFocus
+                      maxLength={6}
+                      className="w-full bg-black/60 border-2 border-brand-500/30 focus:border-brand-500 rounded-xl py-4 px-4 text-center text-4xl font-black tracking-[0.6em] text-white focus:outline-none transition-all shadow-[0_0_20px_rgba(14,165,233,0.08)] placeholder:text-slate-700 placeholder:text-2xl placeholder:tracking-[0.4em]"
+                    />
+                    <p className="text-xs text-slate-600 mt-2 text-center">
+                      Entrez le code à 5 chiffres reçu dans l'application Telegram
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handleVerifyCode}
+                    disabled={code.length < 5}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-emerald-600/20 active:scale-95"
+                  >
+                    Autoriser la session
+                  </button>
+                  <button
+                    onClick={() => { setAuthStep(1); setCode(''); }}
+                    className="w-full py-2 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                  >
+                    ← Changer de numéro
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1030,7 +1238,7 @@ const Leaks = ({ onBack }) => {
         {showChannelMgr && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-[#05060b]/80 backdrop-blur-sm" onClick={() => setShowChannelMgr(false)} />
-            <div className="relative w-full max-w-xl bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="relative w-full max-w-2xl bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
               <div className="p-6 border-b border-white/5 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-purple-500/20 rounded-lg">
@@ -1073,10 +1281,13 @@ const Leaks = ({ onBack }) => {
                     channels.map((url, i) => (
                       <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-white/10 transition-all">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-all">
+                          <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-all shrink-0">
                             <Terminal className="w-4 h-4" />
                           </div>
-                          <span className="text-xs font-bold text-slate-300 truncate max-w-[300px]">{url}</span>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-white truncate">{extractChannelName(url)}</p>
+                            <p className="text-xs text-slate-500 truncate max-w-[280px]">{url}</p>
+                          </div>
                         </div>
                         <button 
                           onClick={() => handleRemoveChannel(url)}
@@ -1136,7 +1347,10 @@ const Leaks = ({ onBack }) => {
                           }}
                           className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-brand-500 focus:ring-brand-500/20"
                         />
-                        <span className="text-xs text-slate-300 truncate">{url}</span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-white">{extractChannelName(url)}</p>
+                          <p className="text-xs text-slate-500 truncate">{url}</p>
+                        </div>
                       </label>
                     ))}
                   </div>

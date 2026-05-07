@@ -322,13 +322,16 @@ def view_csv(path: str):
 
     # ── TXT files: return as plain lines ──────────────────────────────
     if ext == ".txt":
-        for enc in ("utf-8", "latin-1", "cp1252"):
+        for enc in ("utf-8", "utf-16", "utf-16-le", "latin-1", "cp1252"):
             try:
                 with open(abs_path, "r", encoding=enc) as f:
                     lines = f.readlines()[:500]  # Limit to 500 lines
                 content = "".join(lines)
+                # If we still see lots of null bytes or it looks like UTF-16 misread, we continue
+                if "\x00" in content and enc == "utf-8":
+                    continue
                 return {"type": "text", "content": content, "lines": len(lines)}
-            except UnicodeDecodeError:
+            except (UnicodeDecodeError, UnicodeError):
                 continue
         raise HTTPException(status_code=500, detail="Could not decode text file")
 
