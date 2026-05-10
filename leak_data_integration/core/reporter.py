@@ -36,6 +36,30 @@ class PDFBulletin(FPDF):
 class LeakReporter:
     def __init__(self, intel_file):
         self.intel_file = intel_file
+        self._settings_cache = None
+
+    def _load_channel_details(self, channel_name: str) -> dict:
+        """Return the group metadata dict for a given channel name/URL, or {}."""
+        if self._settings_cache is None:
+            try:
+                import yaml
+                settings_path = os.path.join(os.path.dirname(__file__), "..", "config", "settings.yaml")
+                with open(settings_path, "r", encoding="utf-8") as f:
+                    self._settings_cache = yaml.safe_load(f) or {}
+            except Exception:
+                self._settings_cache = {}
+        channels = self._settings_cache.get("telegram", {}).get("channels", [])
+        for ch in channels:
+            if isinstance(ch, dict):
+                url = ch.get("url", "")
+                name = ch.get("name", "")
+                # Match by partial channel name contained in URL or by display name
+                if channel_name and (channel_name.lower() in url.lower() or channel_name.lower() in name.lower()):
+                    return ch
+            else:
+                if channel_name and channel_name.lower() in str(ch).lower():
+                    return {"url": ch}
+        return {}
 
     def generate_summary(self, start_date_str, end_date_str):
         """Generates a structured summary of leaks within a date interval."""
@@ -120,7 +144,9 @@ class LeakReporter:
 
         meta = leak["leak_metadata"]
         target = ", ".join(meta["target_organization"])
-        
+        channel = leak.get("source_channel", "")
+        group = self._load_channel_details(channel)
+
         bulletin = [
             "="*60,
             f"   BULLETIN D'ALERTE - FUITE DE DONNÉES SPÉCIFIQUE",
@@ -133,6 +159,31 @@ class LeakReporter:
             f"TYPE DE FUITE : {meta['leak_type']}",
             f"CONFIANCE IA : {meta['confidence_score'] * 100}%",
             "-"*60,
+        ]
+
+        # Group info block
+        if group:
+            bulletin += [
+                f"PROFIL DU GROUPE SOURCE :",
+                f"  - Canal Telegram   : {group.get('url', channel)}",
+            ]
+            if group.get("name"):
+                bulletin.append(f"  - Nom du groupe    : {group['name']}")
+            if group.get("category"):
+                bulletin.append(f"  - Catégorie        : {group['category']}")
+            if group.get("risk_level") and group["risk_level"] != "unknown":
+                bulletin.append(f"  - Niveau de risque : {group['risk_level'].upper()}")
+            if group.get("country"):
+                bulletin.append(f"  - Pays d'origine   : {group['country']}")
+            if group.get("language"):
+                bulletin.append(f"  - Langue           : {group['language']}")
+            if group.get("member_count"):
+                bulletin.append(f"  - Membres          : {group['member_count']}")
+            if group.get("description"):
+                bulletin.append(f"  - Description      : {group['description']}")
+            bulletin.append("-"*60)
+
+        bulletin += [
             f"ANALYSE SYNTHÉTIQUE :",
             f"{leak['summary_fr']}",
             "-"*60,
@@ -186,9 +237,14 @@ class LeakReporter:
         target = safe_text(", ".join(meta["target_organization"]))
         channel = safe_text(leak["source_channel"])
 
-        # Actor Intelligence
+        # Load group metadata from settings
+        group = self._load_channel_details(leak.get("source_channel", ""))
+
+        # Actor Intelligence: use settings description first, fallback to hardcoded
         actor_intel = ""
-        if "jabaroot" in channel.lower():
+        if group.get("description"):
+            actor_intel = safe_text(group["description"])
+        elif "jabaroot" in channel.lower():
             actor_intel = safe_text(
                 "Jabaroot (Jabaroot DZ) est un groupe de hackers anonymes specialise dans le ciblage des institutions "
                 "publiques marocaines. Le groupe est classe comme un acteur de menace politiquement motive, "
@@ -284,6 +340,14 @@ class LeakReporter:
 
         add_meta_row("Alert ID", leak['intel_id'])
         add_meta_row("Source Channel", f"@{channel}")
+        if group.get("name"):
+            add_meta_row("Nom du Groupe", safe_text(group["name"]))
+        if group.get("category"):
+            add_meta_row("Categorie", safe_text(group["category"]))
+        if group.get("country"):
+            add_meta_row("Pays d'Origine", safe_text(group["country"]))
+        if group.get("risk_level") and group["risk_level"] != "unknown":
+            add_meta_row("Niveau de Risque", safe_text(group["risk_level"].upper()))
         add_meta_row("Leak Type", meta['leak_type'])
         add_meta_row("Target Entity", target)
         if meta.get("mitre_attack"):
@@ -309,15 +373,46 @@ class LeakReporter:
         pdf.multi_cell(0, 7, reasoning_text, 1)
         pdf.ln(10)
 
-        # 2. Source Profile
-        if actor_intel:
+        # 2. Source Group Profile
+        has_group_info = any([
+            group.get("name"), group.get("category"), group.get("country"),
+            group.get("language"), group.get("member_count"), group.get("risk_level") not in (None, "unknown", ""),
+            actor_intel,
+        ])
+        if has_group_info:
             pdf.set_font('helvetica', 'B', 14)
             pdf.set_text_color(23, 54, 93)
-            pdf.cell(0, 10, ' Profil de la Source (Threat Actor)', 0, 1, 'L')
-            pdf.set_font('helvetica', '', 11)
-            pdf.set_text_color(255, 255, 255)
-            pdf.set_fill_color(23, 54, 93)
-            pdf.multi_cell(0, 7, actor_intel, 1, 'L', fill=True)
+            pdf.cell(0, 10, ' Profil du Groupe Source (Threat Actor)', 0, 1, 'L')
+
+            # Info rows table
+            def add_group_row(label, value):
+                if not value:
+                    return
+                pdf.set_font('helvetica', 'B', 10)
+                pdf.set_text_color(80, 80, 80)
+                pdf.set_fill_color(235, 240, 250)
+                pdf.cell(55, 9, f"  {label}", 1, 0, 'L', fill=True)
+                pdf.set_font('helvetica', '', 10)
+                pdf.set_text_color(30, 30, 30)
+                pdf.cell(130, 9, f"  {safe_text(str(value))}", 1, 1, 'L')
+
+            add_group_row("Canal Telegram", group.get("url", f"@{channel}"))
+            add_group_row("Nom du Groupe", group.get("name", ""))
+            add_group_row("Categorie", group.get("category", ""))
+            add_group_row("Pays d'Origine", group.get("country", ""))
+            add_group_row("Langue", group.get("language", ""))
+            if group.get("member_count"):
+                add_group_row("Membres", str(group["member_count"]))
+            risk = group.get("risk_level", "")
+            if risk and risk != "unknown":
+                add_group_row("Niveau de Risque", risk.upper())
+
+            if actor_intel:
+                pdf.ln(4)
+                pdf.set_font('helvetica', 'I', 10)
+                pdf.set_text_color(255, 255, 255)
+                pdf.set_fill_color(23, 54, 93)
+                pdf.multi_cell(0, 7, actor_intel, 1, 'L', fill=True)
             pdf.set_text_color(50, 50, 50)
             pdf.ln(10)
 

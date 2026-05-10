@@ -36,7 +36,14 @@ import {
   ChevronDown,
   ChevronUp,
   Activity,
-  Users
+  Users,
+  Info,
+  Edit2,
+  Save,
+  X,
+  MapPin,
+  Languages,
+  ShieldQuestion
 } from 'lucide-react';
 import { format } from 'date-fns';
 import CSVReader from './CSVReader';
@@ -136,8 +143,12 @@ const Leaks = ({ onBack }) => {
   const [channels, setChannels] = useState([]);
   const [showChannelMgr, setShowChannelMgr] = useState(false);
   const [newChannelUrl, setNewChannelUrl] = useState('');
+  const [newChannelDetails, setNewChannelDetails] = useState({ name: '', description: '', category: '', risk_level: 'unknown', member_count: 0, language: '', country: '' });
   const [addingChannel, setAddingChannel] = useState(false);
   const [expandedChannels, setExpandedChannels] = useState({});
+  const [editingChannel, setEditingChannel] = useState(null); // url being edited
+  const [editForm, setEditForm] = useState({});
+  const [savingChannel, setSavingChannel] = useState(false);
 
   useEffect(() => {
     fetchLeaks();
@@ -264,10 +275,12 @@ const Leaks = ({ onBack }) => {
     if (!newChannelUrl) return;
     setAddingChannel(true);
     try {
-      await axios.post(`${API_BASE}/api/leaks/channels?url=${encodeURIComponent(newChannelUrl)}`);
+      const params = new URLSearchParams({ url: newChannelUrl, ...newChannelDetails, member_count: newChannelDetails.member_count || 0 });
+      await axios.post(`${API_BASE}/api/leaks/channels?${params.toString()}`);
       setNewChannelUrl('');
+      setNewChannelDetails({ name: '', description: '', category: '', risk_level: 'unknown', member_count: 0, language: '', country: '' });
       fetchChannels();
-      fetchStats(); // Update channel count
+      fetchStats();
     } catch (e) {
       alert("Failed to add channel: " + e.message);
     } finally {
@@ -275,8 +288,23 @@ const Leaks = ({ onBack }) => {
     }
   };
 
-  const handleRemoveChannel = async (url) => {
-    if (!window.confirm(`Supprimer le canal ${url} ?`)) return;
+  const handleUpdateChannel = async (url) => {
+    setSavingChannel(true);
+    try {
+      const params = new URLSearchParams({ url, ...editForm, member_count: editForm.member_count || 0 });
+      await axios.put(`${API_BASE}/api/leaks/channels?${params.toString()}`);
+      setEditingChannel(null);
+      fetchChannels();
+    } catch (e) {
+      alert("Failed to update channel: " + e.message);
+    } finally {
+      setSavingChannel(false);
+    }
+  };
+
+  const handleRemoveChannel = async (urlOrObj) => {
+    const url = typeof urlOrObj === 'object' ? urlOrObj.url : urlOrObj;
+    if (!window.confirm(`Supprimer le groupe ${url} ?`)) return;
     try {
       await axios.delete(`${API_BASE}/api/leaks/channels?url=${encodeURIComponent(url)}`);
       fetchChannels();
@@ -291,7 +319,7 @@ const Leaks = ({ onBack }) => {
       const params = new URLSearchParams();
       if (config) {
         if (config.channels && config.channels.length > 0) {
-          config.channels.forEach(c => params.append('channels', c));
+          config.channels.forEach(c => params.append('channels', typeof c === 'object' ? c.url : c));
         }
         if (config.startDate) {
           params.append('start_date', config.startDate);
@@ -307,16 +335,23 @@ const Leaks = ({ onBack }) => {
     }
   };
 
-  const extractChannelName = (url) => {
+  const extractChannelName = (urlOrObj) => {
+    const url = typeof urlOrObj === 'object' ? urlOrObj?.url : urlOrObj;
     try {
       const path = new URL(url).pathname.replace('/', '');
       return path.startsWith('+') ? path : `@${path}`;
     } catch {
-      return url;
+      return url || '';
     }
   };
 
-  const getChannelStats = (url) => {
+  const getRiskColor = (level) => {
+    const map = { critical: 'text-red-400 bg-red-500/10 border-red-500/30', high: 'text-orange-400 bg-orange-500/10 border-orange-500/30', medium: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30', low: 'text-blue-400 bg-blue-500/10 border-blue-500/30', unknown: 'text-slate-400 bg-slate-500/10 border-slate-500/30' };
+    return map[level?.toLowerCase()] || map.unknown;
+  };
+
+  const getChannelStats = (urlOrObj) => {
+    const url = typeof urlOrObj === 'object' ? urlOrObj?.url : urlOrObj;
     const urlLower = url.toLowerCase();
     const channelLeaks = leaks.filter(l => {
       const sc = l.source_channel?.toLowerCase() || '';
@@ -1237,74 +1272,173 @@ const Leaks = ({ onBack }) => {
         {/* ── Channel Management Modal ── */}
         {showChannelMgr && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-[#05060b]/80 backdrop-blur-sm" onClick={() => setShowChannelMgr(false)} />
-            <div className="relative w-full max-w-2xl bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="absolute inset-0 bg-[#05060b]/80 backdrop-blur-sm" onClick={() => { setShowChannelMgr(false); setEditingChannel(null); }} />
+            <div className="relative w-full max-w-3xl bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              {/* Header */}
               <div className="p-6 border-b border-white/5 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-purple-500/20 rounded-lg">
                     <Globe className="w-5 h-5 text-purple-400" />
                   </div>
-                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Gestion des Canaux Telegram</h3>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Gestion des Groupes Telegram</h3>
                 </div>
-                <button onClick={() => setShowChannelMgr(false)} className="text-slate-500 hover:text-white transition-colors">
-                  <AlertCircle className="w-6 h-6 rotate-45" />
+                <button onClick={() => { setShowChannelMgr(false); setEditingChannel(null); }} className="text-slate-500 hover:text-white transition-colors">
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="p-6">
-                {/* Add New Channel */}
-                <div className="flex gap-2 mb-8">
-                  <input 
-                    type="text" 
-                    placeholder="Lien du canal (ex: https://t.me/channel_name)"
+              <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto custom-scrollbar">
+
+                {/* ── Add New Channel Form ── */}
+                <div className="bg-black/30 border border-white/5 rounded-2xl p-5 space-y-3">
+                  <p className="text-[10px] font-black text-brand-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <Plus className="w-3 h-3" /> Ajouter un nouveau groupe
+                  </p>
+                  <input
+                    type="text"
+                    placeholder="URL du groupe (ex: https://t.me/channel_name) *"
                     value={newChannelUrl}
                     onChange={(e) => setNewChannelUrl(e.target.value)}
-                    className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500/50 transition-all"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500/50 transition-all"
                   />
-                  <button 
+                  <input type="text" placeholder="Nom (optionnel)"
+                    value={newChannelDetails.name} onChange={e => setNewChannelDetails(d => ({...d, name: e.target.value}))}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-brand-500/50 transition-all" />
+                  <input type="number" placeholder="Nombre d'abonnés (optionnel)" min={0}
+                    value={newChannelDetails.member_count || ''} onChange={e => setNewChannelDetails(d => ({...d, member_count: parseInt(e.target.value) || 0}))}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-brand-500/50 transition-all" />
+                  <textarea placeholder="Description (optionnel)"
+                    value={newChannelDetails.description} onChange={e => setNewChannelDetails(d => ({...d, description: e.target.value}))}
+                    rows={2}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-brand-500/50 transition-all resize-none" />
+                  <button
                     onClick={handleAddChannel}
                     disabled={addingChannel || !newChannelUrl}
-                    className="bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white px-4 py-3 rounded-xl transition-all active:scale-95 flex items-center gap-2"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-xl transition-all active:scale-95 text-sm font-bold"
                   >
                     {addingChannel ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                    <span className="text-[10px] font-black uppercase tracking-widest">Ajouter</span>
+                    Ajouter le groupe
                   </button>
                 </div>
 
-                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">Canaux Actifs ({channels.length})</p>
+                {/* ── Channel List ── */}
+                <div>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3">Groupes Actifs ({channels.length})</p>
                   {channels.length === 0 ? (
                     <div className="text-center py-10 bg-black/20 rounded-2xl border border-white/5">
-                      <p className="text-xs text-slate-600 italic">Aucun canal configuré</p>
+                      <p className="text-xs text-slate-600 italic">Aucun groupe configuré</p>
                     </div>
                   ) : (
-                    channels.map((url, i) => (
-                      <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-white/10 transition-all">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-all shrink-0">
-                            <Terminal className="w-4 h-4" />
+                    <div className="space-y-3">
+                      {channels.map((ch, i) => {
+                        const url = ch.url || ch;
+                        const isEditing = editingChannel === url;
+                        const isExpanded = expandedChannels[url];
+                        const riskCls = getRiskColor(ch.risk_level);
+                        return (
+                          <div key={i} className="bg-white/3 border border-white/5 rounded-2xl overflow-hidden transition-all hover:border-white/10">
+                            {/* Card Header */}
+                            <div className="flex items-center gap-3 p-4">
+                              <div className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center text-purple-400 shrink-0">
+                                <Terminal className="w-4 h-4" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-sm font-bold text-white">{ch.name || extractChannelName(url)}</p>
+                                  {ch.name && <p className="text-[10px] text-slate-500 font-mono">{extractChannelName(url)}</p>}
+                                  {ch.category && <span className="px-2 py-0.5 bg-purple-500/15 border border-purple-500/25 rounded-full text-[9px] font-bold text-purple-300 uppercase">{ch.category}</span>}
+                                  {ch.risk_level && ch.risk_level !== 'unknown' && (
+                                    <span className={`px-2 py-0.5 border rounded-full text-[9px] font-bold uppercase ${riskCls}`}>{ch.risk_level}</span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-slate-500 truncate mt-0.5">{url}</p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button onClick={() => setExpandedChannels(s => ({...s, [url]: !s[url]}))}
+                                  className="p-2 text-slate-600 hover:text-slate-300 hover:bg-white/5 rounded-lg transition-all" title="Voir détails">
+                                  <Info className="w-3.5 h-3.5" />
+                                </button>
+                                <button onClick={() => { setEditingChannel(url); setEditForm({ name: ch.name || '', description: ch.description || '', category: ch.category || '', risk_level: ch.risk_level || 'unknown', member_count: ch.member_count || 0, language: ch.language || '', country: ch.country || '' }); setExpandedChannels(s => ({...s, [url]: true})); }}
+                                  className="p-2 text-slate-600 hover:text-brand-400 hover:bg-brand-500/10 rounded-lg transition-all" title="Modifier">
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button onClick={() => handleRemoveChannel(url)}
+                                  className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all" title="Supprimer">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Expanded / Edit Panel */}
+                            {isExpanded && (
+                              <div className="px-4 pb-4 border-t border-white/5 pt-4">
+                                {isEditing ? (
+                                  <div className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <input type="text" placeholder="Nom du groupe" value={editForm.name}
+                                        onChange={e => setEditForm(f => ({...f, name: e.target.value}))}
+                                        className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-brand-500/50" />
+                                      <input type="text" placeholder="Catégorie" value={editForm.category}
+                                        onChange={e => setEditForm(f => ({...f, category: e.target.value}))}
+                                        className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-brand-500/50" />
+                                      <input type="text" placeholder="Pays d'origine" value={editForm.country}
+                                        onChange={e => setEditForm(f => ({...f, country: e.target.value}))}
+                                        className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-brand-500/50" />
+                                      <input type="text" placeholder="Langue" value={editForm.language}
+                                        onChange={e => setEditForm(f => ({...f, language: e.target.value}))}
+                                        className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-brand-500/50" />
+                                      <input type="number" placeholder="Membres" min={0} value={editForm.member_count || ''}
+                                        onChange={e => setEditForm(f => ({...f, member_count: parseInt(e.target.value) || 0}))}
+                                        className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-brand-500/50" />
+                                      <select value={editForm.risk_level} onChange={e => setEditForm(f => ({...f, risk_level: e.target.value}))}
+                                        className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-brand-500/50 text-slate-300">
+                                        <option value="unknown">Niveau de risque</option>
+                                        <option value="critical">Critical</option>
+                                        <option value="high">High</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="low">Low</option>
+                                      </select>
+                                    </div>
+                                    <textarea placeholder="Description" rows={2} value={editForm.description}
+                                      onChange={e => setEditForm(f => ({...f, description: e.target.value}))}
+                                      className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-brand-500/50 resize-none" />
+                                    <div className="flex gap-2">
+                                      <button onClick={() => handleUpdateChannel(url)} disabled={savingChannel}
+                                        className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all active:scale-95">
+                                        {savingChannel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                                        Enregistrer
+                                      </button>
+                                      <button onClick={() => setEditingChannel(null)}
+                                        className="flex items-center gap-2 px-4 py-2 border border-white/10 text-slate-400 hover:text-white rounded-xl text-xs font-bold transition-all">
+                                        <X className="w-3.5 h-3.5" /> Annuler
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-xs">
+                                    {ch.country && <div className="flex items-center gap-2 text-slate-400"><MapPin className="w-3.5 h-3.5 text-slate-600" /><span className="text-slate-500">Pays :</span> <span className="text-slate-200">{ch.country}</span></div>}
+                                    {ch.language && <div className="flex items-center gap-2 text-slate-400"><Languages className="w-3.5 h-3.5 text-slate-600" /><span className="text-slate-500">Langue :</span> <span className="text-slate-200">{ch.language}</span></div>}
+                                    {ch.member_count > 0 && <div className="flex items-center gap-2 text-slate-400"><Users className="w-3.5 h-3.5 text-slate-600" /><span className="text-slate-500">Membres :</span> <span className="text-slate-200">{ch.member_count.toLocaleString()}</span></div>}
+                                    {ch.risk_level && ch.risk_level !== 'unknown' && <div className="flex items-center gap-2"><ShieldQuestion className="w-3.5 h-3.5 text-slate-600" /><span className="text-slate-500">Risque :</span> <span className={`font-bold uppercase ${getRiskColor(ch.risk_level).split(' ')[0]}`}>{ch.risk_level}</span></div>}
+                                    {ch.description && <div className="col-span-2 mt-1 text-slate-400 leading-relaxed"><span className="text-slate-500 font-semibold">Description : </span>{ch.description}</div>}
+                                    {!ch.country && !ch.language && !ch.member_count && !ch.description && (
+                                      <p className="col-span-2 text-slate-600 italic text-[11px]">Aucun détail renseigné — cliquez sur <Edit2 className="inline w-3 h-3" /> pour compléter le profil.</p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-white truncate">{extractChannelName(url)}</p>
-                            <p className="text-xs text-slate-500 truncate max-w-[280px]">{url}</p>
-                          </div>
-                        </div>
-                        <button 
-                          onClick={() => handleRemoveChannel(url)}
-                          className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                          title="Supprimer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               </div>
-              
-              <div className="p-4 bg-black/20 text-center">
+
+              <div className="p-4 bg-black/20 text-center border-t border-white/5">
                 <p className="text-[8px] text-slate-600 font-mono uppercase tracking-[0.2em]">
-                  Les modifications sont appliquées immédiatement au collecteur
+                  Les détails des groupes sont inclus dans les rapports PDF générés
                 </p>
               </div>
             </div>
@@ -1333,26 +1467,30 @@ const Leaks = ({ onBack }) => {
                 <div>
                   <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3">Sélection des Canaux</p>
                   <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
-                    {channels.map((url, i) => (
+                    {channels.map((ch, i) => {
+                      const url = typeof ch === 'object' ? ch.url : ch;
+                      const checked = selectedChannelsForRun.some(u => (typeof u === 'object' ? u.url : u) === url);
+                      return (
                       <label key={i} className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:border-brand-500/30 cursor-pointer transition-all">
-                        <input 
-                          type="checkbox" 
-                          checked={selectedChannelsForRun.includes(url)}
+                        <input
+                          type="checkbox"
+                          checked={checked}
                           onChange={(e) => {
                             if (e.target.checked) {
-                              setSelectedChannelsForRun([...selectedChannelsForRun, url]);
+                              setSelectedChannelsForRun(prev => [...prev, ch]);
                             } else {
-                              setSelectedChannelsForRun(selectedChannelsForRun.filter(u => u !== url));
+                              setSelectedChannelsForRun(prev => prev.filter(u => (typeof u === 'object' ? u.url : u) !== url));
                             }
                           }}
                           className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-brand-500 focus:ring-brand-500/20"
                         />
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-white">{extractChannelName(url)}</p>
+                          <p className="text-sm font-semibold text-white">{ch.name || extractChannelName(url)}</p>
                           <p className="text-xs text-slate-500 truncate">{url}</p>
                         </div>
                       </label>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 

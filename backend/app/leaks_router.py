@@ -129,34 +129,99 @@ async def get_telegram_status():
     except Exception as e:
         return {"connected": False, "reason": str(e)}
 
+def _normalize_channel(ch) -> dict:
+    """Normalize channel entry to dict format regardless of old string or new dict format."""
+    if isinstance(ch, str):
+        return {"url": ch, "name": "", "description": "", "category": "", "risk_level": "unknown", "member_count": 0, "language": "", "country": ""}
+    return {
+        "url": ch.get("url", ""),
+        "name": ch.get("name", ""),
+        "description": ch.get("description", ""),
+        "category": ch.get("category", ""),
+        "risk_level": ch.get("risk_level", "unknown"),
+        "member_count": ch.get("member_count", 0),
+        "language": ch.get("language", ""),
+        "country": ch.get("country", ""),
+    }
+
+def _load_config():
+    with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+def _save_config(config):
+    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+        yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+
 @router.get("/channels")
 async def get_telegram_channels():
     if not os.path.exists(SETTINGS_FILE):
         return []
     try:
-        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-        return config.get("telegram", {}).get("channels", [])
+        config = _load_config()
+        raw = config.get("telegram", {}).get("channels", [])
+        return [_normalize_channel(ch) for ch in raw]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/channels")
-async def add_telegram_channel(url: str):
+async def add_telegram_channel(
+    url: str,
+    name: str = "",
+    description: str = "",
+    category: str = "",
+    risk_level: str = "unknown",
+    member_count: int = 0,
+    language: str = "",
+    country: str = "",
+):
     if not os.path.exists(SETTINGS_FILE):
         raise HTTPException(status_code=404, detail="Settings file not found")
     try:
-        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-        
+        config = _load_config()
         if "telegram" not in config: config["telegram"] = {}
         if "channels" not in config["telegram"]: config["telegram"]["channels"] = []
-        
-        if url not in config["telegram"]["channels"]:
-            config["telegram"]["channels"].append(url)
-            with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-                yaml.dump(config, f, default_flow_style=False)
-        
-        return {"status": "success", "channels": config["telegram"]["channels"]}
+
+        channels = config["telegram"]["channels"]
+        existing_urls = [_normalize_channel(ch)["url"] for ch in channels]
+
+        if url not in existing_urls:
+            new_entry = {"url": url, "name": name, "description": description, "category": category, "risk_level": risk_level, "member_count": member_count, "language": language, "country": country}
+            config["telegram"]["channels"].append(new_entry)
+            _save_config(config)
+
+        return {"status": "success", "channels": [_normalize_channel(ch) for ch in config["telegram"]["channels"]]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/channels")
+async def update_telegram_channel(
+    url: str,
+    name: str = "",
+    description: str = "",
+    category: str = "",
+    risk_level: str = "unknown",
+    member_count: int = 0,
+    language: str = "",
+    country: str = "",
+):
+    if not os.path.exists(SETTINGS_FILE):
+        raise HTTPException(status_code=404, detail="Settings file not found")
+    try:
+        config = _load_config()
+        channels = config.get("telegram", {}).get("channels", [])
+        found = False
+        for i, ch in enumerate(channels):
+            if _normalize_channel(ch)["url"] == url:
+                channels[i] = {"url": url, "name": name, "description": description, "category": category, "risk_level": risk_level, "member_count": member_count, "language": language, "country": country}
+                found = True
+                break
+        if not found:
+            raise HTTPException(status_code=404, detail="Channel not found")
+        config["telegram"]["channels"] = channels
+        _save_config(config)
+        return {"status": "success"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -165,16 +230,14 @@ async def remove_telegram_channel(url: str):
     if not os.path.exists(SETTINGS_FILE):
         raise HTTPException(status_code=404, detail="Settings file not found")
     try:
-        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-        
+        config = _load_config()
         if "telegram" in config and "channels" in config["telegram"]:
-            if url in config["telegram"]["channels"]:
-                config["telegram"]["channels"].remove(url)
-                with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-                    yaml.dump(config, f, default_flow_style=False)
-        
-        return {"status": "success", "channels": config.get("telegram", {}).get("channels", [])}
+            config["telegram"]["channels"] = [
+                ch for ch in config["telegram"]["channels"]
+                if _normalize_channel(ch)["url"] != url
+            ]
+            _save_config(config)
+        return {"status": "success", "channels": [_normalize_channel(ch) for ch in config.get("telegram", {}).get("channels", [])]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

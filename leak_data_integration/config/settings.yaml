@@ -1,7 +1,21 @@
 telegram:
   channels:
-    - "https://t.me/Jabaroot01"
-    - "https://t.me/+Lv3LYdpVyJc5ZTM0"
+    - url: "https://t.me/Jabaroot01"
+      name: "Jabaroot DZ"
+      description: "Groupe hacktiviste algérien ciblant les institutions marocaines via des campagnes de leak massives sur Telegram."
+      category: "Hacktiviste"
+      risk_level: "high"
+      member_count: 0
+      language: "AR/FR"
+      country: "Algérie"
+    - url: "https://t.me/+Lv3LYdpVyJc5ZTM0"
+      name: ""
+      description: ""
+      category: ""
+      risk_level: "unknown"
+      member_count: 0
+      language: ""
+      country: ""
   backfill_days: 10
 storage:
   base_path: "../data/leaks"

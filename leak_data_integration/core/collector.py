@@ -56,7 +56,13 @@ class TelegramCollector:
             logger.error(f"Error loading config: {e}")
             self.config = {}
 
-        self.channels = self.config.get('telegram', {}).get('channels', [])
+        # Support both old string format and new dict format with metadata
+        raw_channels = self.config.get('telegram', {}).get('channels', [])
+        self.channels = [ch.get('url', ch) if isinstance(ch, dict) else ch for ch in raw_channels]
+        self.channel_details = {
+            (ch.get('url', '') if isinstance(ch, dict) else ch): ch
+            for ch in raw_channels if isinstance(ch, dict)
+        }
 
         # Ensure session path is absolute and stable (in project root)
         session_path = os.path.join(ROOT_DIR, "telegram_leak_session")
