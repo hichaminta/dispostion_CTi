@@ -1,7 +1,7 @@
 import os
 
 sources = [
-    ('AbuseIPDB', 'abuseipdb_data.json', 'abuseipdb_extractor.py'),
+    # AbuseIPDB removed - now an enrichment stage
     ('CINS Army', 'cins_army_data.json', 'cins_army_extractor.py'),
     ('MalwareBazaar Community API', 'malwarebazaar_data.json', 'malwarebazaar_extractor.py'),
     ('NVd', 'nvd_data.json', 'nvd_extractor.py'),

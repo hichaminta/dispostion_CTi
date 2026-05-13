@@ -58,7 +58,7 @@ class MISPClient:
     # Gestion des événements MISP
     # ------------------------------------------------------------------
 
-    def _get_or_create_event_by_info(self, info_string, risk_level="low"):
+    def _get_or_create_event_by_info(self, info_string, risk_level="low", event_date=None):
         """
         Recherche un événement existant par son champ 'info' ou en crée un.
         """
@@ -76,6 +76,8 @@ class MISPClient:
 
         event = MISPEvent()
         event.info = info_string
+        if event_date:
+            event.date = event_date
         event.distribution = 0
         event.threat_level_id = self._get_threat_level(risk_level)
         event.analysis = 0
@@ -122,8 +124,24 @@ class MISPClient:
             info_name = event_item.get("event_name")
             priority = event_item.get("priority_score", "LOW")
             
-            event_uuid = self._get_or_create_event_by_info(info_name, priority)
+            # Utiliser la date de collection (first_seen) pour l'événement MISP
+            first_seen = event_item.get("first_seen")
+            event_date = None
+            if first_seen:
+                try:
+                    event_date = first_seen.split('T')[0]
+                except Exception:
+                    pass
+
+            event_uuid = self._get_or_create_event_by_info(info_name, priority, event_date=event_date)
             if not event_uuid: continue
+
+            # Ajouter un tag pour la date d'intégration si possible
+            integration_date = datetime.now().strftime("%Y-%m-%d")
+            try:
+                self.misp.tag(event_uuid, f"soc:integrated-at=\"{integration_date}\"")
+            except Exception:
+                pass
 
             for ioc in event_item.get("iocs", []):
                 if ioc.get("integre_par_misp") == 1: continue
@@ -163,10 +181,12 @@ class MISPClient:
                         
                         logger.info(f"Poussé (Corrélé) : {ioc['value']}")
                         ioc["integre_par_misp"] = 1
+                        ioc["integrated_at"] = datetime.now().isoformat()
                         file_modified = True
                     elif isinstance(res, dict) and "errors" in res:
                         if 'A similar attribute already exists' in str(res['errors']):
                             ioc["integre_par_misp"] = 1
+                            ioc["integrated_at"] = ioc.get("integrated_at") or datetime.now().isoformat()
                             file_modified = True
                 except Exception as e:
                     logger.error(f"Exception push corrélé pour {ioc['value']}: {e}")
@@ -203,7 +223,10 @@ class MISPClient:
                 continue
             
             info_string = event_data.get("info", "CTI Export")
-            event_uuid = self._get_or_create_event_by_info(info_string)
+            
+            # Tenter d'extraire la date si dispo
+            event_date = event_data.get("date")
+            event_uuid = self._get_or_create_event_by_info(info_string, event_date=event_date)
             if not event_uuid:
                 continue
 
@@ -228,6 +251,7 @@ class MISPClient:
                             self.misp.tag(attr_uuid, tag["name"])
                         logger.info(f"Poussé : {attr_data['value']}")
                         attr_data["integre_par_misp"] = 1
+                        attr_data["integrated_at"] = datetime.now().isoformat()
                         file_modified = True
                     elif isinstance(res, dict) and "errors" in res:
                         err_msg = str(res['errors'])
@@ -235,6 +259,7 @@ class MISPClient:
                         if 'A similar attribute already exists' in err_msg or 'Invalid CIDR' in err_msg:
                             logger.info(f"Sauté (déjà présent ou invalide) : {attr_data['value']}")
                             attr_data["integre_par_misp"] = 1
+                            attr_data["integrated_at"] = attr_data.get("integrated_at") or datetime.now().isoformat()
                             file_modified = True
                         else:
                             logger.error(f"Erreur MISP pour {attr_data['value']}: {res['errors']}")

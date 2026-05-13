@@ -30,7 +30,9 @@ const SOURCES = [
 const PIPELINE_PHASES = [
   { id: 'collecte',      label: 'COL',  full: 'Collecte',             icon: Database },
   { id: 'extraction',    label: 'EXT',  full: 'Extraction CVE / IOC', icon: Search },
-  { id: 'geo',           label: 'GEO',  full: 'Geolocalisation',      icon: Globe },
+  { id: 'abuse_enr',     label: 'ABUSE', full: 'AbuseIPDB Enrichment',   icon: Shield },
+  { id: 'vt_enr',        label: 'VT',    full: 'VirusTotal Enrichment',   icon: ScanEye },
+  { id: 'geo',           label: 'GEO',   full: 'Geolocalisation',         icon: Globe },
   { id: 'urlscan',       label: 'URL',  full: 'URLScan',              icon: ScanEye },
   { id: 'fallback',      label: 'FALL', full: 'Fallback',             icon: Layers },
   { id: 'cve_enr',       label: 'CVE',  full: 'Enrichissement CVE',   icon: AlertTriangle },
@@ -71,6 +73,7 @@ const Dashboard = ({ onSelectRun }) => {
   const [stopping,       setStopping]       = useState(false);
   const [runningSources, setRunningSources] = useState(new Set());
   const [showEnrichDetails, setShowEnrichDetails] = useState(false);
+  const [showScoringDetails, setShowScoringDetails] = useState(false);
 
   const [showGlobalUrlDetails, setShowGlobalUrlDetails] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -436,6 +439,36 @@ const Dashboard = ({ onSelectRun }) => {
                   <ArrowConnector />
                   
 
+                  {/* AbuseIPDB */}
+                  <button
+                    onClick={() => startGlobalStep('AbuseIPDB Enrichment')}
+                    disabled={stats?.running_runs > 0 || isStarting}
+                    title="Stage 1: AbuseIPDB Reputation"
+                    className={`flex flex-col items-center gap-1 px-3 py-1 group/step ${isStarting ? 'opacity-40' : ''}`}
+                  >
+                    <div className="w-7 h-7 rounded bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 group-hover/step:bg-blue-500 group-hover/step:text-white transition-all">
+                      {isStarting ? <Loader2 size={12} className="animate-spin" /> : <Shield size={12} />}
+                    </div>
+                    <span className="text-[11px] font-medium text-slate-500 group-hover/step:text-blue-400 uppercase">Abuse</span>
+                  </button>
+
+                  <ArrowConnector />
+
+                  {/* VirusTotal */}
+                  <button
+                    onClick={() => startGlobalStep('VirusTotal Enrichment')}
+                    disabled={stats?.running_runs > 0 || isStarting}
+                    title="Stage 1b: VirusTotal (URL / Domain / Hash)"
+                    className={`flex flex-col items-center gap-1 px-3 py-1 group/step ${isStarting ? 'opacity-40' : ''}`}
+                  >
+                    <div className="w-7 h-7 rounded bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover/step:bg-indigo-500 group-hover/step:text-white transition-all">
+                      {isStarting ? <Loader2 size={12} className="animate-spin" /> : <ScanEye size={12} />}
+                    </div>
+                    <span className="text-[11px] font-medium text-slate-500 group-hover/step:text-indigo-400 uppercase">VT</span>
+                  </button>
+
+                  <ArrowConnector />
+
                   {/* GEO */}
                   <button
                     onClick={() => startGlobalStep('Geolocalisation')}
@@ -613,6 +646,22 @@ const Dashboard = ({ onSelectRun }) => {
               {/* Separator */}
               <div className="w-px h-10 bg-slate-700 mx-2" />
 
+              {/* Intelligence Engine Toggle */}
+              <button
+                onClick={() => setShowScoringDetails(!showScoringDetails)}
+                className={`group flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 border ${
+                  showScoringDetails 
+                    ? 'bg-purple-500/20 border-purple-500/50 text-purple-300' 
+                    : 'bg-slate-900/40 border-white/5 text-slate-500 hover:text-purple-400 hover:border-purple-500/30'
+                }`}
+              >
+                <Cpu className={`w-4 h-4 ${showScoringDetails ? 'animate-spin-slow' : ''}`} />
+                <span className="text-[10px] font-black uppercase tracking-widest">Intelligence Engine</span>
+                {showScoringDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+
+              <div className="w-px h-10 bg-slate-700 mx-2" />
+
               {/* Full pipeline button */}
               <button
                 onClick={() => startRun()}
@@ -632,10 +681,85 @@ const Dashboard = ({ onSelectRun }) => {
                   <span className="tracking-wide uppercase">{stats?.running_runs > 0 ? 'En cours...' : 'Pipeline Complet'}</span>
                 </div>
               </button>
-            </div>
-
           </div>
         </div>
+      </div>
+
+        {/* ── Intelligence Engine HUD ────────────────────────────── */}
+        {showScoringDetails && (
+          <div className="mb-10 animate-in zoom-in-95 fade-in duration-500">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Module 1: Classification */}
+              <div className="bg-slate-900/60 border border-brand-500/20 rounded-3xl p-6 backdrop-blur-xl relative group hover:border-brand-500/50 transition-all">
+                <div className="absolute top-4 right-4 opacity-10 group-hover:opacity-30 transition-opacity">
+                  <ScanEye size={40} className="text-brand-400" />
+                </div>
+                <h4 className="text-brand-400 text-[10px] font-black uppercase tracking-widest mb-1">Module Intelligence</h4>
+                <h3 className="text-white text-lg font-black mb-4">Threat Classifier</h3>
+                <div className="space-y-2 mb-6">
+                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+                    <CheckCircle2 size={10} className="text-emerald-500" />
+                    Identification Malware/Phishing
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+                    <CheckCircle2 size={10} className="text-emerald-500" />
+                    Deep Analysis (RAT, Stealer, RCE)
+                  </div>
+                </div>
+                <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+                  <span className="text-[9px] font-mono text-slate-600">classifier.py</span>
+                  <button className="text-[10px] font-bold text-brand-400 hover:underline">Détails Script</button>
+                </div>
+              </div>
+
+              {/* Module 2: Reliability */}
+              <div className="bg-slate-900/60 border border-purple-500/20 rounded-3xl p-6 backdrop-blur-xl relative group hover:border-purple-500/50 transition-all">
+                <div className="absolute top-4 right-4 opacity-10 group-hover:opacity-30 transition-opacity">
+                  <Shield size={40} className="text-purple-400" />
+                </div>
+                <h4 className="text-purple-400 text-[10px] font-black uppercase tracking-widest mb-1">Module Trust</h4>
+                <h3 className="text-white text-lg font-black mb-4">Source Reliability</h3>
+                <div className="space-y-2 mb-6">
+                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+                    <CheckCircle2 size={10} className="text-emerald-500" />
+                    Source Confidence Mapping
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+                    <CheckCircle2 size={10} className="text-emerald-500" />
+                    Consensus Validation (0-100)
+                  </div>
+                </div>
+                <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+                  <span className="text-[9px] font-mono text-slate-600">reliability.py</span>
+                  <button className="text-[10px] font-bold text-purple-400 hover:underline">Détails Script</button>
+                </div>
+              </div>
+
+              {/* Module 3: Scorer */}
+              <div className="bg-slate-900/60 border border-orange-500/20 rounded-3xl p-6 backdrop-blur-xl relative group hover:border-orange-500/50 transition-all">
+                <div className="absolute top-4 right-4 opacity-10 group-hover:opacity-30 transition-opacity">
+                  <Zap size={40} className="text-orange-400" />
+                </div>
+                <h4 className="text-orange-400 text-[10px] font-black uppercase tracking-widest mb-1">Module Scoring</h4>
+                <h3 className="text-white text-lg font-black mb-4">Priority & Risk Scorer</h3>
+                <div className="space-y-2 mb-6">
+                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+                    <CheckCircle2 size={10} className="text-emerald-500" />
+                    CVSS & EPSS Real-time Scoring
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+                    <CheckCircle2 size={10} className="text-emerald-500" />
+                    Additive Risk Matrix (0-100)
+                  </div>
+                </div>
+                <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
+                  <span className="text-[9px] font-mono text-slate-600">scorer.py</span>
+                  <button className="text-[10px] font-bold text-orange-400 hover:underline">Détails Script</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
 
 
@@ -996,8 +1120,9 @@ const Dashboard = ({ onSelectRun }) => {
 const PIPELINE_STEPS = [
   { name: "Collecte",             icon: Database  },
   { name: "Extraction CVE / IOC", icon: Activity  },
-  { name: "Enrichissement",        icon: Sparkles  },
-  { name: "Geolocalisation",      icon: Globe     },
+  { name: "AbuseIPDB Enrichment",   icon: Shield    },
+  { name: "VirusTotal Enrichment",   icon: ScanEye   },
+  { name: "Geolocalisation",         icon: Globe     },
   { name: "URLScan",              icon: ScanEye   },
   { name: "Enrichissement CVE",    icon: AlertTriangle },
   { name: "Classification",       icon: Sparkles      },
