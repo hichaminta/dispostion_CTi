@@ -1,41 +1,46 @@
-
 class SourceReliability:
-    """Gère les niveaux de confiance pour les différentes sources CTI."""
-    
-    # Scores de fiabilité par source (0-100)
+    """Niveaux de confiance pour chaque source CTI."""
+
     SOURCE_RELIABILITY = {
-        "nvd": 100,            # Source officielle
-        "spamhaus": 95,        # Très haute fiabilité
-        "malwarebazaar": 95,   # Confirmé par analyse de fichiers
-        "threatfox": 90,       # Confirmé par la communauté
-        "feodotracker": 90,    # Spécialisé botnets
-        "abuseipdb": 85,       # Fiable mais basé sur rapports utilisateurs
-        "urlhaus": 80,         # Très réactif
-        "alienvault": 75,      # OTX peut contenir du bruit
-        "cins_army": 75,       # Listes de blocage IP
-        "phishtank": 70,       # Beaucoup de faux positifs potentiels
-        "openphish": 70,       # Similaire à PhishTank
-        "pulsedive": 70        # Agrégateur
+        # Sources officielles / vérifiées
+        "nvd":          100,   # NIST National Vulnerability Database
+        "spamhaus":      95,   # Réputation très haute, peu de faux positifs
+        "malwarebazaar": 95,   # Samples confirmés par analyse binaire
+        "threatfox":     90,   # Communauté abuse.ch, bien modérée
+        "feodotracker":  90,   # Spécialisé C2 botnets, très précis
+        "abuseipdb":     85,   # Fiable mais basé sur rapports users
+        "urlhaus":       80,   # Très réactif, quelques faux positifs
+        "alienvault":    75,   # OTX peut contenir du bruit communautaire
+        "cins":          75,   # Listes de blocage IP
+        "cins_army":     75,
+        "phishtank":     70,   # Votes communautaires, faux positifs possibles
+        "openphish":     70,   # Feed automatique, moins vérifié
+        "pulsedive":     70,   # Agrégateur, qualité variable
     }
 
     @staticmethod
-    def get_confidence(source_name):
-        """Retourne un score de confiance pour une source donnée."""
-        return SourceReliability.SOURCE_RELIABILITY.get(source_name.lower(), 50)
+    def get_confidence(source_name: str) -> int:
+        key = source_name.lower().replace("-", "_")
+        # Cherche une correspondance partielle si clé exacte absente
+        for k, v in SourceReliability.SOURCE_RELIABILITY.items():
+            if k in key or key in k:
+                return v
+        return 50  # source inconnue
 
     @staticmethod
-    def apply_reliability_tag(record, source_name):
-        """Applique un tag de fiabilité basé sur la source."""
+    def apply_reliability_tag(record: dict, source_name: str):
+        """Ajoute le tag reliability:X et source_confidence au record."""
         conf = SourceReliability.get_confidence(source_name)
+
         if conf >= 90:
             tag = "reliability:high"
         elif conf >= 75:
             tag = "reliability:medium"
         else:
             tag = "reliability:low"
-            
-        if "tags" not in record:
-            record["tags"] = []
+
+        record.setdefault("tags", [])
         if tag not in record["tags"]:
             record["tags"].append(tag)
+
         record["source_confidence"] = conf

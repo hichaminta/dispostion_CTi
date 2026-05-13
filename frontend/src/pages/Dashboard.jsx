@@ -12,7 +12,6 @@ const API_BASE = `http://${window.location.hostname}:8000`;
 const WS_BASE  = `ws://${window.location.hostname}:8000/ws`;
 
 const SOURCES = [
-  { id: 'abuseipdb',    name: 'AbuseIPDB',       type: 'IP Reputation',    color: 'blue'   },
   { id: 'alienvault',   name: 'AlienVault OTX',  type: 'Threat Feeds',     color: 'purple' },
   { id: 'cins_army',    name: 'CINS Army',        type: 'IP Blocking',      color: 'red'    },
   { id: 'feodotracker', name: 'FeodoTracker',     type: 'Botnet C2',        color: 'orange' },
