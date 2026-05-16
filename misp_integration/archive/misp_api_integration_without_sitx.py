@@ -1,7 +1,6 @@
 import os
 import json
 import logging
-import uuid
 from datetime import datetime
 from pymisp import PyMISP, MISPEvent
 from dotenv import load_dotenv
@@ -239,99 +238,6 @@ class MISPClient:
                 json.dump(events_data, f, indent=4)
         return True
 
-    def push_stix_bundle(self, stix_file_path):
-        """
-        Importe un bundle STIX 2.1 dans MISP en le découpant par Report.
-        Cela force MISP à créer un événement séparé pour chaque Report STIX.
-        """
-        if not self.misp:
-            return False
-
-        if not os.path.exists(stix_file_path):
-            logger.error(f"Fichier STIX introuvable : {stix_file_path}")
-            return False
-
-        try:
-            with open(stix_file_path, 'r', encoding='utf-8') as f:
-                bundle = json.load(f)
-            
-            all_objects = bundle.get("objects", [])
-            reports = [obj for obj in all_objects if obj.get("type") == "report"]
-            other_objects = {obj["id"]: obj for obj in all_objects if obj.get("type") != "report"}
-
-            logger.info(f"Découpage du bundle en {len(reports)} événements individuels...")
-
-            success_count = 0
-            for report in reports:
-                # Créer un mini-bundle pour ce report
-                report_objects = [report]
-                
-                # Ajouter l'identité si référencée
-                if report.get("created_by_ref") in other_objects:
-                    report_objects.append(other_objects[report["created_by_ref"]])
-                
-                # Ajouter tous les objets référencés
-                for ref_id in report.get("object_refs", []):
-                    if ref_id in other_objects:
-                        report_objects.append(other_objects[ref_id])
-                
-                mini_bundle = {
-                    "type": "bundle",
-                    "id": f"bundle--{uuid.uuid4()}",
-                    "objects": report_objects
-                }
-
-                # Sauvegarder temporairement le mini-bundle
-                temp_path = stix_file_path + ".tmp.json"
-                with open(temp_path, 'w', encoding='utf-8') as f:
-                    json.dump(mini_bundle, f)
-
-                try:
-                    # Importer le mini-bundle
-                    res = self.misp.upload_stix(temp_path, version=2)
-                    
-                    import time
-                    time.sleep(0.2) # Petit délai pour Windows filesystem
-
-                    # Gérer si res est un objet Response ou un dictionnaire
-                    if hasattr(res, 'json'):
-                        res_data = res.json()
-                        status_ok = res.status_code in [200, 201]
-                    else:
-                        res_data = res
-                        status_ok = isinstance(res, dict) and "errors" not in res
-
-                    if status_ok:
-                        success_count += 1
-                        report_name = report.get('name', 'Unnamed Event')
-                        
-                        try:
-                            created_events = res_data if isinstance(res_data, list) else [res_data]
-                            if created_events and "Event" in created_events[0]:
-                                event_id = created_events[0]["Event"]["id"]
-                                self.misp.update_event({'id': event_id, 'info': report_name})
-                                logger.info(f"Importé et renommé ({success_count}/{len(reports)}) : {report_name}")
-                            else:
-                                logger.info(f"Importé ({success_count}/{len(reports)}) : {report_name} (Renommage impossible)")
-                        except Exception as e:
-                            logger.warning(f"Import réussi mais erreur lors du renommage : {e}")
-                    else:
-                        err = res_data.get('errors') if isinstance(res_data, dict) else "Erreur inconnue"
-                        logger.error(f"Erreur pour {report.get('name')} : {err}")
-                finally:
-                    try:
-                        if os.path.exists(temp_path):
-                            os.remove(temp_path)
-                    except:
-                        pass
-
-            logger.info(f"Terminé : {success_count} événements créés sur {len(reports)} prévus.")
-            return success_count > 0
-
-        except Exception as e:
-            logger.error(f"Exception lors du découpage STIX : {e}")
-            return False
-
     # ------------------------------------------------------------------
     # Push d'un fichier JSON classique
     # ------------------------------------------------------------------
@@ -414,23 +320,26 @@ class MISPClient:
 
     def push_all(self, source_filter=None):
         """
-        Synchronise uniquement le bundle STIX 2.1 vers MISP.
-        Le fichier stix_export.json est désormais le seul canal d'intégration.
+        Parcourt uniquement output_correlation/ pour pousser les fichiers consolidés.
+        L'ancien dossier output_misp/ est ignoré pour éviter les doublons et les CVE non filtrés.
         """
+        # 1. Dossier Corrélation (Prioritaire et Unique)
         corr_dir = os.path.join(BASE_DIR, "output_correlation")
-        stix_file = os.path.join(corr_dir, "stix_export.json")
+        if os.path.exists(corr_dir):
+            for f in os.listdir(corr_dir):
+                if f.endswith(".json") and "soc_enriched" in f:
+                    logger.info(f"Synchronisation du fichier enrichi : {f}")
+                    self.push_correlated_file(os.path.join(corr_dir, f))
 
-        if os.path.exists(stix_file):
-            logger.info(f"Fichier STIX détecté : {stix_file}")
-            logger.info("Début de l'importation du bundle STIX vers MISP...")
-            success = self.push_stix_bundle(stix_file)
-            if success:
-                logger.info("Intégration STIX terminée avec succès.")
-            else:
-                logger.error("L'intégration STIX a échoué.")
-        else:
-            logger.error(f"Fichier STIX introuvable : {stix_file}")
-            logger.info("Assurez-vous d'avoir exécuté stix_exporter.py d'abord.")
+        # 2. Dossier MISP (Désactivé pour éviter les doublons et CVE)
+        # misp_output = os.path.join(BASE_DIR, "output_misp")
+        # if os.path.exists(misp_output):
+        #     for root, dirs, files in os.walk(misp_output):
+        #         for file in files:
+        #             if not file.endswith(".json"): continue
+        #             if source_filter and source_filter.lower() not in root.lower() and source_filter.lower() not in file.lower():
+        #                 continue
+        #             self.push_event_file(os.path.join(root, file))
 
 
 if __name__ == "__main__":
@@ -438,7 +347,6 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Synchronisation vers MISP")
     parser.add_argument("-f", "--file", help="Fichier JSON spécifique")
-    parser.add_argument("-x", "--stix", help="Fichier STIX 2.1 spécifique")
     parser.add_argument("-s", "--source", help="Filtrer par source")
     args = parser.parse_args()
 
@@ -448,7 +356,5 @@ if __name__ == "__main__":
 
     if args.file:
         client.push_event_file(args.file)
-    elif args.stix:
-        client.push_stix_bundle(args.stix)
     else:
         client.push_all(source_filter=args.source)

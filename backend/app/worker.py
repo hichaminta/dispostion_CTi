@@ -63,6 +63,8 @@ OUTPUT_DIR        = os.path.join(PROJECT_ROOT, "output_cve_ioc")
 COLLECTION_SCRIPT = os.path.join(SCRIPTS_DIR, "run_collection_all.py")
 LEAK_INTEGRATION_SCRIPT = os.path.join(PROJECT_ROOT, "leak_data_integration", "main.py")
 ENRICHMENT_DIR    = os.path.join(PROJECT_ROOT, "enrichment")
+CORRELATION_SCRIPT = os.path.join(PROJECT_ROOT, "misp_integration", "correlation_pre_misp.py")
+STIX_EXPORT_SCRIPT = os.path.join(PROJECT_ROOT, "misp_integration", "stix_exporter.py")
 
 # Sources CVE-only (pas d'IOCs)
 CVE_ONLY_SOURCES = {"NVD", "NVd"}
@@ -423,18 +425,25 @@ async def execute_pipeline_task(run_id: str, source_name: str):
 
 
         # ══════════════════════════════════════════════════════════════
-        # ÉTAPE 6 : Normalisation
+        # ÉTAPE 6 : Corrélation SOC (Remplaçant Normalisation)
         # ══════════════════════════════════════════════════════════════
         if _is_run_cancelled(run_id): return
-        await _update_step(run_id, "Normalisation", "running")
-        await _ws_log(run_id, "Normalisation", f"[{ts()}] ➔ STAGE 4 : Normalisation complète (Standard + MISP)")
-        norm_script = os.path.join(PROJECT_ROOT, "normalisation", "pipeline_runner.py")
-        ok_norm = await _run_proc(run_id, "Normalisation", [sys.executable, norm_script, "--skip-misp"] + source_flag, PROJECT_ROOT)
-
-        await _update_step(run_id, "Normalisation", "success" if ok_norm else "failed")
+        await _update_step(run_id, "Corrélation SOC", "running")
+        await _ws_log(run_id, "Corrélation SOC", f"[{ts()}] ➔ STAGE 9 : Corrélation & Groupement des menaces")
+        ok_corr = await _run_proc(run_id, "Corrélation SOC", [sys.executable, CORRELATION_SCRIPT], PROJECT_ROOT)
+        await _update_step(run_id, "Corrélation SOC", "success" if ok_corr else "failed")
 
         # ══════════════════════════════════════════════════════════════
-        # ÉTAPE 7 : Intégration MISP (IGNORÉ POUR LE MOMENT)
+        # ÉTAPE 7 : Export STIX 2.1
+        # ══════════════════════════════════════════════════════════════
+        if _is_run_cancelled(run_id): return
+        await _update_step(run_id, "Export STIX", "running")
+        await _ws_log(run_id, "Export STIX", f"[{ts()}] ➔ STAGE 10 : Génération du bundle STIX 2.1")
+        ok_stix = await _run_proc(run_id, "Export STIX", [sys.executable, STIX_EXPORT_SCRIPT], PROJECT_ROOT)
+        await _update_step(run_id, "Export STIX", "success" if ok_stix else "failed")
+
+        # ══════════════════════════════════════════════════════════════
+        # ÉTAPE 8 : Intégration MISP (IGNORÉ POUR LE MOMENT)
         # ══════════════════════════════════════════════════════════════
         await _ws_log(run_id, "Intégration MISP", f"[{ts()}] ℹ Intégration MISP ignorée selon la configuration.")
         await _update_step(run_id, "Intégration MISP", "success")
@@ -589,8 +598,16 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
             step_ok = await _run_proc(run_id, step_name, [sys.executable, master_url_script, "--mode", "urlscan"] + source_flag, PROJECT_ROOT)
             ioc_count, cve_count = _count_ioc_cve(source_name)
 
+        elif step_name == "Corrélation SOC":
+            await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 9 : Corrélation avancée & Groupement")
+            step_ok = await _run_proc(run_id, step_name, [sys.executable, CORRELATION_SCRIPT], PROJECT_ROOT)
+
+        elif step_name == "Export STIX":
+            await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 10 : Exportation STIX 2.1 (Bundle complet)")
+            step_ok = await _run_proc(run_id, step_name, [sys.executable, STIX_EXPORT_SCRIPT], PROJECT_ROOT)
+
         elif step_name == "Normalisation":
-            await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 4 : Normalisation complète (Standard + MISP)")
+            await _ws_log(run_id, step_name, f"[{ts()}] ➔ [OBSOLETE] Normalisation des données")
             norm_script = os.path.join(PROJECT_ROOT, "normalisation", "pipeline_runner.py")
             step_ok = await _run_proc(run_id, step_name, [sys.executable, norm_script] + source_flag, PROJECT_ROOT)
 

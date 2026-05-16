@@ -59,6 +59,9 @@ with Diagram(
         with Cluster("VirusTotal", graph_attr=cluster_attr):
             vt_enr = Custom("", "./logos/VT.png")
 
+        with Cluster("AbuseIPDB", graph_attr=cluster_attr):
+            abuse_enr = Custom("", "./logos/Abuse.png")
+
     # 5. NORMALISATION
     with Cluster("Normalisation & Deduplication\nStandardize", graph_attr=cluster_attr):
         normalise = Python("", width="2.0", height="2.0")
@@ -104,12 +107,14 @@ with Diagram(
 
     collecte   >> Edge(color="steelblue")                        >> extraction
     extraction >> Edge(color="blue")                             >> geo
-    extraction >> Edge(color="purple", style="dashed", label="URLs")  >> urlscan
-    extraction >> Edge(color="blue",   style="dashed", label="IOCs")  >> vt_enr
+    extraction >> Edge(color="purple", style="dashed", label="URLs / Domains")  >> urlscan
+    extraction >> Edge(color="blue",   style="dashed", label="Hashes / URLs / Domains")  >> vt_enr
+    extraction >> Edge(color="blue",   style="dashed", label="IPs")   >> abuse_enr
 
     geo     >> Edge(color="blue")   >> normalise
     urlscan >> Edge(color="purple") >> normalise
     vt_enr  >> Edge(color="blue")   >> normalise
+    abuse_enr >> Edge(color="blue")  >> normalise
 
     normalise >> Edge(color="green") >> misp
     misp      >> Edge(color="green") >> bulletin

@@ -199,3 +199,43 @@ class PriorityScorer:
         score += min(35, bonus)
 
         return round(min(100.0, score), 1)
+
+    @staticmethod
+    def calculate_ioc_risk(ioc: dict, source_confidence: int = 50) -> float:
+        """
+        Calcule le score de risque pour UN SEUL IOC.
+        Utilise les mêmes pondérations que calculate_additive_risk.
+        """
+        score = min(25, source_confidence * 0.25)
+        e = ioc.get("ioc_enrichment", {})
+
+        # VT (max 25)
+        vt = float(e.get("vt_malicious_count", 0) or 0)
+        if vt >= 50: score += 25
+        elif vt >= 10: score += 18
+        elif vt >= 1: score += 8
+
+        # Abuse (max 20)
+        abuse = float(e.get("abuseConfidenceScore", 0) or 0)
+        score += min(20, abuse * 0.2)
+
+        # ThreatFox (max 10)
+        tf_conf = float(e.get("confidence", 0) or 0)
+        score += min(10, tf_conf * 0.1)
+
+        # MalwareBazaar (max 10)
+        try:
+            dl = int(e.get("intel_downloads", 0) or 0)
+            if dl >= 500: score += 10
+            elif dl >= 100: score += 5
+        except: pass
+
+        # Bonus (max 30)
+        bonus = 0
+        if e.get("status") == "online": bonus += 15
+        if e.get("risk_flag") == "high": bonus += 10
+        if e.get("typosquat_flag") is True: bonus += 5
+        if e.get("suspicious_keywords"): bonus += 5
+        score += min(30, bonus)
+
+        return round(min(100.0, score), 1)

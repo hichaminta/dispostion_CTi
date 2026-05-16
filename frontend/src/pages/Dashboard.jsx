@@ -3,7 +3,7 @@ import axios from 'axios';
 import {
   Play, Shield, Activity, Clock, FileText,
   Database, AlertTriangle, CheckCircle2, Loader2, Zap, Sparkles, Square,
-  Download, Search, Cpu, Globe, Languages, ScanEye, Layers, ChevronRight,
+  Download, Search, Cpu, Globe, Languages, ScanEye, Layers, Share2, ChevronRight,
   ChevronDown, ChevronUp, Terminal
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -38,7 +38,8 @@ const PIPELINE_PHASES = [
 
   { id: 'classif',      label: 'CLASSIF', full: 'Classification',       icon: Sparkles },
   { id: 'mitre',        label: 'MITRE',full: 'MITRE Mapping',        icon: Shield },
-  { id: 'norm',          label: 'NORM', full: 'Normalisation',        icon: Activity },
+  { id: 'correlation',  label: 'CORR',  full: 'Corrélation SOC',      icon: Layers },
+  { id: 'stix',         label: 'STIX',  full: 'Export STIX',          icon: Share2 },
   { id: 'misp',          label: 'MISP', full: 'Intégration MISP',     icon: Zap },
 ];
 
@@ -77,6 +78,7 @@ const Dashboard = ({ onSelectRun }) => {
   const [showGlobalUrlDetails, setShowGlobalUrlDetails] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [countryStats, setCountryStats] = useState([]);
+  const [bulletinLoading, setBulletinLoading] = useState(false);
   const [enrichmentStats, setEnrichmentStats] = useState({
     coverage: 0,
     topCountries: []
@@ -270,6 +272,23 @@ const Dashboard = ({ onSelectRun }) => {
       console.error("Error stopping run:", e);
     } finally {
       setStopping(false);
+    }
+  };
+
+  const generateBulletin = async () => {
+    setBulletinLoading(true);
+    try {
+      const res = await axios.post(`${API_BASE}/api/generate-stix-bulletin`);
+      if (res.data.status === "success") {
+        window.open(`${API_BASE}${res.data.url}`, '_blank');
+      } else {
+        alert("Erreur: " + res.data.message);
+      }
+    } catch (e) {
+      console.error("Bulletin error:", e);
+      alert("Erreur lors de la g\u00e9n\u00e9ration du bulletin");
+    } finally {
+      setBulletinLoading(false);
     }
   };
 
@@ -594,11 +613,11 @@ const Dashboard = ({ onSelectRun }) => {
 
               <ArrowConnector />
 
-              {/* Step 4: Normalisation */}
+              {/* Step 4: Correlation SOC */}
               <button
-                onClick={() => startGlobalStep('Normalisation')}
+                onClick={() => startGlobalStep('Corrélation SOC')}
                 disabled={stats?.running_runs > 0}
-                title="Normalisation des données"
+                title="Corrélation SOC — Groupement des menaces"
                 className={`group relative flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all duration-200 active:scale-95 ${
                   stats?.running_runs > 0
                     ? 'opacity-40 cursor-not-allowed'
@@ -610,11 +629,59 @@ const Dashboard = ({ onSelectRun }) => {
                     ? 'bg-slate-800 border-slate-700 text-slate-600'
                     : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 group-hover:bg-emerald-500/20 group-hover:border-emerald-400 group-hover:shadow-[0_0_12px_rgba(16,185,129,0.3)]'
                 }`}>
-                  <Shield className="w-3.5 h-3.5" />
+                  <Layers className="w-3.5 h-3.5" />
                 </div>
                 <span className={`text-xs font-medium uppercase tracking-wide transition-colors ${
                   stats?.running_runs > 0 ? 'text-slate-600' : 'text-slate-500 group-hover:text-emerald-400'
-                }`}>Normaliser</span>
+                }`}>Corrélation</span>
+              </button>
+
+              <ArrowConnector />
+
+              {/* Step 5: Export STIX */}
+              <button
+                onClick={() => startGlobalStep('Export STIX')}
+                disabled={stats?.running_runs > 0}
+                title="Générer Export STIX 2.1"
+                className={`group relative flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all duration-200 active:scale-95 ${
+                  stats?.running_runs > 0
+                    ? 'opacity-40 cursor-not-allowed'
+                    : 'hover:bg-blue-500/10 cursor-pointer'
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all duration-200 ${
+                  stats?.running_runs > 0
+                    ? 'bg-slate-800 border-slate-700 text-slate-600'
+                    : 'bg-blue-500/10 border-blue-500/30 text-blue-400 group-hover:bg-blue-500/20 group-hover:border-blue-400 group-hover:shadow-[0_0_12px_rgba(14,165,233,0.3)]'
+                }`}>
+                  <Share2 className="w-3.5 h-3.5" />
+                </div>
+                <span className={`text-xs font-medium uppercase tracking-wide transition-colors ${
+                  stats?.running_runs > 0 ? 'text-slate-600' : 'text-slate-500 group-hover:text-blue-400'
+                }`}>STIX 2.1</span>
+              </button>
+
+              {/* Nouveau Bouton Bulletin PDF */}
+              <button
+                onClick={generateBulletin}
+                disabled={bulletinLoading}
+                title="G\u00e9n\u00e9rer Bulletin PDF (STIX)"
+                className={`group relative flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all duration-200 active:scale-95 ${
+                  bulletinLoading
+                    ? 'opacity-40 cursor-not-allowed'
+                    : 'hover:bg-red-500/10 cursor-pointer'
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all duration-200 ${
+                  bulletinLoading
+                    ? 'bg-slate-800 border-slate-700 text-slate-600'
+                    : 'bg-red-500/10 border-red-500/30 text-red-400 group-hover:bg-red-500/20 group-hover:border-red-400 group-hover:shadow-[0_0_12px_rgba(239,68,68,0.3)]'
+                }`}>
+                  {bulletinLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+                </div>
+                <span className={`text-xs font-medium uppercase tracking-wide transition-colors ${
+                  bulletinLoading ? 'text-slate-600' : 'text-slate-500 group-hover:text-red-400'
+                }`}>Bulletin</span>
               </button>
 
               <ArrowConnector />

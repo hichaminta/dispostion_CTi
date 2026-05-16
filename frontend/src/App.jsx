@@ -4,12 +4,14 @@ import RunDetail from './pages/RunDetail';
 import Results from './pages/Results';
 import Leaks from './pages/Leaks';
 import CSVAnalyzer from './pages/CSVAnalyzer';
+import CorrelatedEvents from './pages/CorrelatedEvents';
 import SettingsModal from './components/SettingsModal';
-import { Settings, Activity, MessageSquare, BarChart2, FileText, ChevronLeft } from 'lucide-react';
+import { Settings, Activity, MessageSquare, BarChart2, FileText, ChevronLeft, Shield } from 'lucide-react';
 import logo from './assets/logo.png';
 
 const NAV_ITEMS = [
   { id: 'monitor',      label: 'Monitor',  icon: Activity   },
+  { id: 'events',       label: 'Events',   icon: Shield     },
   { id: 'leaks',        label: 'Leaks',    icon: MessageSquare },
   { id: 'results',      label: 'Results',  icon: BarChart2  },
   { id: 'csv_analyzer', label: 'CSV AI',   icon: FileText, accent: true },
@@ -88,6 +90,8 @@ function App() {
           <RunDetail runId={selectedRunId} onBack={() => setSelectedRunId(null)} />
         ) : view === 'monitor' ? (
           <Dashboard onSelectRun={(id) => setSelectedRunId(id)} />
+        ) : view === 'events' ? (
+          <CorrelatedEvents onBack={() => setView('monitor')} />
         ) : view === 'leaks' ? (
           <Leaks onBack={() => setView('monitor')} />
         ) : view === 'csv_analyzer' ? (

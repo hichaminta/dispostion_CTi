@@ -88,6 +88,16 @@ class IntelligenceOrchestrator:
                     record["priority_score"]      = priority   # CRITICAL | HIGH | MEDIUM | LOW
                     record["soc_action"]          = action     # escalate | investigate | monitor | block | monitor_quiet
                     record["risk_score_additive"] = PriorityScorer.calculate_additive_risk(record)
+                    
+                    # Score par IOC individuel
+                    src_conf = record.get("source_confidence", 50)
+                    for ioc in record.get("iocs", []):
+                        ioc["risk_score"] = PriorityScorer.calculate_ioc_risk(ioc, src_conf)
+                        # Action simplifiée par IOC
+                        if ioc["risk_score"] >= 70: ioc["soc_action"] = "investigate"
+                        elif ioc["risk_score"] >= 40: ioc["soc_action"] = "monitor"
+                        else: ioc["soc_action"] = "monitor_quiet"
+
                     record["passser_par_scoring"] = 1
                     modified_record = True
                 else:

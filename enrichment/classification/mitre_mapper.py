@@ -92,6 +92,43 @@ def map_record(record):
         return True
     return False
 
+def map_ioc(ioc, record_context):
+    """
+    Mappe les techniques MITRE pour un IOC individuel.
+    Prend en compte l'IOC lui-même et un peu de contexte du record (tags, description).
+    """
+    techniques = set()
+    search_text = []
+
+    # 1. Données spécifiques de l'IOC
+    search_text.append(ioc.get("type", ""))
+    search_text.append(ioc.get("value", ""))
+    enrich = ioc.get("ioc_enrichment", {})
+    search_text.append(enrich.get("threat_type", ""))
+    search_text.append(enrich.get("malware_family", ""))
+    search_text.extend(enrich.get("vt_tags", []))
+
+    # 2. Contexte minimal du record
+    search_text.extend(record_context.get("tags", []))
+    search_text.append(record_context.get("threat_type", ""))
+    search_text.append(record_context.get("attack_type", ""))
+
+    # Normalisation
+    full_text = " ".join([str(t) for t in search_text if t]).lower()
+
+    # Apply Rules
+    for pattern, tech_list in MAPPING_RULES["keywords"].items():
+        if re.search(pattern, full_text):
+            for tech in tech_list:
+                techniques.add(tech)
+
+    if techniques:
+        ioc["mitre_attack"] = [
+            {"id": t[0], "name": t[1]} for t in sorted(list(techniques))
+        ]
+        return True
+    return False
+
 def process_files(source_filter=None, skip_mapped=False):
     if not os.path.exists(INPUT_DIR):
         logger.error(f"Input directory not found: {INPUT_DIR}")

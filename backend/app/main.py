@@ -26,7 +26,8 @@ from .database import db
 
 OUTPUT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_cve_ioc"))
 ENRICHMENT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_enrichment"))
-MITRE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_mitre_attack"))
+MITRE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_correlation")) # Use correlation output for some stats too
+CORRELATION_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_correlation"))
 DASHBOARD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "dashboard"))
 
 app = FastAPI(title="CTI Pipeline Tracker API")
@@ -34,6 +35,7 @@ app.include_router(leaks_router.router)
 
 app.mount("/results", StaticFiles(directory=DASHBOARD_DIR, html=True), name="results")
 app.mount("/data", StaticFiles(directory=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))), name="data")
+app.mount("/bulletins", StaticFiles(directory=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "bultein_de_security"))), name="bulletins")
 GEO_STATS_CACHE = {"data": [], "last_updated": 0}
 
 app.add_middleware(
@@ -73,7 +75,7 @@ async def create_run(run_in: schemas.RunCreate, background_tasks: BackgroundTask
         "status_global": "running"
     }
     db.create_run(new_run)
-    steps = ["Collecte", "Extraction CVE / IOC", "Geolocalisation", "URLScan", "Enrichissement CVE", "Analyse NLP CVE", "Normalisation", "Intégration MISP"]
+    steps = ["Collecte", "Extraction CVE / IOC", "Geolocalisation", "URLScan", "Enrichissement CVE", "Classification", "MITRE Mapping", "Corrélation SOC", "Export STIX", "Intégration MISP"]
     for step_name in steps:
         db.update_step(external_id, {
             "step_name": step_name,
@@ -469,6 +471,48 @@ def get_mitre_data(source_id: str, page: int = 1, limit: int = 50, search: str =
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ──────────────────────────────────────────────────────────────────────────────
+# CORRELATION ENDPOINTS
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/correlated/data")
+def get_correlated_data(page: int = 1, limit: int = 50, search: str = None, priority: str = None):
+    filepath = os.path.join(CORRELATION_DIR, "correlated_events_soc_enriched.json")
+    if not os.path.exists(filepath):
+        return {"data": [], "total": 0, "page": page, "limit": limit}
+
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            all_data = json.load(f)
+            
+        # 1. Priority Filtering
+        if priority:
+            p_low = priority.upper()
+            all_data = [d for d in all_data if d.get("priority_score") == p_low]
+
+        # 2. Search Filtering
+        if search:
+            search_low = search.lower()
+            all_data = [
+                d for d in all_data 
+                if search_low in str(d.get("event_name", "")).lower() or 
+                   search_low in str(d.get("group_id", "")).lower() or
+                   any(search_low in str(t).lower() for t in d.get("tags", [])) or
+                   any(search_low in str(ioc.get("value", "")).lower() for ioc in d.get("iocs", []))
+            ]
+            
+        total = len(all_data)
+        start = (page - 1) * limit
+        end = start + limit
+        return {
+            "data": all_data[start:end],
+            "total": total,
+            "page": page,
+            "limit": limit
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/mitre/matrix")
 def get_mitre_matrix_stats():
     """
@@ -583,3 +627,31 @@ if __name__ == "__main__":
     import uvicorn
     # En lançant uvicorn via ce script, on garantit que la loop policy est fixée avant.
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True, loop="asyncio")
+# ─── API STIX ────────────────────────────────────────────────────────
+@app.get("/api/stix/data")
+async def get_stix_data():
+    """
+    Retourne le contenu du bundle STIX exporté.
+    """
+    stix_path = os.path.join(os.path.dirname(__file__), "..", "..", "output_correlation", "stix_export.json")
+    if not os.path.exists(stix_path):
+        return {"objects": [], "type": "bundle"}
+    try:
+        with open(stix_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/generate-stix-bulletin")
+def generate_stix_bulletin():
+    try:
+        from misp_integration.stix_reporter import STIXReporter
+        reporter = STIXReporter()
+        pdf_path = reporter.generate_pdf()
+        if pdf_path:
+            return {"status": "success", "file": os.path.basename(pdf_path), "url": f"/bulletins/{os.path.basename(pdf_path)}"}
+        else:
+            return {"status": "error", "message": "Échec de la génération du PDF"}
+    except Exception as e:
+        print(f"[ERROR] Bulletin generation failed: {e}")
+        return {"status": "error", "message": str(e)}
