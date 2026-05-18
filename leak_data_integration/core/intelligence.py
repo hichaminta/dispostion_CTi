@@ -172,9 +172,14 @@ class IntelligenceAgent:
             intel_list = self._load_intel()
             
             for inc in mapped_data["incidents"]:
-                # Create a unique ID based on the first original ID
-                base_id = inc.get("original_ids", ["0"])[0]
-                target_prefix = inc.get("target_organization", ["UNK"])[0][:3].upper()
+                # Create a unique ID based on the first original ID robustly
+                orig_ids = inc.get("original_ids", ["0"])
+                base_id = orig_ids[0] if isinstance(orig_ids, list) and orig_ids else "0"
+                
+                targets = inc.get("target_organization", ["UNK"])
+                target_name = targets[0] if isinstance(targets, list) and targets else "UNK"
+                target_prefix = str(target_name)[:3].upper() if target_name else "UNK"
+                
                 intel_id = f"INTEL-{datetime.now().strftime('%Y%m%d')}-{target_prefix}-{base_id}"
                 
                 final_record = {

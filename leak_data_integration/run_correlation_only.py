@@ -25,14 +25,24 @@ async def run_pipeline():
     agent._write_intel([]) # Clear the old database
     
     analyzer = LeakAnalyzer()
-    jabaroot_dir = os.path.join(PROJECT_ROOT, "data", "leaks", "Jabaroot")
+    leaks_base_dir = os.path.join(PROJECT_ROOT, "data", "leaks")
     
-    print("[*] Lancement du mapping LLM pour chaque jour...")
-    if os.path.exists(jabaroot_dir):
-        for date_folder in os.listdir(jabaroot_dir):
-            leaks_file = os.path.join(jabaroot_dir, date_folder, "leaks.json")
-            if os.path.exists(leaks_file):
-                await agent.process_daily_leaks(leaks_file, analyzer)
+    print("[*] Lancement du mapping LLM pour chaque groupe/jour...")
+    if os.path.exists(leaks_base_dir):
+        for channel_folder in os.listdir(leaks_base_dir):
+            channel_path = os.path.join(leaks_base_dir, channel_folder)
+            if not os.path.isdir(channel_path) or channel_folder == "uploads":
+                continue
+                
+            channel_name = "./xorcat~files" if channel_folder == "__xorcat_files" else channel_folder
+            
+            for date_folder in os.listdir(channel_path):
+                date_path = os.path.join(channel_path, date_folder)
+                if not os.path.isdir(date_path):
+                    continue
+                leaks_file = os.path.join(date_path, "leaks.json")
+                if os.path.exists(leaks_file):
+                    await agent.process_daily_leaks(leaks_file, analyzer, channel_name=channel_name)
                 
     # 2. Generate PDF Reports
     if not os.path.exists(intel_file):
