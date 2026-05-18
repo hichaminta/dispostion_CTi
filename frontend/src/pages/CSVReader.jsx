@@ -141,7 +141,7 @@ const CSVReader = ({ filePath, onBack }) => {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#05060b] text-slate-200 p-6 md:p-8 relative overflow-hidden">
+    <div className="min-h-screen bg-transparent text-slate-200 p-6 md:p-8 relative overflow-hidden">
       {/* Background glows */}
       <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-brand-500/5 blur-[150px] rounded-full pointer-events-none" />
       <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-purple-500/5 blur-[150px] rounded-full pointer-events-none" />
@@ -358,7 +358,7 @@ const CSVReader = ({ filePath, onBack }) => {
                         key={idx}
                         className="hover:bg-white/[0.02] transition-colors group"
                       >
-                        <td className="px-4 py-3 text-[9px] font-mono text-slate-700 sticky left-0 bg-[#05060b] group-hover:bg-[#0a0d14] transition-colors">
+                        <td className="px-4 py-3 text-[9px] font-mono text-slate-700 sticky left-0 bg-slate-950 group-hover:bg-[#0a0d14] transition-colors">
                           {page * PAGE_SIZE + idx + 1}
                         </td>
                         {columns.map(col => (

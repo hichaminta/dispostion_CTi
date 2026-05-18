@@ -4,6 +4,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from telethon import TelegramClient
+from telethon.errors import InviteHashExpiredError, InviteHashInvalidError, ChannelPrivateError
 from dotenv import load_dotenv
 
 
@@ -279,8 +280,16 @@ class TelegramCollector:
                 logger.info(f"Done. Processed: {processed_count}, Skipped: {skipped_count}")
                 self._save_tracking() # Always save to update state
 
+            except InviteHashExpiredError:
+                logger.error(f"Error for {channel_url}: The invite link has expired and is not valid anymore.")
+            except InviteHashInvalidError:
+                logger.error(f"Error for {channel_url}: The invite link is invalid.")
+            except ChannelPrivateError:
+                logger.error(f"Error for {channel_url}: The channel is private or you do not have permission to access it.")
+            except ValueError as ve:
+                logger.error(f"Error for {channel_url}: Invalid invite link / channel format: {ve}")
             except Exception as e:
-                logger.error(f"Error for {channel_url}: {e}")
+                logger.error(f"Unexpected error for {channel_url}: {e}")
                 import traceback
                 traceback.print_exc()
 

@@ -45,7 +45,7 @@ async def run_pipeline():
             
         print(f"\n[*] Génération des rapports PDF pour {len(data)} incidents...")
         
-        reporter = LeakReporter(INTEL_DIR)
+        reporter = LeakReporter(intel_file)
         reports_dir = os.path.join(INTEL_DIR, "reports")
         os.makedirs(reports_dir, exist_ok=True)
         

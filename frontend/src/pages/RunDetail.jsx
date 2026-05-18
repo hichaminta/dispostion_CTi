@@ -163,7 +163,7 @@ const RunDetail = ({ runId, onBack }) => {
     : allLogs;
 
   return (
-    <div className="min-h-screen bg-[#0a0d1a] p-6">
+    <div className="min-h-screen bg-transparent p-6">
       {/* Header */}
       <div className="max-w-[1600px] mx-auto">
         <button

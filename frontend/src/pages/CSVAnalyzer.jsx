@@ -83,7 +83,7 @@ const CSVAnalyzer = ({ onBack }) => {
   }
 
   return (
-    <div className="min-h-screen bg-[#05060b] text-slate-200 p-8 relative overflow-hidden">
+    <div className="min-h-screen bg-transparent text-slate-200 p-8 relative overflow-hidden">
       {/* Background Glows */}
       <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-brand-500/10 blur-[150px] rounded-full pointer-events-none" />
       <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-purple-500/10 blur-[150px] rounded-full pointer-events-none" />

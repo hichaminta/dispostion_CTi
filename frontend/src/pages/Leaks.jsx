@@ -450,7 +450,7 @@ const Leaks = ({ onBack }) => {
   }
 
   return (
-    <div className="min-h-screen bg-[#05060b] text-slate-200 p-8 relative overflow-hidden">
+    <div className="min-h-screen bg-transparent text-slate-200 p-8 relative overflow-hidden">
       {/* Background Glows */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-500/10 blur-[120px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-500/10 blur-[120px] rounded-full pointer-events-none" />

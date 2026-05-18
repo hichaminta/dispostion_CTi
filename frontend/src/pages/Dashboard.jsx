@@ -323,7 +323,7 @@ const Dashboard = ({ onSelectRun }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#05060b] relative overflow-hidden p-6 md:p-8 text-slate-200">
+    <div className="min-h-screen bg-transparent relative overflow-hidden p-6 md:p-8 text-slate-200">
       <div className="fixed inset-0 hud-grid pointer-events-none opacity-20" />
       
       {/* ── Background Glow Effects ── */}
@@ -350,8 +350,8 @@ const Dashboard = ({ onSelectRun }) => {
           </div>
           <div className="flex flex-col items-end gap-2">
             {/* HUD Pipeline Control Panel */}
-            <div className="flex items-center gap-0 bg-slate-900/40 border border-white/10 rounded-2xl p-2 shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-xl relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.02] to-transparent pointer-events-none" />
+            <div className="flex items-center gap-0 bg-slate-900/40 border border-brand-500/20 rounded-2xl p-2 shadow-[0_8px_32px_rgba(0,0,0,0.8),inset_0_0_30px_rgba(14,165,233,0.1)] backdrop-blur-xl relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-brand-500/[0.03] to-transparent pointer-events-none" />
               {/* Stop button when running */}
               {stats?.running_runs > 0 && (
                 <>

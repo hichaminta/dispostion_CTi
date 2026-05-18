@@ -40,7 +40,7 @@ body {
   display: block;
   min-width: 320px;
   min-height: 100vh;
-  background: radial-gradient(circle at 50% 0%, #0c1222 0%, #05060b 100%);
+  background: radial-gradient(circle at 50% -20%, #0c152e 0%, #04060d 40%, #020204 100%);
 }
 
 #root {
@@ -49,26 +49,29 @@ body {
 
 /* ─── Glassmorphism ─── */
 .glass-panel {
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  background: rgba(11, 15, 25, 0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+  border-radius: 20px;
 }
 
 .glass-card {
-  background: rgba(30, 41, 59, 0.4);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.3) 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 16px;
 }
 
 .glass-card:hover {
-  background: rgba(30, 41, 59, 0.6);
-  border-color: rgba(14, 165, 233, 0.3);
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 0 15px 0 rgba(14, 165, 233, 0.1);
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.5) 100%);
+  border-color: rgba(14, 165, 233, 0.4);
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.5), 0 0 20px 0 rgba(14, 165, 233, 0.15), inset 0 1px 0 rgba(255,255,255,0.1);
 }
 
 /* ─── Cyber HUD Animations ─── */

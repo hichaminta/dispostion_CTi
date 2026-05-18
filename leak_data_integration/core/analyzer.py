@@ -2,6 +2,7 @@ import os
 import re
 import json
 import logging
+import asyncio
 try:
     from google import genai
 except ImportError:
@@ -64,57 +65,53 @@ class LeakAnalyzer:
             return False
 
     async def _query_ai(self, prompt):
-        """Unified query method for different AI providers."""
-        if self.provider == "gemini" and self.gemini_key:
+        """Unified query method for different AI providers with automatic retry & exponential backoff."""
+        max_retries = 3
+        backoff_factor = 2.0
+        
+        for attempt in range(1, max_retries + 1):
             try:
-                response = self.client.models.generate_content(
-                    model='gemini-1.5-flash',
-                    contents=prompt
-                )
-                return response.text
-            except Exception as e:
-                logger.error(f"Gemini error: {e}")
+                if self.provider == "gemini" and self.gemini_key:
+                    response = self.client.models.generate_content(
+                        model='gemini-1.5-flash',
+                        contents=prompt
+                    )
+                    return response.text
+                elif self.provider == "openai" and self.openai_key:
+                    response = self.client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[{"role": "user", "content": prompt}],
+                        response_format={ "type": "json_object" } if "JSON" in prompt else None
+                    )
+                    return response.choices[0].message.content
+                elif self.provider == "ollama":
+                    import requests
+                    response = requests.post(
+                        self.ollama_url,
+                        json={
+                            "model": self.ollama_model,
+                            "prompt": prompt,
+                            "stream": False,
+                            "format": "json"
+                        },
+                        timeout=90
+                    )
+                    return response.json().get("response")
+                elif self.provider == "openrouter" and self.client:
+                    response = self.client.chat.completions.create(
+                        model=self.openrouter_model,
+                        messages=[{"role": "user", "content": prompt}],
+                        response_format={ "type": "json_object" } if "JSON" in prompt else None
+                    )
+                    return response.choices[0].message.content
                 return None
-        elif self.provider == "openai" and self.openai_key:
-            try:
-                response = self.client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": prompt}],
-                    response_format={ "type": "json_object" } if "JSON" in prompt else None
-                )
-                return response.choices[0].message.content
             except Exception as e:
-                logger.error(f"OpenAI error: {e}")
-                return None
-        elif self.provider == "ollama":
-            try:
-                import requests
-                response = requests.post(
-                    self.ollama_url,
-                    json={
-                        "model": self.ollama_model,
-                        "prompt": prompt,
-                        "stream": False,
-                        "format": "json"
-                    },
-                    timeout=90
-                )
-                return response.json().get("response")
-            except Exception as e:
-                logger.error(f"Ollama error: {e}")
-                return None
-        elif self.provider == "openrouter" and self.client:
-            try:
-                response = self.client.chat.completions.create(
-                    model=self.openrouter_model,
-                    messages=[{"role": "user", "content": prompt}],
-                    response_format={ "type": "json_object" } if "JSON" in prompt else None
-                )
-                return response.choices[0].message.content
-            except Exception as e:
-                logger.error(f"OpenRouter error: {e}")
-                return None
-        return None
+                logger.warning(f"AI query attempt {attempt}/{max_retries} failed for {self.provider}: {e}")
+                if attempt == max_retries:
+                    logger.error(f"AI query failed after {max_retries} attempts: {e}")
+                    return None
+                sleep_time = backoff_factor ** attempt
+                await asyncio.sleep(sleep_time)
 
     def extract_patterns(self, text):
         """Extracts basic patterns using Regex."""

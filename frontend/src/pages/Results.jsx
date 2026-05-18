@@ -159,7 +159,7 @@ const Results = ({ onBack }) => {
   const selectedSrcObj = sources.find(s => s.id === currentSource);
 
   return (
-    <div className="min-h-screen bg-[#05060b] relative overflow-hidden flex flex-col text-slate-200">
+    <div className="min-h-screen bg-transparent relative overflow-hidden flex flex-col text-slate-200">
       <div className="fixed inset-0 hud-grid pointer-events-none opacity-20" />
       
       {/* ── Header ─────────────────────────────────────────────────── */}

@@ -1,7 +1,7 @@
 import os
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from .analyzer import LeakAnalyzer
 
 logger = logging.getLogger("DailyCorrelator")
@@ -28,9 +28,13 @@ class DailyCorrelator:
                 l_run = entry.get("last_run")
                 if e_mod and str(e_mod).strip():
                     dt = datetime.fromisoformat(str(e_mod).strip().replace("Z", "+00:00"))
+                    if dt.tzinfo is not None:
+                        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
                     if gap_start is None or dt < gap_start: gap_start = dt
                 if l_run and str(l_run).strip():
                     dt = datetime.fromisoformat(str(l_run).strip().replace("Z", "+00:00"))
+                    if dt.tzinfo is not None:
+                        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
                     if gap_end is None or dt > gap_end: gap_end = dt
             except Exception as e:
                 logger.warning(f"Error parsing tracking entry dates: {e}")
