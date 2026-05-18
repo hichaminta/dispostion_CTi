@@ -1,0 +1,516 @@
+[
+    {
+        "source": "OTX AlienVault",
+        "record_id": "69cbf7d955b9ee7f5f7ddfef",
+        "summary": "Extracted 3 IOCs explicitly from OTX without NLP.",
+        "iocs": [
+            {
+                "type": "hash",
+                "value": "22e32bcf113326e366ac480b077067cf",
+                "source": "OTX AlienVault",
+                "ioc_enrichment": {
+                    "passer_par_virustotal": 0
+                },
+                "risk_score": 18.8,
+                "soc_action": "monitor_quiet"
+            },
+            {
+                "type": "hash",
+                "value": "248a4d7d4c48478dcbeade8f7dba80b3",
+                "source": "OTX AlienVault",
+                "ioc_enrichment": {
+                    "passer_par_virustotal": 0
+                },
+                "risk_score": 18.8,
+                "soc_action": "monitor_quiet"
+            },
+            {
+                "type": "hash",
+                "value": "9b435ad985b733b64a6d5f39080f4ae0",
+                "source": "OTX AlienVault",
+                "ioc_enrichment": {
+                    "vt_malicious_count": 45,
+                    "vt_suspicious_count": 0,
+                    "vt_harmless_count": 0,
+                    "vt_total_engines": 74,
+                    "vt_reputation": -52,
+                    "vt_tags": [
+                        "spreader",
+                        "pedll",
+                        "detect-debug-environment",
+                        "long-sleeps"
+                    ],
+                    "vt_last_analysis_date": 1778137504,
+                    "vt_permalink": null,
+                    "passer_par_virustotal": 1
+                },
+                "risk_score": 36.8,
+                "soc_action": "monitor_quiet"
+            }
+        ],
+        "cves": [],
+        "tags": [
+            "cve-2026-3502",
+            "dll sideloading",
+            "government targets",
+            "havoc",
+            "southeast asia",
+            "trueconf",
+            "zero-day",
+            "reliability:medium",
+            "soc_enriched"
+        ],
+        "references": [
+            "https://research.checkpoint.com/2026/operation-truechaos-0-day-exploitation-against-southeast-asian-government-targets/"
+        ],
+        "attributes": {
+            "nlp_analysis": {
+                "vendors": [
+                    "Havoc",
+                    "TrueChaos"
+                ],
+                "products": [
+                    "CVE-2026-3502"
+                ],
+                "versions": [
+                    "version 8.5.3",
+                    "8.5.3"
+                ],
+                "platforms": [
+                    "TrueConf"
+                ],
+                "tlp": "TLP:CLEAR",
+                "nlp_enriched_at": "2026-05-12T19:57:59.338335"
+            }
+        },
+        "collected_at": "2026-03-31T16:35:37.820000",
+        "description": "A zero-day vulnerability in the TrueConf client application, CVE-2026-3502, was exploited in a targeted campaign against government entities in Southeast Asia. The flaw allows attackers controlling an on-premises TrueConf server to distribute and execute arbitrary files across connected endpoints. The campaign, dubbed 'TrueChaos', abused the trusted update channel to deliver malware to multiple government agencies. The attack likely involved a Chinese-nexus threat actor and utilized the Havoc post-exploitation framework. The vulnerability stems from inadequate validation in the update process, enabling malicious updates to be distributed through a centrally managed server. TrueConf has since released a fix in version 8.5.3 of their Windows client.",
+        "threat_type": "vulnerability",
+        "attack_type": "RCE",
+        "passer_par_callasifcation": 1,
+        "source_confidence": 75,
+        "confidence_label": "MEDIUM",
+        "paser_reliablity": 1,
+        "mitre_attack": [
+            {
+                "id": "T1105",
+                "name": "Ingress Tool Transfer"
+            },
+            {
+                "id": "T1190",
+                "name": "Exploit Public-Facing Application"
+            },
+            {
+                "id": "T1204",
+                "name": "User Execution"
+            },
+            {
+                "id": "T1497",
+                "name": "Virtualization/Sandbox Evasion"
+            },
+            {
+                "id": "T1570",
+                "name": "Lateral Tool Transfer"
+            },
+            {
+                "id": "T1595",
+                "name": "Active Scanning"
+            },
+            {
+                "id": "TA0002",
+                "name": "Execution"
+            }
+        ],
+        "passer_par_mittre_attck": 1,
+        "priority_score": "LOW",
+        "soc_action": "monitor_quiet",
+        "risk_score_additive": 36.8,
+        "passser_par_scoring": 1
+    },
+    {
+        "source": "OTX AlienVault",
+        "record_id": "69cd1aa5d630ea626fc62588",
+        "summary": "Extracted 6 IOCs explicitly from OTX without NLP.",
+        "iocs": [
+            {
+                "type": "hash",
+                "value": "07d889e2dadce6f3910dcbc253317d28ca61c766",
+                "source": "OTX AlienVault",
+                "ioc_enrichment": {
+                    "vt_malicious_count": 39,
+                    "vt_suspicious_count": 0,
+                    "vt_harmless_count": 0,
+                    "vt_total_engines": 75,
+                    "vt_reputation": -124,
+                    "vt_tags": [
+                        "tar-bundle",
+                        "gzip"
+                    ],
+                    "vt_last_analysis_date": 1778594578,
+                    "vt_permalink": null,
+                    "passer_par_virustotal": 1
+                },
+                "risk_score": 36.8,
+                "soc_action": "monitor_quiet"
+            },
+            {
+                "type": "hash",
+                "value": "2553649f2322049666871cea80a5d0d6adc700ca",
+                "source": "OTX AlienVault",
+                "ioc_enrichment": {
+                    "vt_malicious_count": 27,
+                    "vt_suspicious_count": 0,
+                    "vt_harmless_count": 0,
+                    "vt_total_engines": 74,
+                    "vt_reputation": -4,
+                    "vt_tags": [
+                        "tar-bundle",
+                        "gzip"
+                    ],
+                    "vt_last_analysis_date": 1778127508,
+                    "vt_permalink": null,
+                    "passer_par_virustotal": 1
+                },
+                "risk_score": 36.8,
+                "soc_action": "monitor_quiet"
+            },
+            {
+                "type": "hash",
+                "value": "d6f3f62fd3b9f5432f5782b62d8cfd5247d5ee71",
+                "source": "OTX AlienVault",
+                "ioc_enrichment": {
+                    "passer_par_virustotal": 0
+                },
+                "risk_score": 18.8,
+                "soc_action": "monitor_quiet"
+            },
+            {
+                "type": "url",
+                "value": "http://sfrclak.com:8000/6202033",
+                "source": "OTX AlienVault",
+                "ioc_enrichment": {
+                    "vt_malicious_count": 25,
+                    "vt_suspicious_count": 1,
+                    "vt_harmless_count": 38,
+                    "vt_total_engines": 92,
+                    "vt_reputation": -16,
+                    "vt_tags": [
+                        "ns-port"
+                    ],
+                    "vt_last_analysis_date": 1777603322,
+                    "vt_permalink": null,
+                    "passer_par_virustotal": 1
+                },
+                "risk_score": 36.8,
+                "soc_action": "monitor_quiet"
+            },
+            {
+                "type": "domaine",
+                "value": "callnrwise.com",
+                "source": "OTX AlienVault",
+                "ioc_enrichment": {
+                    "vt_malicious_count": 24,
+                    "vt_suspicious_count": 0,
+                    "vt_harmless_count": 41,
+                    "vt_total_engines": 92,
+                    "vt_reputation": -4,
+                    "vt_tags": [],
+                    "vt_last_analysis_date": 1778371413,
+                    "vt_permalink": null,
+                    "passer_par_virustotal": 1
+                },
+                "risk_score": 36.8,
+                "soc_action": "monitor_quiet"
+            },
+            {
+                "type": "domaine",
+                "value": "sfrclak.com",
+                "source": "OTX AlienVault",
+                "ioc_enrichment": {
+                    "vt_malicious_count": 25,
+                    "vt_suspicious_count": 1,
+                    "vt_harmless_count": 39,
+                    "vt_total_engines": 92,
+                    "vt_reputation": -128,
+                    "vt_tags": [],
+                    "vt_last_analysis_date": 1778608649,
+                    "vt_permalink": null,
+                    "passer_par_virustotal": 1
+                },
+                "risk_score": 36.8,
+                "soc_action": "monitor_quiet"
+            }
+        ],
+        "cves": [],
+        "tags": [
+            "axios",
+            "npm",
+            "supply chain",
+            "supply chain attack",
+            "reliability:medium",
+            "soc_enriched"
+        ],
+        "references": [
+            "https://nsfocusglobal.com/axios-front-end-library-npm-supply-chain-poisoning-alert/"
+        ],
+        "attributes": {
+            "nlp_analysis": {
+                "vendors": [
+                    "GitHub Actions CI",
+                    "ProtonMail",
+                    "CLI"
+                ],
+                "products": [],
+                "versions": [],
+                "platforms": [],
+                "tlp": "TLP:CLEAR",
+                "nlp_enriched_at": "2026-05-12T19:57:59.366232"
+            }
+        },
+        "collected_at": "2026-04-01T13:16:21.862000",
+        "description": "On March 31, NSFOCUS CERT detected that the npm repository of the HTTP client library Axios was poisoned by the supply chain. The attacker bypassed the normal GitHub Actions CI/CD pipeline of the project, changed the account email address of the axios maintainer to an anonymous ProtonMail address, and manually released a malicious version with a Trojan backdoor through the npm CLI. When the user installs it, a persistent remote control will be established on the host. The impact is wide-ranging, and relevant users are requested to take measures for investigation and protection as soon as possible.",
+        "threat_type": "malware",
+        "attack_type": "Other",
+        "passer_par_callasifcation": 1,
+        "source_confidence": 75,
+        "confidence_label": "MEDIUM",
+        "paser_reliablity": 1,
+        "mitre_attack": [
+            {
+                "id": "T1071",
+                "name": "Application Layer Protocol"
+            },
+            {
+                "id": "TA0011",
+                "name": "Command and Control"
+            }
+        ],
+        "passer_par_mittre_attck": 1,
+        "priority_score": "MEDIUM",
+        "soc_action": "monitor",
+        "risk_score_additive": 36.8,
+        "passser_par_scoring": 1
+    },
+    {
+        "source": "OTX AlienVault",
+        "record_id": "69cd66412a30a525e66b507d",
+        "summary": "Extracted 6 IOCs explicitly from OTX without NLP.",
+        "iocs": [
+            {
+                "type": "hash",
+                "value": "964540e24c4e2e048e4600e5f590bf96",
+                "source": "OTX AlienVault",
+                "ioc_enrichment": {
+                    "vt_malicious_count": 55,
+                    "vt_suspicious_count": 0,
+                    "vt_harmless_count": 0,
+                    "vt_total_engines": 74,
+                    "vt_reputation": -125,
+                    "vt_tags": [
+                        "detect-debug-environment",
+                        "64bits",
+                        "peexe"
+                    ],
+                    "vt_last_analysis_date": 1778137529,
+                    "vt_permalink": null,
+                    "passer_par_virustotal": 1
+                },
+                "risk_score": 43.8,
+                "soc_action": "monitor"
+            },
+            {
+                "type": "hash",
+                "value": "d4757f035c3447c33c2347101d08c1e798f1a044",
+                "source": "OTX AlienVault",
+                "ioc_enrichment": {
+                    "vt_malicious_count": 55,
+                    "vt_suspicious_count": 0,
+                    "vt_harmless_count": 0,
+                    "vt_total_engines": 74,
+                    "vt_reputation": -125,
+                    "vt_tags": [
+                        "detect-debug-environment",
+                        "64bits",
+                        "peexe"
+                    ],
+                    "vt_last_analysis_date": 1778137529,
+                    "vt_permalink": null,
+                    "passer_par_virustotal": 1
+                },
+                "risk_score": 43.8,
+                "soc_action": "monitor"
+            },
+            {
+                "type": "hash",
+                "value": "1facf7cdd94eed0a8a11b30f4237699385b20578339c68df01e542d772ccbce5",
+                "source": "OTX AlienVault",
+                "ioc_enrichment": {
+                    "vt_malicious_count": 24,
+                    "vt_suspicious_count": 0,
+                    "vt_harmless_count": 0,
+                    "vt_total_engines": 74,
+                    "vt_reputation": -1,
+                    "vt_tags": [
+                        "powershell",
+                        "detect-debug-environment",
+                        "long-sleeps"
+                    ],
+                    "vt_last_analysis_date": 1778137514,
+                    "vt_permalink": null,
+                    "passer_par_virustotal": 1
+                },
+                "risk_score": 36.8,
+                "soc_action": "monitor_quiet"
+            },
+            {
+                "type": "hash",
+                "value": "26f51df1a12230b6bb583f3003c102a79106b049f89d9b9d43c6e85e072bd99e",
+                "source": "OTX AlienVault",
+                "ioc_enrichment": {
+                    "vt_malicious_count": 23,
+                    "vt_suspicious_count": 0,
+                    "vt_harmless_count": 0,
+                    "vt_total_engines": 74,
+                    "vt_reputation": -1,
+                    "vt_tags": [
+                        "detect-debug-environment",
+                        "calls-wmi",
+                        "long-sleeps",
+                        "exe-pattern",
+                        "powershell"
+                    ],
+                    "vt_last_analysis_date": 1778137517,
+                    "vt_permalink": null,
+                    "passer_par_virustotal": 1
+                },
+                "risk_score": 36.8,
+                "soc_action": "monitor_quiet"
+            },
+            {
+                "type": "hash",
+                "value": "4f88d3977a24fb160fc3ba69821287a197ae9b04493d705dc2fe939442ba6461",
+                "source": "OTX AlienVault",
+                "ioc_enrichment": {
+                    "vt_malicious_count": 55,
+                    "vt_suspicious_count": 0,
+                    "vt_harmless_count": 0,
+                    "vt_total_engines": 74,
+                    "vt_reputation": -125,
+                    "vt_tags": [
+                        "detect-debug-environment",
+                        "64bits",
+                        "peexe"
+                    ],
+                    "vt_last_analysis_date": 1778137529,
+                    "vt_permalink": null,
+                    "passer_par_virustotal": 1
+                },
+                "risk_score": 43.8,
+                "soc_action": "monitor"
+            },
+            {
+                "type": "hash",
+                "value": "ebfe75ab3223b036a4b886d497f2b172425b3e63890d485c99353773d4c436ea",
+                "source": "OTX AlienVault",
+                "ioc_enrichment": {
+                    "vt_malicious_count": 26,
+                    "vt_suspicious_count": 0,
+                    "vt_harmless_count": 0,
+                    "vt_total_engines": 75,
+                    "vt_reputation": -1,
+                    "vt_tags": [
+                        "detect-debug-environment",
+                        "powershell",
+                        "long-sleeps",
+                        "exe-pattern"
+                    ],
+                    "vt_last_analysis_date": 1778292152,
+                    "vt_permalink": null,
+                    "passer_par_virustotal": 1
+                },
+                "risk_score": 36.8,
+                "soc_action": "monitor_quiet"
+            }
+        ],
+        "cves": [],
+        "tags": [
+            "anydesk",
+            "infostealers",
+            "netexec",
+            "netscan",
+            "yurei ransomware",
+            "reliability:medium",
+            "soc_enriched"
+        ],
+        "references": [
+            "https://www.team-cymru.com/post/yurei-double-extortion-ransomware-campaign-toolkit"
+        ],
+        "attributes": {
+            "nlp_analysis": {
+                "vendors": [
+                    "Ransomware",
+                    "PDB",
+                    "VirusTotal",
+                    "Yurei",
+                    "Tor"
+                ],
+                "products": [
+                    "D:\\satanlockv2"
+                ],
+                "versions": [],
+                "platforms": [
+                    "Morocco"
+                ],
+                "tlp": "TLP:CLEAR",
+                "nlp_enriched_at": "2026-05-12T19:57:59.404671"
+            }
+        },
+        "collected_at": "2026-04-01T18:38:57.381000",
+        "description": "Active since September 2025, Yurei is a double extortion ransomware campaign. The operators run their own Tor data leak site with a low number of victims listed at the time of writing. It is reportedly derived from Prince Ransomware, an open-source ransomware family written in Go. Check Point researchers noted that all samples were first submitted to VirusTotal from Morocco, and that one sample did not include a ticket ID, indicating that this could be a test build, possibly uploaded by the developer themselves. Yurei ransomware samples also contained a link to SatanLockv2, based on the presence of the PDB path string “D:\\satanlockv2” present in the Yurei samples.",
+        "threat_type": "malware",
+        "attack_type": "RAT",
+        "passer_par_callasifcation": 1,
+        "source_confidence": 75,
+        "confidence_label": "MEDIUM",
+        "paser_reliablity": 1,
+        "mitre_attack": [
+            {
+                "id": "T1047",
+                "name": "Windows Management Instrumentation"
+            },
+            {
+                "id": "T1059.001",
+                "name": "PowerShell"
+            },
+            {
+                "id": "T1071",
+                "name": "Application Layer Protocol"
+            },
+            {
+                "id": "T1210",
+                "name": "Exploitation of Remote Services"
+            },
+            {
+                "id": "T1486",
+                "name": "Data Encrypted for Impact"
+            },
+            {
+                "id": "T1497",
+                "name": "Virtualization/Sandbox Evasion"
+            },
+            {
+                "id": "TA0010",
+                "name": "Exfiltration"
+            },
+            {
+                "id": "TA0011",
+                "name": "Command and Control"
+            }
+        ],
+        "passer_par_mittre_attck": 1,
+        "priority_score": "HIGH",
+        "soc_action": "investigate",
+        "risk_score_additive": 43.8,
+        "passser_par_scoring": 1
+    }
+]

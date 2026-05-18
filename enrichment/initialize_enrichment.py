@@ -2,7 +2,13 @@ import os
 import json
 import shutil
 import logging
+import subprocess
+import sys
 from datetime import datetime
+try:
+    from demo_selective_enrichment import filter_alienvault_for_demo
+except ImportError:
+    filter_alienvault_for_demo = None
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -30,7 +36,7 @@ def save_tracking(tracking):
     with open(TRACKING_FILE, "w", encoding="utf-8") as f:
         json.dump(tracking, f, indent=4)
 
-def initialize_enrichment_files(source_filter=None, force=False):
+def initialize_enrichment_files(source_filter=None, force=False, demo=False):
     """
     Copie les fichiers extraits vers le dossier d'enrichissement 
     en les renommant de *_extracted.json vers *_enriched.json.
@@ -129,11 +135,24 @@ def initialize_enrichment_files(source_filter=None, force=False):
 
     logger.info(f"Initialisation terminée. {count} fichiers traités.")
 
+    if demo:
+        logger.info("Mode DEMO activé : Lancement du filtrage sélectif...")
+        if filter_alienvault_for_demo:
+            filter_alienvault_for_demo()
+        else:
+            # Fallback if import failed (e.g. running from different CWD)
+            demo_script = os.path.join(os.path.dirname(__file__), "demo_selective_enrichment.py")
+            if os.path.exists(demo_script):
+                subprocess.run([sys.executable, demo_script], check=False)
+            else:
+                logger.warning("Script demo_selective_enrichment.py introuvable.")
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Initialise enrichment files from extraction outputs.")
     parser.add_argument("-s", "--source", help="Only initialize a specific source (e.g. spamhaus)")
     parser.add_argument("-f", "--force", action="store_true", help="Force update even if tracking matches")
+    parser.add_argument("-d", "--demo", action="store_true", help="Prepare files for demonstration (keep only most enriched records)")
     args = parser.parse_args()
     
-    initialize_enrichment_files(source_filter=args.source, force=args.force)
+    initialize_enrichment_files(source_filter=args.source, force=args.force, demo=args.demo)

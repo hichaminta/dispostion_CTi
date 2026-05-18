@@ -47,6 +47,12 @@ async def start_leak_collection(background_tasks: BackgroundTasks, channels: Lis
 # Global client store for auth (temporary)
 AUTH_SESSIONS = {}
 
+@router.get("/auth/config")
+async def get_auth_config():
+    import os
+    env_phone = os.getenv("TELEGRAM_PHONE", "")
+    return {"default_phone": env_phone}
+
 @router.post("/auth/send-code")
 async def send_code(phone: str = None):
     from telethon import TelegramClient

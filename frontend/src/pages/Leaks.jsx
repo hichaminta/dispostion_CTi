@@ -129,6 +129,7 @@ const Leaks = ({ onBack }) => {
   const [code, setCode] = useState('');
   const [phoneCodeHash, setPhoneCodeHash] = useState('');
   const [authStep, setAuthStep] = useState(1); // 1: Phone, 2: Code
+  const [defaultPhone, setDefaultPhone] = useState('');
   const [logs, setLogs] = useState([]);
   const [activeRunId, setActiveRunId] = useState(null);
   const [viewingFile, setViewingFile] = useState(null);
@@ -166,6 +167,17 @@ const Leaks = ({ onBack }) => {
       clearInterval(leakInterval);
     };
   }, [activeRunId]);
+
+  useEffect(() => {
+    if (showAuth) {
+      axios.get(`${API_BASE}/api/leaks/auth/config`).then(res => {
+        if (res.data.default_phone) {
+          setDefaultPhone(res.data.default_phone);
+          if (!phone) setPhone(res.data.default_phone);
+        }
+      }).catch(() => {});
+    }
+  }, [showAuth]);
 
   const fetchLogs = async (runId) => {
     try {
@@ -1165,7 +1177,7 @@ const Leaks = ({ onBack }) => {
                     <label className="text-xs font-semibold text-slate-400 block mb-2">Numéro de téléphone</label>
                     <input
                       type="text"
-                      placeholder="+2126XXXXXXXX"
+                      placeholder={defaultPhone || "+2126XXXXXXXX"}
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleSendCode()}
@@ -1173,14 +1185,15 @@ const Leaks = ({ onBack }) => {
                       className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-sm font-mono text-white focus:outline-none focus:border-brand-500/60 focus:bg-black/60 transition-all placeholder:text-slate-600"
                     />
                     <p className="text-xs text-slate-600 mt-2 italic">
-                      Laissez vide pour utiliser le numéro défini dans le fichier <code className="text-slate-500">.env</code>.
+                      {defaultPhone ? `Un numéro par défaut a été détecté dans votre fichier .env. Cliquez sur envoyer pour recevoir le code.` : `Laissez vide pour utiliser le numéro défini dans le fichier .env.`}
                     </p>
                   </div>
                   <button
                     onClick={handleSendCode}
-                    className="w-full py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-brand-600/20 active:scale-95"
+                    className="w-full py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-brand-600/20 active:scale-95 flex items-center justify-center gap-2"
                   >
-                    Envoyer le code de vérification
+                    <Zap className="w-4 h-4" />
+                    Envoyer le code de vérification Telegram
                   </button>
                 </div>
               ) : (

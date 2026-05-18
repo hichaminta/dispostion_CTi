@@ -15,4 +15,5 @@ temp_sources
 misp-docker
 data
 leak_data_integration/reports
+leak_session.session
 *.session
