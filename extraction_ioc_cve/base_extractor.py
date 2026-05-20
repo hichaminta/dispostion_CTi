@@ -42,18 +42,18 @@ class BaseExtractor:
 
         # Whitelist of benign domains to filter out false positives
         self.WHITELIST_DOMAINS = {
-            "google.com", "google.org", "google.net", "google.io", "google.ai",
-            "microsoft.com", "microsoft.org", "microsoft.net", "microsoft.io",
-            "amazon.com", "amazon.net", "amazon.org",
+            "google.com", "google.org", "google.net", "google.io", "google.ai", "googleusercontent.com",
+            "microsoft.com", "microsoft.org", "microsoft.net", "microsoft.io", "windows.net", "office.com",
+            "amazon.com", "amazon.net", "amazon.org", "amazonaws.com",
             "cloudflare.com", "cloudflare.net", "cloudflare.io",
-            "github.com", "github.io", "github.dev",
+            "github.com", "github.io", "github.dev", "githubusercontent.com",
             "openai.com", "openai.org",
             "apple.com", "apple.net",
             "facebook.com", "facebook.net", "facebook.org",
             "sinkhole.ch", "abuse.ch", "shadowserver.org",
             "phishtank.com", "abuseipdb.com", "alienvault.com",
             "pulsedive.com", "openphish.com", "spamhaus.org", "cinsarmy.com",
-            "nist.gov",
+            "nist.gov", "filebase.com", "dropbox.com",
             "localhost", "example.com", "127.0.0.1"
         }
 
@@ -65,8 +65,105 @@ class BaseExtractor:
         self.INVALID_DOMAIN_EXTENSIONS = {
             '.exe', '.dll', '.zip', '.rar', '.7z', '.tar', '.gz', '.file', '.arm', 
             '.mpsl', '.mips', '.hta', '.msi', '.bat', '.vbs', '.scr', '.js', '.elf', 
-            '.sh', '.lnk', '.bin', '.dat', '.tmp', '.ulise', '.variant', '.png', '.jpg', '.jpeg'
+            '.sh', '.lnk', '.bin', '.dat', '.tmp', '.ulise', '.variant', '.png', '.jpg', '.jpeg',
+            '.conf', '.config', '.cfg', '.ini', '.lic', '.msc', '.xml', '.json', '.yaml', '.txt', '.log', '.reg'
         }
+
+    def extract_file_hashes_general(self, text):
+        """
+        Parses raw text to map hashes (MD5, SHA1, SHA256) to their corresponding filenames.
+        Supports:
+          1. Header block style: "File: name.exe" followed by lines of hashes.
+          2. Inline separator style: "name.exe: hash" or "name.exe - hash".
+          3. Inline parentheses style: "name.exe (hash)".
+          4. Checksum utility output: "hash *name.exe" or "hash name.exe".
+        Filters out configuration/system files from mapping.
+        """
+        if not text:
+            return {}
+
+        # 1. Clean HTML tags to preserve line structures
+        clean_text = re.sub(r'<[^>]+>', '\n', text)
+        lines = clean_text.splitlines()
+        
+        file_map = {}
+        
+        # Regex components
+        hash_pattern = r'\b([a-fA-F0-9]{32}|[a-fA-F0-9]{40}|[a-fA-F0-9]{64})\b'
+        hash_regex = re.compile(f'^{hash_pattern}$', re.IGNORECASE)
+        
+        # Match typical file with extension (e.g. w.exe, nxc.exe)
+        file_pattern = r'[a-zA-Z0-9_\-\.]+\.[a-zA-Z0-9]{2,4}'
+        
+        # Inline formats
+        inline_sep_regex = re.compile(rf'\b({file_pattern})\s*[:\-]\s*{hash_pattern}', re.IGNORECASE)
+        inline_paren_regex = re.compile(rf'\b({file_pattern})\s*\(\s*{hash_pattern}\s*\)', re.IGNORECASE)
+        
+        # Checksum format
+        checksum_regex = re.compile(rf'^{hash_pattern}\s+(?:\*)?({file_pattern})$', re.IGNORECASE)
+        
+        # Extensions of configuration/license/logs to exclude
+        exclude_extensions = {
+            '.conf', '.config', '.cfg', '.ini', '.lic', '.msc', '.xml', '.json', '.yaml', '.txt', '.log', '.lnk', '.reg'
+        }
+        
+        current_header_file = None
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Rule 2: Inline separator
+            match_sep = inline_sep_regex.search(line)
+            if match_sep:
+                filename = match_sep.group(1).strip()
+                hash_val = match_sep.group(2).strip().lower()
+                ext = os.path.splitext(filename.lower())[1]
+                if ext not in exclude_extensions:
+                    file_map[hash_val] = filename
+                continue
+                
+            # Rule 3: Inline parentheses
+            match_paren = inline_paren_regex.search(line)
+            if match_paren:
+                filename = match_paren.group(1).strip()
+                hash_val = match_paren.group(2).strip().lower()
+                ext = os.path.splitext(filename.lower())[1]
+                if ext not in exclude_extensions:
+                    file_map[hash_val] = filename
+                continue
+                
+            # Rule 4: Checksum format
+            match_checksum = checksum_regex.match(line)
+            if match_checksum:
+                hash_val = match_checksum.group(1).strip().lower()
+                filename = match_checksum.group(2).strip()
+                ext = os.path.splitext(filename.lower())[1]
+                if ext not in exclude_extensions:
+                    file_map[hash_val] = filename
+                continue
+                
+            # Rule 1: Header detection
+            header_match = re.match(r'^(?:File|Filename|Fichier):\s*(.+)$', line, re.IGNORECASE)
+            if header_match:
+                candidate = header_match.group(1).strip().replace('`', '').replace('*', '')
+                ext = os.path.splitext(candidate.lower())[1]
+                if ext not in exclude_extensions:
+                    current_header_file = candidate
+                else:
+                    current_header_file = None
+                continue
+                
+            # If under an active header and line is a single hash, map it
+            if current_header_file:
+                if hash_regex.match(line):
+                    file_map[line.lower()] = current_header_file
+                else:
+                    current_header_file = None
+                    
+        return file_map
+
 
     def is_whitelisted(self, domain):
         """Checks if a domain or its parent is in the whitelist."""
@@ -222,6 +319,14 @@ class BaseExtractor:
                 seen_iocs.add(key)
                 unique_iocs.append(ioc)
         results['iocs'] = unique_iocs
+
+        # General file-hash association mapping
+        file_hash_map = self.extract_file_hashes_general(text)
+        for ioc in results['iocs']:
+            if ioc['type'] == 'hashe':
+                val_lower = ioc['value'].lower()
+                if val_lower in file_hash_map:
+                    ioc['file'] = file_hash_map[val_lower]
 
         unique_cves = []
         seen_cves = set()

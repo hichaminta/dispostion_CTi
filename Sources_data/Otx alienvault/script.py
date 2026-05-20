@@ -254,9 +254,9 @@ def main():
     tracking = load_tracking()
     e_calc, l_calc = get_interval_from_data(existing_data)
     
-    if "earliest_modified" not in tracking:
+    if tracking.get("earliest_modified") is None:
         tracking["earliest_modified"] = e_calc
-    if "latest_modified" not in tracking:
+    if tracking.get("latest_modified") is None:
         tracking["latest_modified"] = l_calc
     
     logging.info(f"Intervalle actuel : {tracking.get('earliest_modified')} <-> {tracking.get('latest_modified')}")

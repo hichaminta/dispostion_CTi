@@ -691,6 +691,143 @@ class STIXExporter:
         return True
 
 
+class STIXReporter:
+    """Génère un bulletin PDF de threat intelligence depuis les événements corrélés."""
+
+    PRIORITY_COLORS = {
+        "CRITICAL": (220, 38,  38),
+        "HIGH":     (234, 88,  12),
+        "MEDIUM":   (202, 138,  4),
+        "LOW":      (37,  99, 235),
+    }
+
+    def __init__(self):
+        self.base_dir    = BASE_DIR
+        self.input_file  = INPUT_FILE
+        self.reports_dir = os.path.join(self.base_dir, "bultein_de_security")
+        os.makedirs(self.reports_dir, exist_ok=True)
+
+    def _load_events(self):
+        if not os.path.exists(self.input_file):
+            return []
+        with open(self.input_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    def generate_pdf(self, output_path: str = None) -> str | None:
+        try:
+            from fpdf import FPDF
+        except ImportError:
+            print("[STIXReporter] fpdf2 non installé — pip install fpdf2")
+            return None
+
+        events = self._load_events()
+        if not events:
+            print("[STIXReporter] Aucun événement corrélé trouvé.")
+            return None
+
+        now_str  = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        date_tag = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        if not output_path:
+            output_path = os.path.join(self.reports_dir, f"cti_bulletin_{date_tag}.pdf")
+
+        # ── Triage events ────────────────────────────────────────────
+        priority_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+        events_sorted  = sorted(events, key=lambda e: priority_order.get(e.get("priority_score", "LOW"), 3))
+
+        counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+        for ev in events_sorted:
+            p = ev.get("priority_score", "LOW")
+            counts[p] = counts.get(p, 0) + 1
+
+        # ── PDF ─────────────────────────────────────────────────────
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+
+        # Header
+        pdf.set_fill_color(15, 23, 42)
+        pdf.rect(0, 0, 210, 30, "F")
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.set_y(8)
+        pdf.cell(0, 8, "CTI THREAT INTELLIGENCE BULLETIN", align="C", ln=True)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.cell(0, 6, f"Generated: {now_str}  |  Source: SOC-PFE-CTI Platform", align="C", ln=True)
+        pdf.ln(10)
+
+        # Stats summary bar
+        pdf.set_text_color(30, 30, 30)
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(0, 7, f"Total Events: {len(events_sorted)}", ln=True)
+        pdf.ln(2)
+
+        col_w = 42
+        for p, c in counts.items():
+            r, g, b = self.PRIORITY_COLORS.get(p, (100, 100, 100))
+            pdf.set_fill_color(r, g, b)
+            pdf.set_text_color(255, 255, 255)
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.cell(col_w, 9, f"  {p}: {c}", fill=True, border=0)
+        pdf.ln(14)
+
+        # Events
+        pdf.set_text_color(30, 30, 30)
+        for i, ev in enumerate(events_sorted):
+            prio   = ev.get("priority_score", "LOW")
+            r, g, b = self.PRIORITY_COLORS.get(prio, (80, 80, 80))
+
+            # Event header band
+            pdf.set_fill_color(r, g, b)
+            pdf.set_text_color(255, 255, 255)
+            pdf.set_font("Helvetica", "B", 10)
+            name = ev.get("event_name", ev.get("group_id", "Unknown"))[:80]
+            pdf.cell(0, 8, f"  [{prio}]  {name}", fill=True, ln=True)
+
+            # Event body
+            pdf.set_text_color(30, 30, 30)
+            pdf.set_font("Helvetica", "", 9)
+            pdf.set_fill_color(248, 248, 252)
+
+            lines = [
+                f"Group ID   : {ev.get('group_id','')}",
+                f"Type       : {ev.get('event_type','')}  |  Attack: {ev.get('attack_type','')}",
+                f"Risk Score : {ev.get('risk_score', 0)}  |  Confidence: {ev.get('confidence_score', 0)}%",
+                f"SOC Action : {ev.get('soc_action','monitor').upper()}",
+                f"Sources    : {', '.join(ev.get('source_list', []))}",
+                f"IOCs       : {len(ev.get('iocs', []))}  |  First Seen: {str(ev.get('first_seen',''))[:10]}  |  Last Seen: {str(ev.get('last_seen',''))[:10]}",
+            ]
+            # MITRE techniques
+            techs = ev.get("mitre_techniques", [])
+            if techs:
+                lines.append(f"MITRE      : {', '.join(techs[:6])}")
+            # DFIR-specific fields
+            if ev.get("threat_actors"):
+                lines.append(f"Actors     : {', '.join(ev['threat_actors'])}")
+            if ev.get("targeted_sectors"):
+                lines.append(f"Targets    : {', '.join(ev['targeted_sectors'][:5])}")
+            if ev.get("article_reference"):
+                lines.append(f"Reference  : {ev['article_reference'][:80]}")
+            # Tags (only meaningful ones)
+            tags = [t for t in ev.get("tags", []) if not t.startswith(("soc_", "reliability:"))][:6]
+            if tags:
+                lines.append(f"Tags       : {', '.join(tags)}")
+
+            for line in lines:
+                pdf.set_x(12)
+                pdf.cell(0, 5, line, ln=True)
+            pdf.ln(4)
+
+        # Footer
+        pdf.set_y(-15)
+        pdf.set_font("Helvetica", "I", 8)
+        pdf.set_text_color(120, 120, 120)
+        pdf.cell(0, 6, f"CTI Bulletin — SOC-PFE-CTI — {now_str} — TLP:CLEAR", align="C")
+
+        pdf.output(output_path)
+        print(f"[STIXReporter] Bulletin PDF généré : {output_path}")
+        return output_path
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Export STIX 2.1 depuis correlated_events")

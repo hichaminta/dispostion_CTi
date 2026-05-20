@@ -23,6 +23,7 @@ function App() {
   const [selectedRunId, setSelectedRunId] = useState(null);
   const [view, setView] = useState('monitor');
   const [showSettings, setShowSettings] = useState(false);
+  const [selectedSourceId, setSelectedSourceId] = useState(null);
 
   if (!isAuthenticated) {
     return <Login onLogin={() => setIsAuthenticated(true)} />;
@@ -60,7 +61,12 @@ function App() {
                 {NAV_ITEMS.map(({ id, label, icon: Icon, accent }) => (
                   <button
                     key={id}
-                    onClick={() => setView(id)}
+                    onClick={() => {
+                      setView(id);
+                      if (id !== 'results') {
+                        setSelectedSourceId(null);
+                      }
+                    }}
                     className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 relative overflow-hidden group ${
                       view === id
                         ? 'text-white shadow-md'
@@ -100,9 +106,23 @@ function App() {
       {/* ── Page content (offset below fixed nav) ──────────────────── */}
       <div className="flex-1 pt-24">
         {selectedRunId ? (
-          <RunDetail runId={selectedRunId} onBack={() => setSelectedRunId(null)} />
+          <RunDetail 
+            runId={selectedRunId} 
+            onBack={() => setSelectedRunId(null)} 
+            onExploreSource={(sourceId) => {
+              setSelectedRunId(null);
+              setView('results');
+              setSelectedSourceId(sourceId);
+            }}
+          />
         ) : view === 'monitor' ? (
-          <Dashboard onSelectRun={(id) => setSelectedRunId(id)} />
+          <Dashboard 
+            onSelectRun={(id) => setSelectedRunId(id)} 
+            onExploreSource={(sourceId) => {
+              setView('results');
+              setSelectedSourceId(sourceId);
+            }}
+          />
         ) : view === 'events' ? (
           <CorrelatedEvents onBack={() => setView('monitor')} />
         ) : view === 'leaks' ? (
@@ -110,7 +130,10 @@ function App() {
         ) : view === 'csv_analyzer' ? (
           <CSVAnalyzer onBack={() => setView('monitor')} />
         ) : (
-          <Results onBack={() => setView('monitor')} />
+          <Results 
+            onBack={() => setView('monitor')} 
+            initialSourceId={selectedSourceId}
+          />
         )}
       </div>
     </div>

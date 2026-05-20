@@ -4,11 +4,40 @@ import logo from '../assets/logo.png';
 import {
   ChevronLeft, Terminal, BarChart3, CheckCircle2,
   XCircle, Loader2, Circle, Shield, Cpu, Database, Zap, Square,
-  Globe, Languages, ScanEye
+  Globe, Languages, ScanEye, Activity
 } from 'lucide-react';
 
 const API_BASE = `http://${window.location.hostname}:8000`;
 const WS_BASE  = `ws://${window.location.hostname}:8000/ws`;
+
+// ─── Liste complète des sources du pipeline ────────────────────────────────────
+const SOURCES_LIST = [
+  { id: 'alienvault',    name: 'AlienVault OTX',  color: 'purple' },
+  { id: 'cins_army',     name: 'CINS Army',        color: 'red'    },
+  { id: 'feodotracker',  name: 'FeodoTracker',     color: 'orange' },
+  { id: 'malwarebazaar', name: 'MalwareBazaar',    color: 'pink'   },
+  { id: 'nvd',           name: 'NVD',              color: 'yellow' },
+  { id: 'openphish',     name: 'OpenPhish',        color: 'cyan'   },
+  { id: 'phishtank',     name: 'PhishTank',        color: 'teal'   },
+  { id: 'pulsedive',     name: 'PulseDive',        color: 'indigo' },
+  { id: 'spamhaus',      name: 'Spamhaus',         color: 'green'  },
+  { id: 'threatfox',     name: 'ThreatFox',        color: 'rose'   },
+  { id: 'urlhaus',       name: 'URLhaus',          color: 'amber'  },
+  { id: 'dfir_report',   name: 'DFIR Report',      color: 'blue'   },
+];
+
+const SRC_LOGO = {
+  alienvault:    'https://www.alienvault.com/favicon.ico',
+  feodotracker:  'https://feodotracker.abuse.ch/favicon.ico',
+  malwarebazaar: 'https://malwarebazaar.abuse.ch/favicon.ico',
+  nvd:           'https://nvd.nist.gov/favicon.ico',
+  openphish:     'https://openphish.com/favicon.ico',
+  phishtank:     'https://www.phishtank.com/favicon_32x32.png',
+  pulsedive:     'https://pulsedive.com/favicon.ico',
+  spamhaus:      'https://www.spamhaus.org/favicon.ico',
+  threatfox:     'https://threatfox.abuse.ch/favicon.ico',
+  urlhaus:       'https://urlhaus.abuse.ch/favicon.ico',
+};
 
 // ─── Config étapes ────────────────────────────────────────────────────────────
 const PIPELINE_STEPS = [
@@ -51,14 +80,50 @@ const colorLine = (line) => {
 };
 
 // ─── Composant RunDetail ──────────────────────────────────────────────────────
-const RunDetail = ({ runId, onBack }) => {
-  const [run,        setRun]        = useState(null);
-  const [loading,    setLoading]    = useState(true);
-  const [stopping,   setStopping]   = useState(false);
-  const [activeStep, setActiveStep] = useState(null);
-  const [allLogs,    setAllLogs]    = useState([]); // [{step, line}]
+const RunDetail = ({ runId, onBack, onExploreSource }) => {
+  const [run,            setRun]            = useState(null);
+  const [loading,        setLoading]        = useState(true);
+  const [stopping,       setStopping]       = useState(false);
+  const [activeStep,     setActiveStep]     = useState(null);
+  const [allLogs,        setAllLogs]        = useState([]); // [{step, line}]
+  const [sourceStatuses, setSourceStatuses] = useState({}); // { sourceId: 'running'|'success'|'failed' }
   const logEndRef      = useRef(null);
   const externalRunRef = useRef(null); // UUID externe, utilisé pour filtrer les WS
+
+  // Helper: detect per-source status from a log line
+  const updateSourceFromLog = (line) => {
+    SOURCES_LIST.forEach(src => {
+      const nameLower = src.name.toLowerCase();
+      const lineLower = line.toLowerCase();
+      if (!lineLower.includes(nameLower) && !lineLower.includes(src.id)) return;
+      if (/collecte échouée|extraction échouée|✗|erreur|failed|error/i.test(line)) {
+        setSourceStatuses(prev => ({ ...prev, [src.id]: 'failed' }));
+      } else if (/collecte|extraction|enrichissement|── /i.test(line)) {
+        setSourceStatuses(prev => (prev[src.id] === 'success' || prev[src.id] === 'failed') ? prev : { ...prev, [src.id]: 'running' });
+      } else if (/✓|terminé|success/i.test(line)) {
+        setSourceStatuses(prev => ({ ...prev, [src.id]: 'success' }));
+      }
+    });
+  };
+
+  const getSourceIdByName = (name) => {
+    if (!name) return null;
+    const SOURCES_MAP = {
+      'alienvault otx': 'alienvault',
+      'cins army': 'cins_army',
+      'feodotracker': 'feodotracker',
+      'malwarebazaar': 'malwarebazaar',
+      'nvd': 'nvd',
+      'openphish': 'openphish',
+      'phishtank': 'phishtank',
+      'pulsedive': 'pulsedive',
+      'spamhaus': 'spamhaus',
+      'threatfox': 'threatfox',
+      'urlhaus': 'urlhaus',
+      'dfir report': 'dfir_report'
+    };
+    return SOURCES_MAP[name.toLowerCase()] || null;
+  };
 
   // Auto-scroll
   const scrollToBottom = useCallback(() => {
@@ -98,6 +163,27 @@ const RunDetail = ({ runId, onBack }) => {
         });
       });
       setAllLogs(logs);
+
+      // Rebuild source statuses from existing log history
+      const statuses = {};
+      logs.forEach(({ line }) => {
+        SOURCES_LIST.forEach(src => {
+          const ll = line.toLowerCase();
+          if (!ll.includes(src.name.toLowerCase()) && !ll.includes(src.id)) return;
+          if (/collecte échouée|extraction échouée|✗|erreur|failed|error/i.test(line)) {
+            statuses[src.id] = 'failed';
+          } else if (/✓|terminé|success/i.test(line)) {
+            if (statuses[src.id] !== 'failed') statuses[src.id] = 'success';
+          } else if (/collecte|extraction|enrichissement|── /i.test(line)) {
+            if (!statuses[src.id]) statuses[src.id] = 'running';
+          }
+        });
+      });
+      // If run is complete & success, all sources are done
+      if (data.status_global === 'success') {
+        SOURCES_LIST.forEach(s => { if (!statuses[s.id]) statuses[s.id] = 'success'; });
+      }
+      setSourceStatuses(statuses);
     } catch (e) {
       console.error(e);
     } finally {
@@ -118,6 +204,17 @@ const RunDetail = ({ runId, onBack }) => {
 
       if (data.type === "log") {
         setAllLogs(prev => [...prev, { step: data.step_name, line: data.line }]);
+        updateSourceFromLog(data.line);
+      } else if (data.type === "source_activity") {
+        if (data.active) {
+          setSourceStatuses(prev => ({ ...prev, [data.source_id]: 'running' }));
+        } else {
+          setSourceStatuses(prev =>
+            prev[data.source_id] === 'running'
+              ? { ...prev, [data.source_id]: 'success' }
+              : prev
+          );
+        }
       } else if (data.type === "step_update") {
         setRun(prev => {
           if (!prev) return prev;
@@ -128,9 +225,26 @@ const RunDetail = ({ runId, onBack }) => {
           );
           return { ...prev, steps: updatedSteps };
         });
+        // When a pipeline step finishes successfully, mark pending sources as done
+        if (data.status === 'success') {
+          setSourceStatuses(prev => {
+            const next = { ...prev };
+            SOURCES_LIST.forEach(src => {
+              if (!next[src.id]) next[src.id] = 'success';
+            });
+            return next;
+          });
+        }
       } else if (data.type === "run_complete") {
         setRun(prev => prev ? { ...prev, status_global: data.status } : prev);
-        fetchRun(); // Refresh final pour récupérer tous les logs
+        if (data.status === 'success') {
+          setSourceStatuses(() => {
+            const all = {};
+            SOURCES_LIST.forEach(s => { all[s.id] = 'success'; });
+            return all;
+          });
+        }
+        fetchRun();
       }
     };
 
@@ -175,7 +289,7 @@ const RunDetail = ({ runId, onBack }) => {
         </button>
 
         {/* Run title */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div className="flex flex-col items-start gap-2">
             <img src={logo} alt="BlueSec Logo" className="h-6 w-auto object-contain" />
             <div className="flex items-center gap-3">
@@ -185,6 +299,15 @@ const RunDetail = ({ runId, onBack }) => {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {run.source_name !== "Unified Extraction" && getSourceIdByName(run.source_name) && (
+              <button
+                onClick={() => onExploreSource(getSourceIdByName(run.source_name))}
+                className="flex items-center gap-2 bg-brand-500/15 hover:bg-brand-500 text-brand-400 hover:text-white border border-brand-500/30 px-4 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 shadow-lg shadow-brand-500/5"
+              >
+                <ScanEye className="w-4 h-4" />
+                <span>Explore Source</span>
+              </button>
+            )}
             {run.status_global === "running" && (
               <button
                 onClick={handleStop}
@@ -196,6 +319,80 @@ const RunDetail = ({ runId, onBack }) => {
               </button>
             )}
             <StatusBadge status={run.status_global} />
+          </div>
+        </div>
+
+        {/* ── Source Status Panel (visible when multiple sources are processed) ── */}
+        <div className="mb-6 bg-slate-900/50 rounded-2xl border border-white/5 p-4 backdrop-blur-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="w-4 h-4 text-brand-400" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Source Status</span>
+            <span className="ml-auto flex items-center gap-3 text-[9px] font-bold uppercase text-slate-600">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_#3b82f6]"/>Running</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"/>Success</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]"/>Failed</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-700"/>Pending</span>
+            </span>
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+            {SOURCES_LIST.map(src => {
+              const status = sourceStatuses[src.id];
+              const isRunning = status === 'running';
+              const isSuccess = status === 'success';
+              const isFailed  = status === 'failed';
+              return (
+                <div
+                  key={src.id}
+                  className={`relative flex flex-col items-center gap-2 p-3 rounded-xl border transition-all duration-500 ${
+                    isRunning ? 'bg-blue-500/10 border-blue-500/40 shadow-[0_0_20px_rgba(59,130,246,0.15)]' :
+                    isSuccess ? 'bg-emerald-500/10 border-emerald-500/30' :
+                    isFailed  ? 'bg-red-500/10 border-red-500/30' :
+                    'bg-white/[0.02] border-white/5 opacity-50'
+                  }`}
+                >
+                  {/* Status dot */}
+                  <div className={`absolute top-2 right-2 w-2 h-2 rounded-full transition-all duration-500 ${
+                    isRunning ? 'bg-blue-500 animate-pulse shadow-[0_0_8px_#3b82f6]' :
+                    isSuccess ? 'bg-emerald-500 shadow-[0_0_6px_#10b981]' :
+                    isFailed  ? 'bg-red-500 shadow-[0_0_6px_#ef4444]' :
+                    'bg-slate-700'
+                  }`} />
+
+                  {/* Logo or shield */}
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center border overflow-hidden ${
+                    isRunning ? 'bg-blue-500/20 border-blue-500/30' :
+                    isSuccess ? 'bg-emerald-500/10 border-emerald-500/20' :
+                    isFailed  ? 'bg-red-500/10 border-red-500/20' :
+                    'bg-slate-800 border-white/5'
+                  }`}>
+                    {SRC_LOGO[src.id] ? (
+                      <img
+                        src={SRC_LOGO[src.id]}
+                        alt={src.name}
+                        className="w-5 h-5 object-contain"
+                        onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
+                      />
+                    ) : null}
+                    <Database className={`w-4 h-4 ${SRC_LOGO[src.id] ? 'hidden' : 'flex'} ${
+                      isRunning ? 'text-blue-400' :
+                      isSuccess ? 'text-emerald-400' :
+                      isFailed  ? 'text-red-400' :
+                      'text-slate-600'
+                    }`} />
+                  </div>
+
+                  <span className={`text-[9px] font-bold text-center leading-tight transition-colors ${
+                    isRunning ? 'text-blue-300' :
+                    isSuccess ? 'text-emerald-300' :
+                    isFailed  ? 'text-red-300' :
+                    'text-slate-600'
+                  }`}>{src.name}</span>
+
+                  {/* Running scan beam */}
+                  {isRunning && <div className="absolute inset-0 rounded-xl scan-beam" />}
+                </div>
+              );
+            })}
           </div>
         </div>
 

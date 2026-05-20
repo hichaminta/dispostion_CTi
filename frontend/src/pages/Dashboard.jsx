@@ -23,7 +23,7 @@ const SOURCES = [
   { id: 'spamhaus',     name: 'Spamhaus',         type: 'Drop List',        color: 'green'  },
   { id: 'threatfox',    name: 'ThreatFox',        type: 'IOC Sharing',      color: 'rose'   },
   { id: 'urlhaus',      name: 'URLhaus',          type: 'Malicious URLs',   color: 'amber'  },
-
+  { id: 'dfir_report',  name: 'DFIR Report',      type: 'Threat Reports',   color: 'blue'   },
 ];
 
 const PIPELINE_PHASES = [
@@ -38,9 +38,6 @@ const PIPELINE_PHASES = [
 
   { id: 'classif',      label: 'CLASSIF', full: 'Classification',       icon: Sparkles },
   { id: 'mitre',        label: 'MITRE',full: 'MITRE Mapping',        icon: Shield },
-  { id: 'correlation',  label: 'CORR',  full: 'Corrélation SOC',      icon: Layers },
-  { id: 'stix',         label: 'STIX',  full: 'Export STIX',          icon: Share2 },
-  { id: 'misp',          label: 'MISP', full: 'Intégration MISP',     icon: Zap },
 ];
 
 const COLOR_CLASSES = {
@@ -66,7 +63,7 @@ const ArrowConnector = () => (
   </div>
 );
 
-const Dashboard = ({ onSelectRun }) => {
+const Dashboard = ({ onSelectRun, onExploreSource }) => {
   const [runs,           setRuns]           = useState([]);
   const [stats,          setStats]          = useState(null);
   const [loading,        setLoading]        = useState(true);
@@ -1086,6 +1083,7 @@ const Dashboard = ({ onSelectRun }) => {
                       onRun={() => startRun(source)}
                       onRunPhase={(phaseName) => startTargetedRun(source, phaseName)}
                       isStarting={isStarting}
+                      onExplore={() => onExploreSource(source.id)}
                     />
                   ))}
                 </tbody>
@@ -1267,21 +1265,41 @@ const PipelineStepper = ({ run, onStepClick, activeFilter }) => {
 };
 
 
-const SourceStatusRow = ({ source, runs, onRun, onRunPhase, isStarting }) => {
-  // Trouver le run le plus récent pour cette source
-  const latestRun = runs.find(r => 
-    r.source_name.toLowerCase().includes(source.name.toLowerCase()) || 
+const SourceStatusRow = ({ source, runs, onRun, onRunPhase, isStarting, onExplore }) => {
+  // Trouver le run le plus récent spécifique à cette source (pour le statut global)
+  const latestSourceRun = runs.find(r =>
+    r.source_name.toLowerCase().includes(source.name.toLowerCase()) ||
     (source.id === 'nvd' && r.source_name === 'NVD')
   );
 
+  // Construire un map des statuts de phase en parcourant TOUS les runs pertinents
+  // (spécifiques à la source ET runs globaux "Unified Extraction")
+  const phaseStatusMap = {};
+  const relevantRuns = runs.filter(r =>
+    r.source_name.toLowerCase().includes(source.name.toLowerCase()) ||
+    (source.id === 'nvd' && r.source_name === 'NVD') ||
+    r.source_name === 'Unified Extraction'
+  );
+
+  // Parcourir du plus ancien au plus récent pour que le plus récent écrase
+  [...relevantRuns].reverse().forEach(run => {
+    (run.steps || []).forEach(step => {
+      if (step.status && step.status !== 'pending') {
+        phaseStatusMap[step.step_name] = step.status;
+      }
+    });
+  });
+
   const getPhaseStatus = (phaseFull) => {
-    if (!latestRun) return 'pending';
-    const step = (latestRun.steps || []).find(s => s.step_name === phaseFull);
-    if (!step) return 'pending';
-    return step.status;
+    return phaseStatusMap[phaseFull] || 'pending';
   };
 
-  const isGlobalRunning = latestRun?.status_global === 'running';
+  // Le run actif : préférer le run spécifique, sinon le run global en cours
+  const activeGlobalRun = runs.find(r =>
+    r.status_global === 'running' && r.source_name === 'Unified Extraction'
+  );
+  const latestRun = latestSourceRun || activeGlobalRun || null;
+  const isGlobalRunning = latestRun?.status_global === 'running' || !!activeGlobalRun;
 
   return (
     <tr className={`group transition-all duration-300 ${isGlobalRunning ? 'bg-brand-500/5 shadow-[inset_0_0_20px_rgba(14,165,233,0.05)]' : 'hover:bg-white/[0.02]'}`}>
@@ -1355,6 +1373,13 @@ const SourceStatusRow = ({ source, runs, onRun, onRunPhase, isStarting }) => {
               Last: {latestRun.run_id.split('-')[0]}
             </span>
           )}
+          <button
+            onClick={onExplore}
+            className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/5 hover:border-white/10 shadow-lg"
+          >
+            <ScanEye size={12} className="text-brand-400" />
+            <span>Explore</span>
+          </button>
           <button
             onClick={onRun}
             disabled={isGlobalRunning || isStarting}

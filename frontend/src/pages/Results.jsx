@@ -21,7 +21,8 @@ const SOURCE_LOGOS = {
   'OpenPhish': 'https://openphish.com/favicon.ico',
   'NVD': 'https://nvd.nist.gov/favicon.ico',
   'PulseDive': 'https://pulsedive.com/favicon.ico',
-  'FeodoTracker': 'https://feodotracker.abuse.ch/favicon.ico'
+  'FeodoTracker': 'https://feodotracker.abuse.ch/favicon.ico',
+  'DFIR Report': 'https://thedfirreport.com/favicon.ico'
 };
 
 const COUNTRY_CODE_TO_NAME = {
@@ -43,10 +44,10 @@ const COUNTRY_CODE_TO_NAME = {
   'uz': 'Uzbekistan', 'vu': 'Vanuatu', 've': 'Venezuela', 'vn': 'Vietnam', 'ye': 'Yemen', 'zm': 'Zambia', 'zw': 'Zimbabwe'
 };
 
-const Results = ({ onBack }) => {
+const Results = ({ onBack, initialSourceId }) => {
   const [viewMode, setViewMode] = useState('extracted');
   const [sources, setSources] = useState([]);
-  const [currentSource, setCurrentSource] = useState(null);
+  const [currentSource, setCurrentSource] = useState(initialSourceId);
   const [data, setData] = useState([]);
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -117,6 +118,12 @@ const Results = ({ onBack }) => {
   useEffect(() => {
     fetchCountryStats();
   }, []);
+
+  useEffect(() => {
+    if (initialSourceId) {
+      setCurrentSource(initialSourceId);
+    }
+  }, [initialSourceId]);
 
   const getSourceLogo = (name) => {
     if (!name) return null;

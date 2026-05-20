@@ -60,6 +60,15 @@ def map_record(record):
     # Malware Family
     search_text.append(record.get("attributes", {}).get("malware_family", ""))
     
+    # NLP Analysis Context
+    nlp_ctx = record.get("attributes", {}).get("nlp_analysis", {})
+    if isinstance(nlp_ctx, dict):
+        for k, v in nlp_ctx.items():
+            if isinstance(v, list):
+                search_text.extend(v)
+            elif isinstance(v, str):
+                search_text.append(v)
+
     # 2. Enrich from IOC-specific data
     for ioc in record.get("iocs", []):
         enrichment = ioc.get("ioc_enrichment", {})
@@ -67,6 +76,8 @@ def map_record(record):
         search_text.append(enrichment.get("threat_type", ""))
         search_text.append(enrichment.get("malware_family", ""))
         search_text.extend(enrichment.get("vt_tags", []))
+        if ioc.get("file"):
+            search_text.append(ioc.get("file"))
     
     # Normalize text
     full_text = " ".join([str(t) for t in search_text if t]).lower()

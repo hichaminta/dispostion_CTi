@@ -21,6 +21,7 @@ class RiskScorer:
         "nvd": 100, "nVd": 100,
         "spamhaus": 95, "malwarebazaar community api": 95,
         "threatfox": 90, "feodotracker": 90,
+        "dfir report": 88,             # Articles rédigés par experts DFIR, IOCs validés
         "abuseipdb": 85, "urlhaus": 80,
         "otx alienvault": 75, "cins army": 75,
         "phishtank": 70, "openphish": 70, "pulsedive": 70,
@@ -225,6 +226,7 @@ class EventNameExtractor:
     NARRATIVE_SOURCES = {
         "otx alienvault", "alienvault", "otx",
         "pulsedive",      # parfois
+        "dfir report",    # articles avec titre + NLP analysis complet
     }
 
     # Patterns regex ordonnés par fiabilité
@@ -484,15 +486,58 @@ class ThreatCorrelator:
             group_id   = None
             event_meta = {"name": "", "type": "", "threat_type": ""}
 
+            # 0. DFIR Report — traitement prioritaire (NLP actor > malware_family > CVE > title)
+            if source.lower() == "dfir report":
+                nlp = attributes.get("nlp_analysis", {})
+                actors = nlp.get("actor", [])
+
+                if actors:
+                    # Grouper par acteur principal détecté par NLP
+                    actor_slug = re.sub(r'[^A-Z0-9]', '-', actors[0].upper())
+                    group_id = f"DFIR-{actor_slug}"
+                    event_meta = {
+                        "name":        f"DFIR Report — {actors[0]} Campaign",
+                        "type":        "malware",
+                        "threat_type": "threat_report",
+                    }
+                elif malware_family:
+                    # Famille connue mais pas d'acteur NLP explicite
+                    group_id = f"DFIR-MAL-{malware_family.upper()}"
+                    event_meta = {
+                        "name":        f"DFIR Report — {malware_family} Incident",
+                        "type":        "malware",
+                        "threat_type": "threat_report",
+                    }
+                elif cves:
+                    # Article de vulnérabilité (dfir_report_vuln_enriched)
+                    cve_obj = cves[0]
+                    cve_id  = cve_obj if isinstance(cve_obj, str) else cve_obj.get("id", "UNKNOWN")
+                    group_id = f"DFIR-{cve_id.upper()}"
+                    event_meta = {
+                        "name":        f"DFIR Report — {cve_id} Exploitation",
+                        "type":        "vulnerability",
+                        "threat_type": "exploit",
+                    }
+                else:
+                    # Fallback : slug du titre de l'article
+                    title = record.get("description", record.get("record_id", "UNKNOWN"))
+                    title_slug = re.sub(r'[^A-Z0-9]', '-', title.upper())[:40].strip('-')
+                    group_id = f"DFIR-{title_slug}"
+                    event_meta = {
+                        "name":        f"DFIR Report — {title[:60]}",
+                        "type":        "suspicious",
+                        "threat_type": "threat_report",
+                    }
+
             # 1. CVE
-            if cves:
+            elif cves:
                 cve_obj = cves[0]
                 cve_id  = cve_obj if isinstance(cve_obj, str) else cve_obj.get('id', 'UNKNOWN')
                 group_id   = cve_id.upper() # cve_id already contains "CVE-"
                 event_meta = {"name": f"Vulnerability - {cve_id}", "type": "vulnerability", "threat_type": "exploit"}
 
             # 2. Malware with Known Family (Priority over generic sample)
-            elif malware_family:
+            elif malware_family and source.lower() != "dfir report":
                 group_id   = f"MAL-{malware_family.upper()}"
                 event_meta = {"name": f"Malware - {malware_family}", "type": "malware", "threat_type": "payload_delivery"}
 
@@ -591,6 +636,25 @@ class ThreatCorrelator:
                             self.events[group_id]["tags"].add("recent_threat")
                     except:
                         pass
+
+                # ── Contexte NLP spécifique DFIR Report ──────────────────
+                if source.lower() == "dfir report":
+                    nlp_ctx = attributes.get("nlp_analysis", {})
+                    ev["threat_actors"]    = nlp_ctx.get("actor", [])
+                    ev["targeted_sectors"] = nlp_ctx.get("victim", [])
+                    ev["dfir_commands"]    = nlp_ctx.get("command", [])
+                    ev["article_reference"] = (
+                        record.get("references", [""])[0]
+                        if record.get("references") else ""
+                    )
+                    # Tags : acteurs et commandes détectés
+                    for actor in nlp_ctx.get("actor", []):
+                        self.events[group_id]["tags"].add(f"actor:{actor.lower()}")
+                    for cmd in nlp_ctx.get("command", [])[:5]:
+                        self.events[group_id]["tags"].add(f"cmd:{cmd.lower()}")
+                    for sector in nlp_ctx.get("victim", [])[:3]:
+                        self.events[group_id]["tags"].add(f"target:{sector.lower()}")
+                    self.events[group_id]["tags"].add("dfir-report")
 
             ev = self.events[group_id]
             ev["last_seen"] = max(ev["last_seen"], collected_at)

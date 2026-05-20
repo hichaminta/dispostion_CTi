@@ -28,12 +28,18 @@ def load_tracking() -> dict:
                 return json.load(f)
         except Exception:
             pass
-    return {"collected_ids": []}
+    return {
+        "earliest_modified": None,
+        "latest_modified": None,
+        "last_sync_success": None,
+        "last_sync_attempt": None,
+        "last_run": None
+    }
 
 
 def save_tracking(data: dict):
     with open(TRACKING, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 
 # ─────────────────────────────────────────────
@@ -166,37 +172,113 @@ def _extract_ioc_section(html_content: str) -> str:
 # Main
 # ─────────────────────────────────────────────
 
+def fetch_full_article_content(url: str) -> str:
+    """Télécharge l'article complet et extrait le bloc entry-content."""
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        resp = requests.get(url, headers=headers, timeout=20)
+        resp.raise_for_status()
+        html = resp.text
+        
+        # Trouver la div entry-content
+        import re
+        start_match = re.search(r'<div[^>]*class=["\'][^"\']*entry-content[^"\']*["\'][^>]*>', html)
+        if start_match:
+            start_idx = start_match.end()
+            chunk = html[start_idx:start_idx+150000]
+            depth = 1
+            pos = 0
+            while depth > 0 and pos < len(chunk):
+                next_div = chunk.find("<div", pos)
+                next_close = chunk.find("</div", pos)
+                if next_close == -1:
+                    break
+                if next_div != -1 and next_div < next_close:
+                    depth += 1
+                    pos = next_div + 4
+                else:
+                    depth -= 1
+                    pos = next_close + 5
+            
+            entry_html = chunk[:pos] if pos > 0 else chunk
+            return entry_html
+    except Exception as e:
+        log.error(f"Erreur téléchargement article complet ({url}) : {e}")
+    return ""
+
+
 def run():
     log.info("=== DFIR Report Collector ===")
     tracking   = load_tracking()
-    seen_ids   = set(tracking.get("collected_ids", []))
+    # Remove collected_ids if present from old tracking to clean up
+    tracking.pop("collected_ids", None)
+
     existing   = load_existing()
     existing_map = {r["id"]: r for r in existing}
+    seen_ids   = set(existing_map.keys())
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    tracking["last_sync_attempt"] = now_iso
+    tracking["last_run"] = now_iso
 
     articles = fetch_rss()
     if not articles:
         log.warning("Aucun article récupéré depuis le flux RSS.")
+        save_tracking(tracking)
         return
 
     new_count = 0
+    updated_count = 0
     for art in articles[:MAX_ARTICLES]:
-        if art["id"] in seen_ids:
+        is_already_collected = art["id"] in seen_ids
+        existing_art = existing_map.get(art["id"]) if is_already_collected else None
+        
+        # Check if we need to fetch/update the full content
+        needs_full_content = (
+            not existing_art 
+            or not existing_art.get("content") 
+            or len(existing_art.get("content", "")) < 1000
+        )
+
+        if is_already_collected and not needs_full_content:
             log.info(f"  [SKIP] Déjà collecté : {art['title'][:60]}")
             continue
 
+        # Fetch the full HTML page content to extract real IOCs
+        log.info(f"  [FETCH] Téléchargement de l'article complet : {art['title'][:60]}")
+        full_content = fetch_full_article_content(art["link"])
+        if full_content:
+            art["content"] = full_content
+            art["ioc_section"] = _extract_ioc_section(full_content)
+
         existing_map[art["id"]] = art
         seen_ids.add(art["id"])
-        new_count += 1
-        log.info(f"  [NEW]  {art['title'][:60]}")
+        
+        if is_already_collected:
+            updated_count += 1
+            log.info(f"  [UPDATE] {art['title'][:60]}")
+        else:
+            new_count += 1
+            log.info(f"  [NEW]  {art['title'][:60]}")
 
-    if new_count > 0:
+    # Calculate min/max published dates
+    all_published_dates = [r.get("published") for r in existing_map.values() if r.get("published")]
+    if all_published_dates:
+        tracking["earliest_modified"] = min(all_published_dates)
+        tracking["latest_modified"] = max(all_published_dates)
+
+    tracking["last_sync_success"] = now_iso
+
+    if new_count > 0 or updated_count > 0:
         records = list(existing_map.values())
         save_data(records)
-        tracking["collected_ids"] = sorted(seen_ids)
         save_tracking(tracking)
-        log.info(f"Sauvegarde : {len(records)} articles total, {new_count} nouveaux.")
+        log.info(f"Sauvegarde : {len(records)} articles total, {new_count} nouveaux, {updated_count} mis à jour.")
     else:
-        log.info("Aucun nouvel article.")
+        save_tracking(tracking)
+        log.info("Aucun nouvel article ou mise à jour.")
 
     log.info("=== Collecte terminée ===")
 

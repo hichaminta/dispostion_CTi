@@ -112,7 +112,7 @@ class VirusTotalEnricher:
                 return self._extract_stats(r.json().get("data", {}).get("attributes", {}))
             elif r.status_code == 404:
                 # Submit for scanning then return None (result available next run)
-                logger.info(f"  [API-URL] {url[:40]}… not in VT yet, submitting for scan.")
+                logger.info(f"  [API-URL] {url[:40]}... not in VT yet, submitting for scan.")
                 requests.post(f"{VT_API_BASE}/urls", headers=self._headers(),
                               data={"url": url}, timeout=15)
             else:
@@ -144,7 +144,7 @@ class VirusTotalEnricher:
             if r.status_code == 200:
                 return self._extract_stats(r.json().get("data", {}).get("attributes", {}))
             else:
-                logger.warning(f"  [API-HASH] HTTP {r.status_code} for {file_hash[:20]}…")
+                logger.warning(f"  [API-HASH] HTTP {r.status_code} for {file_hash[:20]}...")
         except Exception as e:
             logger.error(f"  [API-HASH] Error: {e}")
         return None

@@ -13,6 +13,13 @@ def run_enrichment():
     urlscan_script = os.path.join(base_dir, "enrichment_url", "enrichir_exclusive_urlscan.py")
     fallback_script = os.path.join(base_dir, "enrichment_url", "enrichir_fallback.py")
 
+    logger.info("### PLATFORM STATUS: INITIALIZING ENRICHMENT FILES ###")
+    init_script = os.path.join(base_dir, "initialize_enrichment.py")
+    try:
+        subprocess.run([sys.executable, init_script], check=False)
+    except Exception as e:
+        logger.error(f"  [ERROR] Failed to run initialization script: {e}")
+
     logger.info("### PLATFORM STATUS: STARTING ENRICHMENT PIPELINE (GEO -> URLSCAN -> FALLBACK) ###")
 
     # ─── STAGE 1: ABUSEIPDB DYNAMIC ENRICHMENT (Local DB + API) ───
@@ -90,22 +97,31 @@ def run_enrichment():
     else:
         logger.warning("[STAGE 5] Consolidated CVE script NOT FOUND. Skipping.")
 
-    # ─── STAGE 6: CLASSIFICATION & SCORING ─── [DÉSACTIVÉ TEMPORAIREMENT]
-    # NOTE: Désactivé en attendant l'analyse de la structure des données enrichies.
-    # Réactiver une fois la logique de classification/scoring/confiance définie.
-    # classification_script = os.path.join(base_dir, "classification", "enrichir.py")
-    # if os.path.exists(classification_script):
-    #     logger.info("[STAGE 6/7] Intelligence Classification & Scoring...")
-    #     subprocess.run([sys.executable, classification_script, "--skip-enriched"], check=False)
-    logger.info("[STAGE 6] Classification SKIPPED (disabled — pending data analysis).")
+    # ─── STAGE 6: CLASSIFICATION & SCORING ───
+    classification_script = os.path.join(base_dir, "classification", "enrichir.py")
+    if os.path.exists(classification_script):
+        logger.info("──────────────────────────────────────────")
+        logger.info("[STAGE 6/7] Intelligence Classification & Scoring...")
+        logger.info("──────────────────────────────────────────")
+        try:
+            subprocess.run([sys.executable, classification_script, "--skip-enriched"], check=False)
+        except Exception as e:
+            logger.error(f"  [ERROR] Failed to run classification stage: {e}")
+    else:
+        logger.warning("[STAGE 6] Classification script NOT FOUND. Skipping.")
 
-    # ─── STAGE 7: MITRE ATT&CK MAPPING ─── [DÉSACTIVÉ TEMPORAIREMENT]
-    # NOTE: Désactivé en même temps que la Classification.
-    # mitre_script = os.path.join(base_dir, "mitre_attack", "mitre_mapper.py")
-    # if os.path.exists(mitre_script):
-    #     logger.info("[STAGE 7/7] MITRE ATT&CK Mapping...")
-    #     subprocess.run([sys.executable, mitre_script, "--skip-mapped"], check=False)
-    logger.info("[STAGE 7] MITRE Mapping SKIPPED (disabled — pending data analysis).")
+    # ─── STAGE 7: MITRE ATT&CK MAPPING ───
+    mitre_script = os.path.join(base_dir, "classification", "mitre_mapper.py")
+    if os.path.exists(mitre_script):
+        logger.info("──────────────────────────────────────────")
+        logger.info("[STAGE 7/7] MITRE ATT&CK Mapping...")
+        logger.info("──────────────────────────────────────────")
+        try:
+            subprocess.run([sys.executable, mitre_script, "--skip-mapped"], check=False)
+        except Exception as e:
+            logger.error(f"  [ERROR] Failed to run MITRE mapping stage: {e}")
+    else:
+        logger.warning("[STAGE 7] MITRE mapping script NOT FOUND. Skipping.")
 
     logger.info("==========================================")
     logger.info("ENRICHMENT PIPELINE COMPLETED.")

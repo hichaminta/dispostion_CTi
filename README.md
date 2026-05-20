@@ -18,12 +18,15 @@ Le tout est piloté par un **Dashboard SOC Interactif** au design moderne et fut
 
 La plateforme repose sur une architecture modulaire et asynchrone, conçue pour minimiser la dépendance aux APIs tierces payantes et maximiser la vitesse d'exécution :
 
+![Schéma d'Architecture Global](architecture/arche/cti_final_schema.png)
+
 ```mermaid
 flowchart TD
     %% Ingest Stage
     subgraph Sources ["📡 Sources d'Ingestion"]
         direction LR
-        Feeds["Flux Publics CTI\n(AlienVault, AbuseIPDB,\nMalwareBazaar, etc.)"]
+        Feeds["Flux Publics CTI\n(AlienVault, ThreatFox,\nMalwareBazaar, etc.)"]
+        DFIR["Rapports DFIR\n(The DFIR Report)"]
         TG["Canaux Telegram\n(Groupes Hackers,\nDarknet Leaks)"]
     end
 
@@ -53,6 +56,7 @@ flowchart TD
 
     %% Links
     Feeds --> Collecte
+    DFIR --> Collecte
     TG --> Collector
     Collector --> Correlator
     Correlator --> Reporter

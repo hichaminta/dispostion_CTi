@@ -82,6 +82,7 @@ SOURCE_MAP = {
     "Spamhaus":        {"id": "spamhaus",      "folder": "Spamhaus",                     "extractor": "spamhaus_extractor.py",       "output": "spamhaus_extracted.json"},
     "ThreatFox":       {"id": "threatfox",     "folder": "ThreatFox",                    "extractor": "threatfox_extractor.py",      "output": "threatfox_extracted.json"},
     "URLhaus":         {"id": "urlhaus",       "folder": "url",                          "extractor": "urlhaus_extractor.py",        "output": "urlhaus_extracted.json"},
+    "DFIR Report":     {"id": "dfir_report",   "folder": "The DFIR Report",              "extractor": "dfir_report_extractor.py",    "output": "dfir_report_extracted.json"},
 }
 
 
@@ -378,6 +379,11 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         # ══════════════════════════════════════════════════════════════
         source_flag = ["-s", source_name] if not is_unified else []
 
+        # Initialisation des fichiers d'enrichissement (copie/split)
+        await _ws_log(run_id, "Geolocalisation", f"[{ts()}] ➔ Initialisation des fichiers d'enrichissement...")
+        init_script = os.path.join(PROJECT_ROOT, "enrichment", "initialize_enrichment.py")
+        await _run_proc(run_id, "Geolocalisation", [sys.executable, init_script] + source_flag, PROJECT_ROOT)
+
         # Geolocation
         if _is_run_cancelled(run_id): return
         await _update_step(run_id, "Geolocalisation", "running")
@@ -481,6 +487,17 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
         cve_count = 0
         source_flag = ["-s", source_name] if source_name and source_name != "Unified Extraction" else []
 
+        # Auto-initialize enrichment files if executing an enrichment step
+        enrichment_steps = {
+            "Enrichissement", "AbuseIPDB Enrichment", "VirusTotal Enrichment",
+            "Enrichissement CVE", "Analyse NLP CVE", "Geolocalisation",
+            "URLScan", "Fallback", "URLScan_Only"
+        }
+        if step_name in enrichment_steps:
+            await _ws_log(run_id, step_name, f"[{ts()}] ➔ Initialisation des fichiers d'enrichissement...")
+            init_script = os.path.join(PROJECT_ROOT, "enrichment", "initialize_enrichment.py")
+            await _run_proc(run_id, step_name, [sys.executable, init_script] + source_flag, PROJECT_ROOT)
+
         if step_name == "Collecte":
             if is_unified:
                 await _ws_log(run_id, step_name, f"[{ts()}] ➔ Orchestrateur Global : run_collection_all.py")
@@ -557,6 +574,18 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
                 ok8 = await _run_proc(run_id, step_name, [sys.executable, mitre_script] + source_flag + ["--skip-mapped"], PROJECT_ROOT)
 
                 step_ok = ok2 and ok3 and ok4 and ok_cve and ok7 and ok8
+
+        elif step_name == "AbuseIPDB Enrichment":
+            await _ws_log(run_id, step_name, f"[{ts()}] ➔ AbuseIPDB Enrichment Pipeline")
+            abuseipdb_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_ip", "enrichir_abuseipdb.py")
+            step_ok = await _run_proc(run_id, step_name, [sys.executable, abuseipdb_script] + source_flag, PROJECT_ROOT)
+            ioc_count, cve_count = _count_ioc_cve(source_name)
+
+        elif step_name == "VirusTotal Enrichment":
+            await _ws_log(run_id, step_name, f"[{ts()}] ➔ VirusTotal Enrichment Pipeline")
+            virustotal_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_vt", "enrichir_virustotal.py")
+            step_ok = await _run_proc(run_id, step_name, [sys.executable, virustotal_script] + source_flag, PROJECT_ROOT)
+            ioc_count, cve_count = _count_ioc_cve(source_name)
 
         elif step_name == "Enrichissement CVE":
             await _ws_log(run_id, step_name, f"[{ts()}] ➔ CVE Enrichment Pipeline (NVD + NLP)")
