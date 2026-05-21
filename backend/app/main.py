@@ -491,7 +491,15 @@ def get_mitre_data(source_id: str, page: int = 1, limit: int = 50, search: str =
 
 @app.get("/api/correlated/data")
 def get_correlated_data(page: int = 1, limit: int = 50, search: str = None, priority: str = None):
-    filepath = os.path.join(CORRELATION_DIR, "correlated_events_soc_enriched.json")
+    try:
+        files = [f for f in os.listdir(CORRELATION_DIR) if f.startswith("correlation_file_") and f.endswith(".json")]
+        if not files:
+            filepath = os.path.join(CORRELATION_DIR, "correlated_events_soc_enriched.json")
+        else:
+            filepath = max([os.path.join(CORRELATION_DIR, f) for f in files], key=os.path.getmtime)
+    except Exception:
+        filepath = os.path.join(CORRELATION_DIR, "correlated_events_soc_enriched.json")
+
     if not os.path.exists(filepath):
         return {"data": [], "total": 0, "page": page, "limit": limit}
 
@@ -737,7 +745,52 @@ async def save_integration_settings(body: dict):
 # SCHEDULER ENDPOINTS (MULTIPLE)
 # ──────────────────────────────────────────────────────────────────────────────
 
+SCHEDULES_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "schedules.json"))
 schedules_db = {}
+# Format: { "id": { "id", "source_name", "step_name", "interval_minutes", "active", "next_run", "task" } }
+
+def load_schedules():
+    global schedules_db
+    if os.path.exists(SCHEDULES_FILE):
+        try:
+            with open(SCHEDULES_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for sid, j in data.items():
+                schedules_db[sid] = {
+                    "id": j["id"],
+                    "source_name": j["source_name"],
+                    "step_name": j["step_name"],
+                    "interval_minutes": j["interval_minutes"],
+                    "active": j["active"],
+                    # Au démarrage, le "next_run" est calculé à partir de maintenant + interval, comme demandé
+                    "next_run": datetime.now() + timedelta(minutes=j["interval_minutes"]) if j["active"] else None,
+                    "task": None
+                }
+        except Exception as e:
+            logger.error(f"Error loading schedules: {e}")
+
+def save_schedules():
+    data = {}
+    for sid, j in schedules_db.items():
+        data[sid] = {
+            "id": j["id"],
+            "source_name": j["source_name"],
+            "step_name": j["step_name"],
+            "interval_minutes": j["interval_minutes"],
+            "active": j["active"]
+        }
+    try:
+        with open(SCHEDULES_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+    except Exception as e:
+        logger.error(f"Error saving schedules: {e}")
+
+@app.on_event("startup")
+async def startup_event():
+    load_schedules()
+    for sid, job in schedules_db.items():
+        if job["active"]:
+            job["task"] = asyncio.create_task(scheduler_job_loop(sid))
 # Format: { "id": { "id", "source_name", "step_name", "interval_minutes", "active", "next_run", "task" } }
 
 async def scheduler_job_loop(schedule_id: str):
@@ -825,6 +878,7 @@ async def create_schedule(req: ScheduleCreateRequest):
         "task": None
     }
     schedules_db[sid]["task"] = asyncio.create_task(scheduler_job_loop(sid))
+    save_schedules()
     return {"status": "success", "id": sid, "message": "Planification créée et démarrée"}
 
 @app.put("/api/schedules/{schedule_id}")
@@ -840,6 +894,7 @@ async def update_schedule(schedule_id: str, req: ScheduleUpdateRequest):
         job["next_run"] = datetime.now()
         if job["task"] is None or job["task"].done():
             job["task"] = asyncio.create_task(scheduler_job_loop(schedule_id))
+        save_schedules()
         return {"status": "success", "message": "Planification démarrée"}
     
     elif req.action == "stop":
@@ -848,6 +903,7 @@ async def update_schedule(schedule_id: str, req: ScheduleUpdateRequest):
         if job["task"] and not job["task"].done():
             job["task"].cancel()
         job["task"] = None
+        save_schedules()
         return {"status": "success", "message": "Planification arrêtée"}
     
     raise HTTPException(status_code=400, detail="Action invalide")
@@ -862,6 +918,7 @@ async def delete_schedule(schedule_id: str):
     if job["task"] and not job["task"].done():
         job["task"].cancel()
     del schedules_db[schedule_id]
+    save_schedules()
     return {"status": "success", "message": "Planification supprimée"}
 
 # Keep legacy endpoint for compatibility with Dashboard.jsx if needed (until updated)
@@ -894,6 +951,7 @@ async def manage_schedule_legacy(req: ScheduleUpdateRequest):
         
         if schedules_db[sid]["task"] is None or schedules_db[sid]["task"].done():
             schedules_db[sid]["task"] = asyncio.create_task(scheduler_job_loop(sid))
+        save_schedules()
         return {"status": "success"}
     elif req.action == "stop":
         sid = "legacy_global"
@@ -902,6 +960,7 @@ async def manage_schedule_legacy(req: ScheduleUpdateRequest):
             schedules_db[sid]["next_run"] = None
             if schedules_db[sid]["task"] and not schedules_db[sid]["task"].done():
                 schedules_db[sid]["task"].cancel()
+            save_schedules()
         return {"status": "success"}
 
 @app.delete("/runs")
@@ -932,7 +991,16 @@ async def get_stix_data():
     """
     Retourne le contenu du bundle STIX exporté.
     """
-    stix_path = os.path.join(os.path.dirname(__file__), "..", "..", "output_correlation", "stix_export.json")
+    out_dir = os.path.join(os.path.dirname(__file__), "..", "..", "output_correlation")
+    try:
+        files = [f for f in os.listdir(out_dir) if f.startswith("stix_export_") and f.endswith(".json")]
+        if not files:
+            stix_path = os.path.join(out_dir, "stix_export.json")
+        else:
+            stix_path = max([os.path.join(out_dir, f) for f in files], key=os.path.getmtime)
+    except Exception:
+        stix_path = os.path.join(out_dir, "stix_export.json")
+
     if not os.path.exists(stix_path):
         return {"objects": [], "type": "bundle"}
     try:

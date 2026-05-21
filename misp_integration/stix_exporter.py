@@ -9,8 +9,6 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8')
 
 BASE_DIR    = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-INPUT_FILE  = os.path.join(BASE_DIR, "output_correlation", "correlated_events_soc_enriched.json")
-OUTPUT_FILE = os.path.join(BASE_DIR, "output_correlation", "stix_export.json")
 
 # ─────────────────────────────────────────────────────────
 #  Mappages
@@ -204,9 +202,32 @@ class STIXExporter:
         self.identity_id = f"identity--{uuid.uuid4()}"
         self.objects      = []
         self._now_str     = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        self.tracking_file = os.path.join(BASE_DIR, "misp_integration", "stix_tracking.json")
         self._add_identity()
 
     # ── Helpers ─────────────────────────────────────────
+    def _get_latest_correlation_file(self):
+        dir_path = os.path.join(BASE_DIR, "output_correlation")
+        if not os.path.exists(dir_path):
+            return None
+        files = [f for f in os.listdir(dir_path) if f.startswith("correlation_file_") and f.endswith(".json")]
+        if not files:
+            fallback = os.path.join(dir_path, "correlated_events_soc_enriched.json")
+            return fallback if os.path.exists(fallback) else None
+        return max([os.path.join(dir_path, f) for f in files], key=os.path.getmtime)
+
+    def _load_tracking(self):
+        if os.path.exists(self.tracking_file):
+            try:
+                with open(self.tracking_file, "r") as f:
+                    return json.load(f)
+            except Exception:
+                return {}
+        return {}
+
+    def _save_tracking(self, tracking_data):
+        with open(self.tracking_file, "w") as f:
+            json.dump(tracking_data, f, indent=4)
     def _ts(self, iso_str=None):
         if iso_str:
             try:
@@ -658,18 +679,29 @@ class STIXExporter:
             self.objects.append(report)
 
     def export(self, input_file=None, output_file=None):
-        src = input_file or INPUT_FILE
-        dst = output_file or OUTPUT_FILE
-
-        if not os.path.exists(src):
-            print(f"Erreur : {src} introuvable.")
+        src = input_file or self._get_latest_correlation_file()
+        if not src or not os.path.exists(src):
+            print(f"Erreur : fichier source introuvable ({src}).")
             return False
+
+        filename = os.path.basename(src)
+        tracking_data = self._load_tracking()
+
+        if filename in tracking_data:
+            print(f"Le fichier {filename} a déjà été traité le {tracking_data[filename]}. Ignore.")
+            return True
 
         with open(src, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         print(f"Conversion de {len(data)} evenements -> STIX 2.1 ...")
         self.convert_all(data)
+
+        if not output_file:
+            timestamp = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+            dst = os.path.join(BASE_DIR, "output_correlation", f"stix_export_{timestamp}.json")
+        else:
+            dst = output_file
 
         bundle = {
             "type":    "bundle",
@@ -692,6 +724,10 @@ class STIXExporter:
         print(f"Total objets : {len(self.objects)}")
         for t, n in sorted(types.items()):
             print(f"  {t:<22} : {n}")
+            
+        tracking_data[filename] = datetime.now().isoformat()
+        self._save_tracking(tracking_data)
+
         return True
 
 

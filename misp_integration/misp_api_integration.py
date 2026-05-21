@@ -40,6 +40,21 @@ class MISPClient:
                 logger.error(f"Erreur de connexion à MISP : {e}")
                 self.misp = None
 
+        self.tracking_file = os.path.join(BASE_DIR, "misp_integration", "misp_tracking.json")
+
+    def _load_tracking(self):
+        if os.path.exists(self.tracking_file):
+            try:
+                with open(self.tracking_file, "r") as f:
+                    return json.load(f)
+            except Exception:
+                return {}
+        return {}
+
+    def _save_tracking(self, tracking_data):
+        with open(self.tracking_file, "w") as f:
+            json.dump(tracking_data, f, indent=4)
+
     # ------------------------------------------------------------------
     # Mappage SOC -> MISP
     # ------------------------------------------------------------------
@@ -414,23 +429,48 @@ class MISPClient:
 
     def push_all(self, source_filter=None):
         """
-        Synchronise uniquement le bundle STIX 2.1 vers MISP.
-        Le fichier stix_export.json est désormais le seul canal d'intégration.
+        Synchronise les fichiers de corrélation SOC vers MISP.
+        Cherche tous les fichiers correlation_file_*.json et les importe s'ils ne l'ont pas encore été.
         """
         corr_dir = os.path.join(BASE_DIR, "output_correlation")
-        stix_file = os.path.join(corr_dir, "stix_export.json")
+        if not os.path.exists(corr_dir):
+            logger.error(f"Dossier introuvable : {corr_dir}")
+            return
 
-        if os.path.exists(stix_file):
-            logger.info(f"Fichier STIX détecté : {stix_file}")
-            logger.info("Début de l'importation du bundle STIX vers MISP...")
-            success = self.push_stix_bundle(stix_file)
-            if success:
-                logger.info("Intégration STIX terminée avec succès.")
+        tracking_data = self._load_tracking()
+        
+        corr_files = [f for f in os.listdir(corr_dir) if f.startswith("correlation_file_") and f.endswith(".json")]
+        
+        if not corr_files:
+            if os.path.exists(os.path.join(corr_dir, "correlated_events_soc_enriched.json")):
+                corr_files = ["correlated_events_soc_enriched.json"]
             else:
-                logger.error("L'intégration STIX a échoué.")
-        else:
-            logger.error(f"Fichier STIX introuvable : {stix_file}")
-            logger.info("Assurez-vous d'avoir exécuté stix_exporter.py d'abord.")
+                logger.info("Aucun fichier de corrélation à importer. Assurez-vous d'avoir exécuté correlation_pre_misp.py d'abord.")
+                return
+
+        # Sort files by modification time (oldest first) so we push in chronological order
+        corr_files.sort(key=lambda f: os.path.getmtime(os.path.join(corr_dir, f)))
+
+        success_any = False
+        for filename in corr_files:
+            if filename in tracking_data:
+                logger.info(f"Fichier de corrélation déjà importé, ignoré : {filename}")
+                continue
+
+            corr_path = os.path.join(corr_dir, filename)
+            logger.info(f"Début de l'importation du fichier de corrélation : {filename}")
+            
+            success = self.push_correlated_file(corr_path)
+            if success:
+                logger.info(f"Intégration MISP terminée avec succès pour : {filename}")
+                tracking_data[filename] = datetime.now().isoformat()
+                self._save_tracking(tracking_data)
+                success_any = True
+            else:
+                logger.error(f"L'intégration MISP a échoué pour : {filename}")
+                
+        if not success_any and corr_files:
+            logger.info("Aucun nouveau fichier de corrélation n'avait besoin d'être importé ou erreur survenue.")
 
 
 if __name__ == "__main__":

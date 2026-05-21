@@ -265,7 +265,14 @@ class CTIBulletinGenerator:
 
 def main():
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    input_file = os.path.join(base_dir, "output_correlation", "correlated_events_soc_enriched.json")
+    out_corr_dir = os.path.join(base_dir, "output_correlation")
+    
+    files = [f for f in os.listdir(out_corr_dir) if f.startswith("correlation_file_") and f.endswith(".json")]
+    if not files:
+        input_file = os.path.join(out_corr_dir, "correlated_events_soc_enriched.json")
+    else:
+        input_file = max([os.path.join(out_corr_dir, f) for f in files], key=os.path.getmtime)
+        
     output_dir = os.path.join(base_dir, "reports", "cti_bulletins")
     
     if not os.path.exists(input_file):

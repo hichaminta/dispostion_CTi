@@ -1,0 +1,503 @@
+@startuml GLOBAL_HIERARCHY
+!theme plain
+skinparam backgroundColor #F8F9FA
+skinparam actorStyle awesome
+
+skinparam actor {
+  BackgroundColor #FFFFFF
+  BorderColor #2C3E50
+  FontColor #2C3E50
+  FontStyle bold
+  FontSize 12
+}
+skinparam usecase {
+  BackgroundColor #FFFFFF
+  BorderColor #2980B9
+  FontColor #1A5276
+  FontSize 11
+}
+skinparam package {
+  BackgroundColor #EBF5FB
+  BorderColor #2980B9
+  FontColor #1A5276
+  FontStyle bold
+  FontSize 12
+}
+skinparam arrow {
+  Color #2C3E50
+  FontSize 10
+}
+skinparam note {
+  BackgroundColor #FEF9E7
+  BorderColor #D4AC0D
+  FontColor #7D6608
+}
+skinparam titleFontSize 18
+skinparam titleFontColor #1A5276
+skinparam titleFontStyle bold
+
+title BlueSec CTI — Vue Globale : Hiérarchie des Acteurs
+
+' ===== ACTEURS =====
+actor "Utilisateur" as User #1ABC9C
+actor "Administrateur" as Admin #E74C3C
+actor "Analyste CTI" as Analyst #2E86C1
+actor "Système\n(Scheduler)" as System #8E44AD
+
+' ===== HÉRITAGE =====
+Admin    -up-|> User : hérite de
+Analyst  -up-|> User : hérite de
+
+' ===== SYSTÈME =====
+rectangle "Système BlueSec CTI" {
+
+  package "Fonctions de Base — Utilisateur" #E8F8F5 {
+    usecase "Se connecter\n(Login)" as UC_Login
+    usecase "Lancer un pipeline simple" as UC_Simple
+    usecase "Consulter le tableau de bord" as UC_Dash
+    usecase "Consulter les statistiques" as UC_Stats
+    usecase "Consulter l'historique" as UC_Hist
+  }
+
+  package "Gestion des Accès\n(Admin uniquement)" #FDEDEC {
+    usecase "Créer un utilisateur" as UC_CreateUser
+    usecase "Modifier un utilisateur" as UC_EditUser
+    usecase "Supprimer un utilisateur" as UC_DelUser
+    usecase "Consulter la liste des utilisateurs" as UC_ListUsers
+    usecase "Réinitialiser le mot de passe" as UC_ResetPwd
+    usecase "Activer / Désactiver un compte" as UC_ToggleUser
+    usecase "Attribuer un rôle" as UC_AssignRole
+    usecase "Gérer les permissions" as UC_Perms
+    usecase "Configurer les clés API\n(VT, AbuseIPDB...)" as UC_APIKeys
+    usecase "Configurer MISP / Telegram / LLM" as UC_Config
+    usecase "Gérer les planifications" as UC_Schedule
+  }
+
+  package "Analyse CTI\n(Analyste CTI uniquement)" #EAF2FB {
+    usecase "Lancer un pipeline complet\n(toutes sources)" as UC_FullRun
+    usecase "Lancer un pipeline ciblé" as UC_TargetRun
+    usecase "Stopper un pipeline" as UC_Stop
+    usecase "Consulter les IoCs extraits" as UC_IOC
+    usecase "Consulter les CVEs identifiées" as UC_CVE
+    usecase "Consulter les données enrichies" as UC_Enriched
+    usecase "Mapping MITRE ATT&CK" as UC_Mitre
+    usecase "Événements corrélés\n(CRITICAL / HIGH / MEDIUM)" as UC_Corr
+    usecase "Filtrer / Rechercher événements" as UC_Filter
+    usecase "Gérer les canaux Telegram" as UC_TGChannels
+    usecase "Consulter les leaks détectés" as UC_Leaks
+    usecase "Analyser un fichier CSV/Excel\n(IA / LLM)" as UC_CSV
+    usecase "Générer un bulletin PDF" as UC_Bulletin
+    usecase "Exporter en STIX 2.1" as UC_STIX
+    usecase "Pousser vers MISP" as UC_MISP
+  }
+
+  package "Monitoring & Tableau de Bord\n(Admin + Analyste CTI)" #F9F3FF {
+    usecase "Statistiques globales" as UC_GlobalStats
+    usecase "Heatmap MITRE ATT&CK" as UC_Heatmap
+    usecase "Géolocalisation des menaces" as UC_Geo
+    usecase "Logs temps réel (WebSocket)" as UC_Logs
+    usecase "Stopper un pipeline en cours" as UC_StopAdmin
+  }
+}
+
+' ===== ASSOCIATIONS UTILISATEUR =====
+User --> UC_Login
+User --> UC_Simple
+User --> UC_Dash
+User --> UC_Stats
+User --> UC_Hist
+
+' ===== ASSOCIATIONS ADMIN =====
+Admin --> UC_CreateUser
+Admin --> UC_EditUser
+Admin --> UC_DelUser
+Admin --> UC_ListUsers
+Admin --> UC_ResetPwd
+Admin --> UC_ToggleUser
+Admin --> UC_AssignRole
+Admin --> UC_Perms
+Admin --> UC_APIKeys
+Admin --> UC_Config
+Admin --> UC_Schedule
+Admin --> UC_GlobalStats
+Admin --> UC_Logs
+Admin --> UC_StopAdmin
+
+' ===== ASSOCIATIONS ANALYSTE =====
+Analyst --> UC_FullRun
+Analyst --> UC_TargetRun
+Analyst --> UC_Stop
+Analyst --> UC_IOC
+Analyst --> UC_CVE
+Analyst --> UC_Enriched
+Analyst --> UC_Mitre
+Analyst --> UC_Corr
+Analyst --> UC_TGChannels
+Analyst --> UC_Leaks
+Analyst --> UC_CSV
+Analyst --> UC_Bulletin
+Analyst --> UC_STIX
+Analyst --> UC_MISP
+Analyst --> UC_GlobalStats
+Analyst --> UC_Heatmap
+Analyst --> UC_Geo
+Analyst --> UC_Logs
+
+' ===== ASSOCIATIONS SYSTÈME =====
+System --> UC_FullRun : <<déclenche>>
+
+' ===== INCLUDE =====
+UC_CreateUser  .> UC_Login     : <<include>>
+UC_FullRun     .> UC_Login     : <<include>>
+UC_APIKeys     .> UC_Login     : <<include>>
+UC_AssignRole  .> UC_ListUsers : <<include>>
+UC_AssignRole  .> UC_Perms     : <<include>>
+UC_FullRun     .> UC_Logs      : <<include>>
+UC_Corr        .> UC_Filter    : <<include>>
+
+' ===== EXTEND =====
+UC_Login       .> UC_ResetPwd  : <<extend>>
+UC_Simple      .> UC_FullRun   : <<extend>>
+UC_Corr        .> UC_STIX      : <<extend>>
+UC_Corr        .> UC_MISP      : <<extend>>
+UC_Leaks       .> UC_Bulletin  : <<extend>>
+UC_Mitre       .> UC_Heatmap   : <<extend>>
+
+note bottom of Admin
+  **Généralisation :**
+  Admin hérite de Utilisateur.
+  Il dispose de toutes les fonctions
+  de base + gestion des accès,
+  rôles et configuration système.
+end note
+
+note bottom of Analyst
+  **Généralisation :**
+  Analyste CTI hérite de Utilisateur.
+  Il accède à l'analyse CTI complète :
+  IoC, CVE, Leaks, STIX, MISP.
+end note
+
+@enduml
+
+
+' ============================================================
+' PAGE 2 — ADMIN DÉTAILLÉ
+' ============================================================
+
+@startuml ADMIN_DETAIL
+!theme plain
+skinparam backgroundColor #F8F9FA
+skinparam actorStyle awesome
+
+skinparam actor {
+  BackgroundColor #FFFFFF
+  BorderColor #C0392B
+  FontColor #C0392B
+  FontStyle bold
+}
+skinparam usecase {
+  BackgroundColor #FFFFFF
+  BorderColor #5DADE2
+  FontColor #1A5276
+  FontSize 11
+}
+skinparam package {
+  BackgroundColor #EBF5FB
+  BorderColor #2980B9
+  FontColor #1A5276
+  FontStyle bold
+}
+skinparam ArrowColor #2980B9
+skinparam titleFontSize 17
+skinparam titleFontColor #1A5276
+skinparam titleFontStyle bold
+
+title BlueSec — Cas d'Utilisation : Administrateur\n(hérite de Utilisateur)
+
+' ===== ACTEURS =====
+actor "Utilisateur" as User   #1ABC9C
+actor "Administrateur" as Admin #E74C3C
+
+' Héritage
+Admin -up-|> User : hérite de
+
+rectangle "Système BlueSec CTI" {
+
+  ' ---- Fonctions de base (Utilisateur) ----
+  package "Fonctions de Base — Utilisateur" #E8F8F5 {
+    usecase "Se connecter (Login)" as UC_Login
+    usecase "Lancer un pipeline simple" as UC_Simple
+    usecase "Consulter le tableau de bord" as UC_Dash
+    usecase "Consulter les statistiques" as UC_Stats
+    usecase "Consulter l'historique" as UC_Hist
+  }
+
+  ' ---- Gestion Utilisateurs ----
+  package "Gestion des Utilisateurs" #FDEDEC {
+    usecase "Créer un utilisateur" as UC_CreateUser
+    usecase "Modifier un utilisateur" as UC_EditUser
+    usecase "Supprimer un utilisateur" as UC_DelUser
+    usecase "Consulter la liste\ndes utilisateurs" as UC_ListUsers
+    usecase "Réinitialiser le\nmot de passe" as UC_ResetPwd
+    usecase "Activer / Désactiver\nun compte" as UC_ToggleUser
+  }
+
+  ' ---- Gestion Rôles ----
+  package "Gestion des Rôles & Permissions" #FDEDEC {
+    usecase "Créer un rôle" as UC_CreateRole
+    usecase "Attribuer un rôle\nà un utilisateur" as UC_AssignRole
+    usecase "Modifier les permissions\nd'un rôle" as UC_EditRole
+    usecase "Supprimer un rôle" as UC_DelRole
+    usecase "Consulter les rôles" as UC_ListRoles
+  }
+
+  ' ---- Configuration ----
+  package "Configuration du Système" #FEF9E7 {
+    usecase "Configurer les clés API\n(VT, AbuseIPDB, OTX...)" as UC_APIKeys
+    usecase "Configurer l'intégration MISP" as UC_MISPConf
+    usecase "Configurer les credentials\nTelegram" as UC_TGConf
+    usecase "Choisir le fournisseur LLM\n(Gemini / OpenAI / Ollama)" as UC_LLMConf
+    usecase "Configurer les sources CTI" as UC_SrcConf
+  }
+
+  ' ---- Planification ----
+  package "Gestion des Planifications" #EBF5FB {
+    usecase "Créer une planification" as UC_CreateSched
+    usecase "Modifier une planification" as UC_EditSched
+    usecase "Supprimer une planification" as UC_DelSched
+    usecase "Activer / Désactiver" as UC_ToggleSched
+  }
+
+  ' ---- Supervision ----
+  package "Supervision & Monitoring" #F9F3FF {
+    usecase "Consulter les statistiques\nglobales" as UC_GlobalStats
+    usecase "Consulter les logs\nd'exécution" as UC_Logs
+    usecase "Stopper un pipeline\nen cours" as UC_StopPipeline
+    usecase "Consulter l'historique\ndes runs" as UC_RunHistory
+  }
+}
+
+' ===== ASSOCIATIONS UTILISATEUR =====
+User --> UC_Login
+User --> UC_Simple
+User --> UC_Dash
+User --> UC_Stats
+User --> UC_Hist
+
+' ===== ASSOCIATIONS ADMIN =====
+Admin --> UC_CreateUser
+Admin --> UC_EditUser
+Admin --> UC_DelUser
+Admin --> UC_ListUsers
+Admin --> UC_ResetPwd
+Admin --> UC_ToggleUser
+
+Admin --> UC_CreateRole
+Admin --> UC_AssignRole
+Admin --> UC_EditRole
+Admin --> UC_DelRole
+Admin --> UC_ListRoles
+
+Admin --> UC_APIKeys
+Admin --> UC_MISPConf
+Admin --> UC_TGConf
+Admin --> UC_LLMConf
+Admin --> UC_SrcConf
+
+Admin --> UC_CreateSched
+Admin --> UC_EditSched
+Admin --> UC_DelSched
+Admin --> UC_ToggleSched
+
+Admin --> UC_GlobalStats
+Admin --> UC_Logs
+Admin --> UC_StopPipeline
+Admin --> UC_RunHistory
+
+' ===== INCLUDE =====
+UC_CreateUser .> UC_Login     : <<include>>
+UC_APIKeys    .> UC_Login     : <<include>>
+UC_AssignRole .> UC_ListUsers : <<include>>
+UC_AssignRole .> UC_ListRoles : <<include>>
+UC_DelUser    .> UC_ListUsers : <<include>>
+UC_EditUser   .> UC_ListUsers : <<include>>
+
+' ===== EXTEND =====
+UC_Login      .> UC_ResetPwd  : <<extend>>
+UC_CreateUser .> UC_AssignRole : <<extend>>
+UC_Simple     .> UC_GlobalStats : <<extend>>
+
+note right of Admin
+  **Admin hérite de Utilisateur.**
+  Accès complet :
+  - Fonctions de base (Login, pipeline simple...)
+  - Gestion des comptes et rôles
+  - Configuration des intégrations
+  - Supervision et monitoring
+end note
+
+@enduml
+
+
+' ============================================================
+' PAGE 3 — ANALYSTE CTI DÉTAILLÉ
+' ============================================================
+
+@startuml CTI_ANALYST_DETAIL
+!theme plain
+skinparam backgroundColor #F8F9FA
+skinparam actorStyle awesome
+
+skinparam actor {
+  BackgroundColor #FFFFFF
+  BorderColor #1A5276
+  FontColor #1A5276
+  FontStyle bold
+}
+skinparam usecase {
+  BackgroundColor #FFFFFF
+  BorderColor #52BE80
+  FontColor #1D8348
+  FontSize 11
+}
+skinparam package {
+  BackgroundColor #E9F7EF
+  BorderColor #27AE60
+  FontColor #1D8348
+  FontStyle bold
+}
+skinparam ArrowColor #27AE60
+skinparam titleFontSize 17
+skinparam titleFontColor #1D8348
+skinparam titleFontStyle bold
+
+title BlueSec — Cas d'Utilisation : Analyste CTI\n(hérite de Utilisateur)
+
+' ===== ACTEURS =====
+actor "Utilisateur" as User    #1ABC9C
+actor "Analyste CTI" as Analyst #2E86C1
+actor "Système\n(Scheduler)" as System #8E44AD
+
+' Héritage
+Analyst -up-|> User : hérite de
+
+rectangle "Système BlueSec CTI" {
+
+  ' ---- Fonctions de base ----
+  package "Fonctions de Base — Utilisateur" #E8F8F5 {
+    usecase "Se connecter (Login)" as UC_Login
+    usecase "Lancer un pipeline simple" as UC_Simple
+    usecase "Consulter le tableau de bord" as UC_Dash
+    usecase "Consulter les statistiques" as UC_Stats
+    usecase "Consulter l'historique" as UC_Hist
+  }
+
+  ' ---- Pipeline ----
+  package "Exécution Pipeline CTI" {
+    usecase "Lancer un pipeline complet\n(toutes sources)" as UC_FullRun
+    usecase "Lancer un pipeline ciblé\n(source unique)" as UC_TargetRun
+    usecase "Exécuter une étape\nspécifique" as UC_StepRun
+    usecase "Stopper un pipeline" as UC_Stop
+    usecase "Visualiser les logs\ntemps réel" as UC_Logs
+  }
+
+  ' ---- Résultats ----
+  package "Analyse des Résultats CTI" {
+    usecase "Consulter les IoCs extraits\n(IP, domaine, hash, URL)" as UC_IOC
+    usecase "Consulter les CVEs\nidentifiées" as UC_CVE
+    usecase "Consulter les données\nenrichies (VT, géoloc)" as UC_Enriched
+    usecase "Mapping MITRE ATT&CK" as UC_Mitre
+    usecase "Événements corrélés\n(CRITICAL / HIGH / MEDIUM)" as UC_Corr
+    usecase "Filtrer / Rechercher\nles événements" as UC_Filter
+  }
+
+  ' ---- Leaks ----
+  package "Intelligence Leaks (Telegram)" {
+    usecase "Gérer les canaux Telegram" as UC_TGChannels
+    usecase "Consulter les leaks\ndétectés" as UC_Leaks
+    usecase "Voir les détails d'un leak\n(acteur, données exposées)" as UC_LeakDetail
+    usecase "Analyser un fichier\nCSV / Excel (LLM)" as UC_CSV
+    usecase "Générer un bulletin\nPDF par leak" as UC_Bulletin
+  }
+
+  ' ---- Export ----
+  package "Export & Intégration" {
+    usecase "Exporter en STIX 2.1" as UC_STIX
+    usecase "Pousser vers MISP" as UC_MISP
+    usecase "Générer un rapport\nPDF global" as UC_Report
+  }
+
+  ' ---- Planification ----
+  package "Planification Automatique" {
+    usecase "Créer une planification\nautomatique" as UC_CreateSched
+    usecase "Activer / Désactiver\nune planification" as UC_ToggleSched
+  }
+
+  ' ---- Dashboard ----
+  package "Tableau de Bord & Statistiques" {
+    usecase "Statistiques globales\nde la plateforme" as UC_GlobalStats
+    usecase "Heatmap MITRE ATT&CK" as UC_Heatmap
+    usecase "Géolocalisation\ndes menaces" as UC_Geo
+  }
+}
+
+' ===== ASSOCIATIONS UTILISATEUR =====
+User --> UC_Login
+User --> UC_Simple
+User --> UC_Dash
+User --> UC_Stats
+User --> UC_Hist
+
+' ===== ASSOCIATIONS ANALYSTE =====
+Analyst --> UC_FullRun
+Analyst --> UC_TargetRun
+Analyst --> UC_StepRun
+Analyst --> UC_Stop
+Analyst --> UC_IOC
+Analyst --> UC_CVE
+Analyst --> UC_Enriched
+Analyst --> UC_Mitre
+Analyst --> UC_Corr
+Analyst --> UC_TGChannels
+Analyst --> UC_Leaks
+Analyst --> UC_LeakDetail
+Analyst --> UC_CSV
+Analyst --> UC_Bulletin
+Analyst --> UC_STIX
+Analyst --> UC_MISP
+Analyst --> UC_Report
+Analyst --> UC_CreateSched
+Analyst --> UC_ToggleSched
+Analyst --> UC_GlobalStats
+Analyst --> UC_Heatmap
+Analyst --> UC_Geo
+
+System --> UC_FullRun : <<déclenche>>
+
+' ===== INCLUDE =====
+UC_FullRun    .> UC_Login   : <<include>>
+UC_FullRun    .> UC_Logs    : <<include>>
+UC_TargetRun  .> UC_Logs    : <<include>>
+UC_Corr       .> UC_Filter  : <<include>>
+UC_LeakDetail .> UC_Leaks   : <<include>>
+
+' ===== EXTEND =====
+UC_Simple     .> UC_FullRun  : <<extend>>
+UC_Corr       .> UC_STIX     : <<extend>>
+UC_Corr       .> UC_MISP     : <<extend>>
+UC_Leaks      .> UC_Bulletin : <<extend>>
+UC_Mitre      .> UC_Heatmap  : <<extend>>
+UC_Login      .> UC_Hist     : <<extend>>
+
+note right of Analyst
+  **Analyste CTI hérite de Utilisateur.**
+  Accès complet :
+  - Pipeline CTI (12+ sources OSINT)
+  - Analyse IoC / CVE / MITRE
+  - Intelligence Leaks Telegram + LLM
+  - Export STIX 2.1 / MISP
+  - Planification automatique
+end note
+
+@enduml

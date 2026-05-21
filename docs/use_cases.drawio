@@ -1,0 +1,523 @@
+<mxfile host="app.diagrams.net" modified="2026-05-21T00:00:00.000Z" version="21.0.0">
+
+  <!-- ============================================================ -->
+  <!-- PAGE 1: ADMINISTRATEUR                                        -->
+  <!-- Admin hérite de Utilisateur                                  -->
+  <!-- ============================================================ -->
+  <diagram id="diag_admin" name="Admin - Cas d&apos;Utilisation">
+    <mxGraphModel background="#F8F9FA" dx="1200" dy="800" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- TITRE -->
+        <mxCell id="title" value="BlueSec — Cas d&apos;Utilisation : Admin (hérite de Utilisateur)"
+          style="text;html=1;align=center;strokeColor=none;fillColor=none;fontColor=#1A5276;fontSize=17;fontStyle=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="150" y="14" width="940" height="34" as="geometry"/>
+        </mxCell>
+
+        <!-- FRONTIÈRE SYSTÈME -->
+        <mxCell id="sys_bound" value="&lt;i&gt;Système BlueSec CTI&lt;/i&gt;"
+          style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#2C3E50;fontColor=#2C3E50;verticalAlign=top;fontSize=11;fontStyle=2;spacingTop=4;dashed=1;dashPattern=8 4;"
+          vertex="1" parent="1">
+          <mxGeometry x="130" y="56" width="1080" height="850" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== ACTEURS ===== -->
+        <!-- Utilisateur (base) -->
+        <mxCell id="user_actor" value="Utilisateur"
+          style="shape=mxgraph.uml.actor2;aspect=fixed;html=1;fillColor=#1ABC9C;strokeColor=#148F77;fontColor=#148F77;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;fontSize=11;fontStyle=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="44" y="155" width="30" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Administrateur (hérite de Utilisateur) -->
+        <mxCell id="admin_actor" value="Administrateur"
+          style="shape=mxgraph.uml.actor2;aspect=fixed;html=1;fillColor=#E74C3C;strokeColor=#C0392B;fontColor=#C0392B;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;fontSize=11;fontStyle=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="44" y="510" width="30" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== GÉNÉRALISATION : Admin hérite de Utilisateur ===== -->
+        <mxCell id="gen_admin_user" value="&lt;i&gt;hérite de&lt;/i&gt;"
+          style="html=1;endArrow=block;endFill=0;startArrow=none;strokeColor=#2C3E50;strokeWidth=2;fontColor=#2C3E50;fontSize=9;fontStyle=2;align=center;"
+          edge="1" source="admin_actor" target="user_actor" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ===================================================== -->
+        <!-- PACKAGE 0 : Fonctions de Base (Utilisateur)           -->
+        <!-- ===================================================== -->
+        <mxCell id="p0" value="Fonctions de Base — Utilisateur"
+          style="swimlane;fontStyle=1;align=center;startSize=30;fillColor=#E8F8F5;strokeColor=#1ABC9C;fontColor=#117A65;fontSize=11;rounded=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="155" y="76" width="1000" height="185" as="geometry"/>
+        </mxCell>
+        <!-- UC communs — disposés horizontalement -->
+        <mxCell id="p0_login" value="Se connecter (Login)"
+          style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1ABC9C;fontColor=#117A65;fontSize=10;fontStyle=1;"
+          vertex="1" parent="p0">
+          <mxGeometry x="25"  y="50" width="190" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p0_pipeline" value="Lancer un pipeline simple"
+          style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1ABC9C;fontColor=#117A65;fontSize=10;"
+          vertex="1" parent="p0">
+          <mxGeometry x="235" y="50" width="190" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p0_dash" value="Consulter le tableau de bord"
+          style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1ABC9C;fontColor=#117A65;fontSize=10;"
+          vertex="1" parent="p0">
+          <mxGeometry x="445" y="50" width="190" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p0_stats" value="Consulter les statistiques de base"
+          style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1ABC9C;fontColor=#117A65;fontSize=10;"
+          vertex="1" parent="p0">
+          <mxGeometry x="655" y="50" width="200" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p0_hist" value="Consulter l&apos;historique des runs"
+          style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1ABC9C;fontColor=#117A65;fontSize=10;"
+          vertex="1" parent="p0">
+          <mxGeometry x="870" y="50" width="115" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- Utilisateur → UCs communes -->
+        <mxCell id="eu1" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#1ABC9C;strokeWidth=1.5;" edge="1" source="user_actor" target="p0_login"    parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="eu2" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#1ABC9C;strokeWidth=1.5;" edge="1" source="user_actor" target="p0_pipeline"  parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="eu3" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#1ABC9C;strokeWidth=1.5;" edge="1" source="user_actor" target="p0_dash"      parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="eu4" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#1ABC9C;strokeWidth=1.5;" edge="1" source="user_actor" target="p0_stats"     parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="eu5" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#1ABC9C;strokeWidth=1.5;" edge="1" source="user_actor" target="p0_hist"      parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- ===================================================== -->
+        <!-- PACKAGE 1 : Gestion des Utilisateurs                  -->
+        <!-- ===================================================== -->
+        <mxCell id="p1" value="Gestion des Utilisateurs"
+          style="swimlane;fontStyle=1;align=center;startSize=30;fillColor=#EBF5FB;strokeColor=#2980B9;fontColor=#1A5276;fontSize=11;rounded=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="155" y="285" width="305" height="340" as="geometry"/>
+        </mxCell>
+        <mxCell id="uc1_1" value="Créer un utilisateur"            style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p1"><mxGeometry x="52" y="38"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc1_2" value="Modifier un utilisateur"         style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p1"><mxGeometry x="52" y="86"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc1_3" value="Supprimer un utilisateur"        style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p1"><mxGeometry x="52" y="134" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc1_4" value="Consulter la liste des utilisateurs" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p1"><mxGeometry x="52" y="182" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc1_5" value="Réinitialiser le mot de passe"   style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p1"><mxGeometry x="52" y="230" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc1_6" value="Activer / Désactiver un compte"  style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p1"><mxGeometry x="52" y="278" width="200" height="38" as="geometry"/></mxCell>
+
+        <!-- ===== P2 : Gestion des Rôles ===== -->
+        <mxCell id="p2" value="Gestion des Rôles &amp; Permissions"
+          style="swimlane;fontStyle=1;align=center;startSize=30;fillColor=#EBF5FB;strokeColor=#2980B9;fontColor=#1A5276;fontSize=11;rounded=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="480" y="285" width="305" height="292" as="geometry"/>
+        </mxCell>
+        <mxCell id="uc2_1" value="Créer un rôle"                        style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p2"><mxGeometry x="52" y="38"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc2_2" value="Attribuer un rôle à un utilisateur"   style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p2"><mxGeometry x="52" y="86"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc2_3" value="Modifier les permissions d&apos;un rôle" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p2"><mxGeometry x="52" y="134" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc2_4" value="Supprimer un rôle"                    style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p2"><mxGeometry x="52" y="182" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc2_5" value="Consulter les rôles existants"        style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p2"><mxGeometry x="52" y="230" width="200" height="38" as="geometry"/></mxCell>
+
+        <!-- ===== P3 : Configuration ===== -->
+        <mxCell id="p3" value="Configuration du Système"
+          style="swimlane;fontStyle=1;align=center;startSize=30;fillColor=#EBF5FB;strokeColor=#2980B9;fontColor=#1A5276;fontSize=11;rounded=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="805" y="285" width="320" height="292" as="geometry"/>
+        </mxCell>
+        <mxCell id="uc3_1" value="Configurer les clés API (VT, AbuseIPDB...)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p3"><mxGeometry x="60" y="38"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc3_2" value="Configurer l&apos;intégration MISP"         style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p3"><mxGeometry x="60" y="86"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc3_3" value="Configurer les credentials Telegram"        style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p3"><mxGeometry x="60" y="134" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc3_4" value="Choisir le fournisseur LLM (Gemini/OpenAI)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p3"><mxGeometry x="60" y="182" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc3_5" value="Configurer les sources CTI actives"         style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p3"><mxGeometry x="60" y="230" width="200" height="38" as="geometry"/></mxCell>
+
+        <!-- ===== P4 : Planifications ===== -->
+        <mxCell id="p4" value="Gestion des Planifications"
+          style="swimlane;fontStyle=1;align=center;startSize=30;fillColor=#EBF5FB;strokeColor=#2980B9;fontColor=#1A5276;fontSize=11;rounded=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="155" y="647" width="305" height="244" as="geometry"/>
+        </mxCell>
+        <mxCell id="uc4_1" value="Créer une planification"               style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p4"><mxGeometry x="52" y="38"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc4_2" value="Modifier une planification"            style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p4"><mxGeometry x="52" y="86"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc4_3" value="Supprimer une planification"           style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p4"><mxGeometry x="52" y="134" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc4_4" value="Activer / Désactiver une planification" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p4"><mxGeometry x="52" y="182" width="200" height="38" as="geometry"/></mxCell>
+
+        <!-- ===== P5 : Supervision ===== -->
+        <mxCell id="p5" value="Supervision &amp; Monitoring"
+          style="swimlane;fontStyle=1;align=center;startSize=30;fillColor=#EBF5FB;strokeColor=#2980B9;fontColor=#1A5276;fontSize=11;rounded=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="480" y="647" width="305" height="244" as="geometry"/>
+        </mxCell>
+        <mxCell id="uc5_1" value="Consulter les statistiques globales"  style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p5"><mxGeometry x="52" y="38"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc5_2" value="Consulter les logs d&apos;exécution"  style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p5"><mxGeometry x="52" y="86"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc5_3" value="Stopper un pipeline en cours"          style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p5"><mxGeometry x="52" y="134" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="uc5_4" value="Consulter l&apos;historique des runs" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="p5"><mxGeometry x="52" y="182" width="200" height="38" as="geometry"/></mxCell>
+
+        <!-- ===== ASSOCIATIONS ADMIN → UCs spécifiques ===== -->
+        <mxCell id="ae1"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc1_1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae2"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc1_2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae3"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc1_3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae4"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc1_4" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae5"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc1_5" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae6"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc1_6" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae7"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc2_1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae8"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc2_2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae9"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc2_3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae10" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc2_4" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae11" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc2_5" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae12" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc3_1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae13" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc3_2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae14" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc3_3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae15" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc3_4" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae16" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc3_5" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae17" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc4_1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae18" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc4_2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae19" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc4_3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae20" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc4_4" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae21" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc5_1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae22" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc5_2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae23" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc5_3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae24" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2980B9;strokeWidth=1.5;" edge="1" source="admin_actor" target="uc5_4" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- ===== INCLUDE ===== -->
+        <!-- Créer utilisateur <<include>> Se connecter -->
+        <mxCell id="inc1" value="&lt;&lt;include&gt;&gt;"
+          style="html=1;dashed=1;endArrow=open;endFill=0;strokeColor=#E74C3C;fontColor=#E74C3C;fontSize=9;"
+          edge="1" source="uc1_1" target="p0_login" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <!-- Configurer API <<include>> Se connecter -->
+        <mxCell id="inc2" value="&lt;&lt;include&gt;&gt;"
+          style="html=1;dashed=1;endArrow=open;endFill=0;strokeColor=#E74C3C;fontColor=#E74C3C;fontSize=9;"
+          edge="1" source="uc3_1" target="p0_login" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <!-- Attribuer rôle <<include>> Consulter liste utilisateurs -->
+        <mxCell id="inc3" value="&lt;&lt;include&gt;&gt;"
+          style="html=1;dashed=1;endArrow=open;endFill=0;strokeColor=#E74C3C;fontColor=#E74C3C;fontSize=9;"
+          edge="1" source="uc2_2" target="uc1_4" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <!-- Attribuer rôle <<include>> Consulter rôles -->
+        <mxCell id="inc4" value="&lt;&lt;include&gt;&gt;"
+          style="html=1;dashed=1;endArrow=open;endFill=0;strokeColor=#E74C3C;fontColor=#E74C3C;fontSize=9;"
+          edge="1" source="uc2_2" target="uc2_5" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <!-- Supprimer utilisateur <<include>> Consulter liste -->
+        <mxCell id="inc5" value="&lt;&lt;include&gt;&gt;"
+          style="html=1;dashed=1;endArrow=open;endFill=0;strokeColor=#E74C3C;fontColor=#E74C3C;fontSize=9;"
+          edge="1" source="uc1_3" target="uc1_4" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- ===== EXTEND ===== -->
+        <!-- Se connecter <<extend>> Réinitialiser MDP (si mot de passe oublié) -->
+        <mxCell id="ext1" value="&lt;&lt;extend&gt;&gt;"
+          style="html=1;dashed=1;endArrow=open;endFill=0;strokeColor=#8E44AD;fontColor=#8E44AD;fontSize=9;"
+          edge="1" source="p0_login" target="uc1_5" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <!-- Créer utilisateur <<extend>> Attribuer rôle (optionnel à la création) -->
+        <mxCell id="ext2" value="&lt;&lt;extend&gt;&gt;"
+          style="html=1;dashed=1;endArrow=open;endFill=0;strokeColor=#8E44AD;fontColor=#8E44AD;fontSize=9;"
+          edge="1" source="uc1_1" target="uc2_2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <!-- Pipeline simple <<extend>> Pipeline complet (admin peut faire plus) -->
+        <mxCell id="ext3" value="&lt;&lt;extend&gt;&gt;"
+          style="html=1;dashed=1;endArrow=open;endFill=0;strokeColor=#8E44AD;fontColor=#8E44AD;fontSize=9;"
+          edge="1" source="p0_pipeline" target="uc5_1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- NOTE -->
+        <mxCell id="note1" value="&lt;b&gt;Généralisation :&lt;/b&gt;&#xa;Admin hérite de Utilisateur.&#xa;Il dispose de toutes les fonctions de base&#xa;+ la gestion des accès, rôles et configuration."
+          style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=14;fillColor=#FEF9E7;strokeColor=#D4AC0D;fontColor=#7D6608;fontSize=10;align=left;spacingLeft=8;"
+          vertex="1" parent="1">
+          <mxGeometry x="805" y="660" width="295" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- LÉGENDE -->
+        <mxCell id="legend" value="— Association (plein)&#xa;- - &lt;&lt;include&gt;&gt; (rouge)&#xa;- - &lt;&lt;extend&gt;&gt; (violet)&#xa;——► hérite de (triangle vide)"
+          style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=14;fillColor=#FDFEFE;strokeColor=#717D7E;fontColor=#515A5A;fontSize=10;align=left;spacingLeft=8;"
+          vertex="1" parent="1">
+          <mxGeometry x="805" y="760" width="215" height="80" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <!-- ============================================================ -->
+  <!-- PAGE 2: ANALYSTE CTI                                          -->
+  <!-- Analyste hérite de Utilisateur                               -->
+  <!-- ============================================================ -->
+  <diagram id="diag_analyst" name="Analyste CTI - Cas d&apos;Utilisation">
+    <mxGraphModel background="#F8F9FA" dx="1200" dy="800" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- TITRE -->
+        <mxCell id="c_title" value="BlueSec — Cas d&apos;Utilisation : Analyste CTI (hérite de Utilisateur)"
+          style="text;html=1;align=center;strokeColor=none;fillColor=none;fontColor=#1D8348;fontSize=17;fontStyle=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="150" y="14" width="1050" height="34" as="geometry"/>
+        </mxCell>
+
+        <!-- FRONTIÈRE -->
+        <mxCell id="c_sys" value="&lt;i&gt;Système BlueSec CTI&lt;/i&gt;"
+          style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#2C3E50;fontColor=#2C3E50;verticalAlign=top;fontSize=11;fontStyle=2;spacingTop=4;dashed=1;dashPattern=8 4;"
+          vertex="1" parent="1">
+          <mxGeometry x="130" y="56" width="1270" height="840" as="geometry"/>
+        </mxCell>
+
+        <!-- ACTEURS -->
+        <mxCell id="c_user" value="Utilisateur"
+          style="shape=mxgraph.uml.actor2;aspect=fixed;html=1;fillColor=#1ABC9C;strokeColor=#148F77;fontColor=#148F77;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;fontSize=11;fontStyle=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="44" y="155" width="30" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="c_analyst" value="Analyste CTI"
+          style="shape=mxgraph.uml.actor2;aspect=fixed;html=1;fillColor=#2E86C1;strokeColor=#1A5276;fontColor=#1A5276;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;fontSize=11;fontStyle=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="44" y="480" width="30" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="c_system" value="Système&#xa;(Scheduler)"
+          style="shape=mxgraph.uml.actor2;aspect=fixed;html=1;fillColor=#8E44AD;strokeColor=#6C3483;fontColor=#6C3483;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;fontSize=11;fontStyle=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="44" y="760" width="30" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- GÉNÉRALISATION : Analyste CTI → Utilisateur -->
+        <mxCell id="c_gen" value="&lt;i&gt;hérite de&lt;/i&gt;"
+          style="html=1;endArrow=block;endFill=0;startArrow=none;strokeColor=#2C3E50;strokeWidth=2;fontColor=#2C3E50;fontSize=9;fontStyle=2;"
+          edge="1" source="c_analyst" target="c_user" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== PACKAGE COMMUN (Utilisateur) ===== -->
+        <mxCell id="c_p0" value="Fonctions de Base — Utilisateur"
+          style="swimlane;fontStyle=1;align=center;startSize=30;fillColor=#E8F8F5;strokeColor=#1ABC9C;fontColor=#117A65;fontSize=11;rounded=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="155" y="76" width="1190" height="185" as="geometry"/>
+        </mxCell>
+        <mxCell id="c_p0_login"    value="Se connecter (Login)"          style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1ABC9C;fontColor=#117A65;fontSize=10;fontStyle=1;" vertex="1" parent="c_p0"><mxGeometry x="20"  y="50" width="190" height="40" as="geometry"/></mxCell>
+        <mxCell id="c_p0_pipeline" value="Lancer un pipeline simple"     style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1ABC9C;fontColor=#117A65;fontSize=10;" vertex="1" parent="c_p0"><mxGeometry x="230" y="50" width="190" height="40" as="geometry"/></mxCell>
+        <mxCell id="c_p0_dash"     value="Consulter le tableau de bord"  style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1ABC9C;fontColor=#117A65;fontSize=10;" vertex="1" parent="c_p0"><mxGeometry x="440" y="50" width="190" height="40" as="geometry"/></mxCell>
+        <mxCell id="c_p0_stats"    value="Consulter les statistiques de base" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1ABC9C;fontColor=#117A65;fontSize=10;" vertex="1" parent="c_p0"><mxGeometry x="650" y="50" width="200" height="40" as="geometry"/></mxCell>
+        <mxCell id="c_p0_hist"     value="Consulter l&apos;historique des runs" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1ABC9C;fontColor=#117A65;fontSize=10;" vertex="1" parent="c_p0"><mxGeometry x="870" y="50" width="190" height="40" as="geometry"/></mxCell>
+
+        <!-- Utilisateur → UCs communes -->
+        <mxCell id="ceu1" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#1ABC9C;strokeWidth=1.5;" edge="1" source="c_user" target="c_p0_login"    parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ceu2" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#1ABC9C;strokeWidth=1.5;" edge="1" source="c_user" target="c_p0_pipeline"  parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ceu3" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#1ABC9C;strokeWidth=1.5;" edge="1" source="c_user" target="c_p0_dash"      parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ceu4" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#1ABC9C;strokeWidth=1.5;" edge="1" source="c_user" target="c_p0_stats"     parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ceu5" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#1ABC9C;strokeWidth=1.5;" edge="1" source="c_user" target="c_p0_hist"      parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- ===== P1: Pipeline CTI ===== -->
+        <mxCell id="c_p1" value="Exécution Pipeline CTI"
+          style="swimlane;fontStyle=1;align=center;startSize=30;fillColor=#E9F7EF;strokeColor=#27AE60;fontColor=#1D8348;fontSize=11;rounded=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="155" y="285" width="295" height="340" as="geometry"/>
+        </mxCell>
+        <mxCell id="c_uc1_1" value="Lancer un pipeline complet (toutes sources)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#52BE80;fontColor=#1D8348;fontSize=10;" vertex="1" parent="c_p1"><mxGeometry x="47" y="38"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc1_2" value="Lancer un pipeline ciblé (source unique)"   style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#52BE80;fontColor=#1D8348;fontSize=10;" vertex="1" parent="c_p1"><mxGeometry x="47" y="86"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc1_3" value="Exécuter une étape spécifique"               style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#52BE80;fontColor=#1D8348;fontSize=10;" vertex="1" parent="c_p1"><mxGeometry x="47" y="134" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc1_4" value="Stopper un pipeline"                         style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#52BE80;fontColor=#1D8348;fontSize=10;" vertex="1" parent="c_p1"><mxGeometry x="47" y="182" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc1_5" value="Consulter l&apos;historique des runs"        style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#52BE80;fontColor=#1D8348;fontSize=10;" vertex="1" parent="c_p1"><mxGeometry x="47" y="230" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc1_6" value="Visualiser les logs temps réel"              style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#52BE80;fontColor=#1D8348;fontSize=10;" vertex="1" parent="c_p1"><mxGeometry x="47" y="278" width="200" height="38" as="geometry"/></mxCell>
+
+        <!-- ===== P2: Analyse Résultats ===== -->
+        <mxCell id="c_p2" value="Analyse des Résultats CTI"
+          style="swimlane;fontStyle=1;align=center;startSize=30;fillColor=#E9F7EF;strokeColor=#27AE60;fontColor=#1D8348;fontSize=11;rounded=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="470" y="285" width="295" height="340" as="geometry"/>
+        </mxCell>
+        <mxCell id="c_uc2_1" value="Consulter les IoCs extraits (IP, hash, domaine)"  style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#52BE80;fontColor=#1D8348;fontSize=10;" vertex="1" parent="c_p2"><mxGeometry x="47" y="38"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc2_2" value="Consulter les CVEs identifiées"                   style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#52BE80;fontColor=#1D8348;fontSize=10;" vertex="1" parent="c_p2"><mxGeometry x="47" y="86"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc2_3" value="Consulter les données enrichies (VT, géoloc)"    style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#52BE80;fontColor=#1D8348;fontSize=10;" vertex="1" parent="c_p2"><mxGeometry x="47" y="134" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc2_4" value="Consulter le mapping MITRE ATT&amp;CK"           style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#52BE80;fontColor=#1D8348;fontSize=10;" vertex="1" parent="c_p2"><mxGeometry x="47" y="182" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc2_5" value="Consulter les événements corrélés (CRITICAL/HIGH)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#52BE80;fontColor=#1D8348;fontSize=10;" vertex="1" parent="c_p2"><mxGeometry x="47" y="230" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc2_6" value="Filtrer et rechercher les événements"             style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#52BE80;fontColor=#1D8348;fontSize=10;" vertex="1" parent="c_p2"><mxGeometry x="47" y="278" width="200" height="38" as="geometry"/></mxCell>
+
+        <!-- ===== P3: Leaks ===== -->
+        <mxCell id="c_p3" value="Intelligence Leaks (Telegram)"
+          style="swimlane;fontStyle=1;align=center;startSize=30;fillColor=#E9F7EF;strokeColor=#27AE60;fontColor=#1D8348;fontSize=11;rounded=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="785" y="285" width="295" height="292" as="geometry"/>
+        </mxCell>
+        <mxCell id="c_uc3_1" value="Gérer les canaux Telegram"                  style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#52BE80;fontColor=#1D8348;fontSize=10;" vertex="1" parent="c_p3"><mxGeometry x="47" y="38"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc3_2" value="Consulter les leaks détectés"               style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#52BE80;fontColor=#1D8348;fontSize=10;" vertex="1" parent="c_p3"><mxGeometry x="47" y="86"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc3_3" value="Voir les détails d&apos;un leak"            style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#52BE80;fontColor=#1D8348;fontSize=10;" vertex="1" parent="c_p3"><mxGeometry x="47" y="134" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc3_4" value="Analyser un fichier CSV / Excel (LLM)"      style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#52BE80;fontColor=#1D8348;fontSize=10;" vertex="1" parent="c_p3"><mxGeometry x="47" y="182" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc3_5" value="Générer un bulletin PDF par leak"           style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#52BE80;fontColor=#1D8348;fontSize=10;" vertex="1" parent="c_p3"><mxGeometry x="47" y="230" width="200" height="38" as="geometry"/></mxCell>
+
+        <!-- ===== P4: Export ===== -->
+        <mxCell id="c_p4" value="Export &amp; Intégration"
+          style="swimlane;fontStyle=1;align=center;startSize=30;fillColor=#EAF2FB;strokeColor=#2E86C1;fontColor=#1A5276;fontSize=11;rounded=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="155" y="648" width="295" height="196" as="geometry"/>
+        </mxCell>
+        <mxCell id="c_uc4_1" value="Exporter les événements en STIX 2.1"  style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="c_p4"><mxGeometry x="47" y="38"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc4_2" value="Pousser les événements vers MISP"     style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="c_p4"><mxGeometry x="47" y="86"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc4_3" value="Générer un rapport PDF global"        style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="c_p4"><mxGeometry x="47" y="134" width="200" height="38" as="geometry"/></mxCell>
+
+        <!-- ===== P5: Planification ===== -->
+        <mxCell id="c_p5" value="Planification Automatique"
+          style="swimlane;fontStyle=1;align=center;startSize=30;fillColor=#EAF2FB;strokeColor=#2E86C1;fontColor=#1A5276;fontSize=11;rounded=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="470" y="648" width="295" height="148" as="geometry"/>
+        </mxCell>
+        <mxCell id="c_uc5_1" value="Créer une planification automatique"    style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="c_p5"><mxGeometry x="47" y="38" width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc5_2" value="Activer / Désactiver une planification" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="c_p5"><mxGeometry x="47" y="86" width="200" height="38" as="geometry"/></mxCell>
+
+        <!-- ===== P6: Dashboard ===== -->
+        <mxCell id="c_p6" value="Tableau de Bord &amp; Statistiques"
+          style="swimlane;fontStyle=1;align=center;startSize=30;fillColor=#EAF2FB;strokeColor=#2E86C1;fontColor=#1A5276;fontSize=11;rounded=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="785" y="598" width="295" height="196" as="geometry"/>
+        </mxCell>
+        <mxCell id="c_uc6_1" value="Consulter les statistiques globales"       style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="c_p6"><mxGeometry x="47" y="38"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc6_2" value="Visualiser la heatmap MITRE ATT&amp;CK"   style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="c_p6"><mxGeometry x="47" y="86"  width="200" height="38" as="geometry"/></mxCell>
+        <mxCell id="c_uc6_3" value="Consulter la géolocalisation des menaces" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5DADE2;fontColor=#1A5276;fontSize=10;" vertex="1" parent="c_p6"><mxGeometry x="47" y="134" width="200" height="38" as="geometry"/></mxCell>
+
+        <!-- ASSOCIATIONS Analyste -->
+        <mxCell id="ce1"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc1_1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce2"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc1_2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce3"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc1_3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce4"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc1_4" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce5"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc2_1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce6"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc2_2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce7"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc2_3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce8"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc2_4" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce9"  value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc2_5" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce10" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc3_1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce11" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc3_2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce12" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc3_4" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce13" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc4_1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce14" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc4_2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce15" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc4_3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce16" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc5_1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce17" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc5_2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce18" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc6_1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce19" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc6_2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce20" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#27AE60;strokeWidth=1.5;" edge="1" source="c_analyst" target="c_uc6_3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <!-- Système -->
+        <mxCell id="ce_sys" value="&lt;&lt;déclenche&gt;&gt;" style="html=1;endArrow=open;endFill=0;strokeColor=#8E44AD;strokeWidth=1.5;fontColor=#8E44AD;fontSize=9;" edge="1" source="c_system" target="c_uc1_1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- INCLUDE -->
+        <mxCell id="cinc1" value="&lt;&lt;include&gt;&gt;" style="html=1;dashed=1;endArrow=open;endFill=0;strokeColor=#E74C3C;fontColor=#E74C3C;fontSize=9;" edge="1" source="c_uc1_1" target="c_p0_login"    parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="cinc2" value="&lt;&lt;include&gt;&gt;" style="html=1;dashed=1;endArrow=open;endFill=0;strokeColor=#E74C3C;fontColor=#E74C3C;fontSize=9;" edge="1" source="c_uc2_5" target="c_uc2_6"       parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="cinc3" value="&lt;&lt;include&gt;&gt;" style="html=1;dashed=1;endArrow=open;endFill=0;strokeColor=#E74C3C;fontColor=#E74C3C;fontSize=9;" edge="1" source="c_uc1_1" target="c_uc1_6"       parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="cinc4" value="&lt;&lt;include&gt;&gt;" style="html=1;dashed=1;endArrow=open;endFill=0;strokeColor=#E74C3C;fontColor=#E74C3C;fontSize=9;" edge="1" source="c_uc3_3" target="c_uc3_2"       parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- EXTEND -->
+        <mxCell id="cext1" value="&lt;&lt;extend&gt;&gt;" style="html=1;dashed=1;endArrow=open;endFill=0;strokeColor=#8E44AD;fontColor=#8E44AD;fontSize=9;" edge="1" source="c_p0_pipeline" target="c_uc1_1"   parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="cext2" value="&lt;&lt;extend&gt;&gt;" style="html=1;dashed=1;endArrow=open;endFill=0;strokeColor=#8E44AD;fontColor=#8E44AD;fontSize=9;" edge="1" source="c_uc2_5"      target="c_uc4_1"    parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="cext3" value="&lt;&lt;extend&gt;&gt;" style="html=1;dashed=1;endArrow=open;endFill=0;strokeColor=#8E44AD;fontColor=#8E44AD;fontSize=9;" edge="1" source="c_uc2_5"      target="c_uc4_2"    parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="cext4" value="&lt;&lt;extend&gt;&gt;" style="html=1;dashed=1;endArrow=open;endFill=0;strokeColor=#8E44AD;fontColor=#8E44AD;fontSize=9;" edge="1" source="c_uc3_2"      target="c_uc3_5"    parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <!-- ============================================================ -->
+  <!-- PAGE 3: VUE GLOBALE — Hiérarchie des acteurs                 -->
+  <!-- ============================================================ -->
+  <diagram id="diag_global" name="Vue Globale - Hiérarchie">
+    <mxGraphModel background="#F8F9FA" dx="1200" dy="800" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- TITRE -->
+        <mxCell id="g_title" value="BlueSec CTI — Vue Globale : Hiérarchie des Acteurs &amp; Cas d&apos;Utilisation"
+          style="text;html=1;align=center;strokeColor=none;fillColor=none;fontColor=#2C3E50;fontSize=17;fontStyle=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="100" y="14" width="1100" height="34" as="geometry"/>
+        </mxCell>
+
+        <!-- FRONTIÈRE -->
+        <mxCell id="g_sys" value="&lt;i&gt;Système BlueSec CTI&lt;/i&gt;"
+          style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#2C3E50;fontColor=#2C3E50;verticalAlign=top;fontSize=11;fontStyle=2;spacingTop=4;dashed=1;dashPattern=8 4;"
+          vertex="1" parent="1">
+          <mxGeometry x="200" y="56" width="1080" height="740" as="geometry"/>
+        </mxCell>
+
+        <!-- ===== ACTEURS ===== -->
+        <mxCell id="g_user" value="Utilisateur"
+          style="shape=mxgraph.uml.actor2;aspect=fixed;html=1;fillColor=#1ABC9C;strokeColor=#148F77;fontColor=#148F77;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;fontSize=12;fontStyle=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="70" y="190" width="35" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="g_admin" value="Administrateur"
+          style="shape=mxgraph.uml.actor2;aspect=fixed;html=1;fillColor=#E74C3C;strokeColor=#C0392B;fontColor=#C0392B;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;fontSize=12;fontStyle=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="50" y="420" width="35" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="g_analyst" value="Analyste CTI"
+          style="shape=mxgraph.uml.actor2;aspect=fixed;html=1;fillColor=#2E86C1;strokeColor=#1A5276;fontColor=#1A5276;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;fontSize=12;fontStyle=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="120" y="420" width="35" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="g_system" value="Système&#xa;(Scheduler)"
+          style="shape=mxgraph.uml.actor2;aspect=fixed;html=1;fillColor=#8E44AD;strokeColor=#6C3483;fontColor=#6C3483;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;fontSize=12;fontStyle=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="85" y="660" width="35" height="70" as="geometry"/>
+        </mxCell>
+
+        <!-- GÉNÉRALISATIONS -->
+        <mxCell id="g_gen1" value="&lt;i&gt;hérite de&lt;/i&gt;" style="html=1;endArrow=block;endFill=0;strokeColor=#E74C3C;strokeWidth=2;fontColor=#E74C3C;fontSize=9;fontStyle=2;" edge="1" source="g_admin"   target="g_user" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="g_gen2" value="&lt;i&gt;hérite de&lt;/i&gt;" style="html=1;endArrow=block;endFill=0;strokeColor=#2E86C1;strokeWidth=2;fontColor=#2E86C1;fontSize=9;fontStyle=2;" edge="1" source="g_analyst" target="g_user" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- PACKAGES -->
+        <!-- P0 Commun -->
+        <mxCell id="g_p0" value="Fonctions de Base (Utilisateur)"
+          style="swimlane;fontStyle=1;align=center;startSize=28;fillColor=#E8F8F5;strokeColor=#1ABC9C;fontColor=#117A65;fontSize=11;rounded=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="225" y="76" width="1030" height="165" as="geometry"/>
+        </mxCell>
+        <mxCell id="g_p0t" value="• Se connecter (Login)&#xa;• Lancer un pipeline simple&#xa;• Consulter le tableau de bord&#xa;• Consulter les statistiques de base&#xa;• Consulter l&apos;historique des runs"
+          style="text;html=1;align=left;verticalAlign=top;fontColor=#117A65;fontSize=11;spacingLeft=10;"
+          vertex="1" parent="g_p0">
+          <mxGeometry x="10" y="32" width="1005" height="118" as="geometry"/>
+        </mxCell>
+
+        <!-- P1 Admin -->
+        <mxCell id="g_p1" value="Gestion des Accès (Admin uniquement)"
+          style="swimlane;fontStyle=1;align=center;startSize=28;fillColor=#FDEDEC;strokeColor=#E74C3C;fontColor=#922B21;fontSize=11;rounded=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="225" y="268" width="500" height="198" as="geometry"/>
+        </mxCell>
+        <mxCell id="g_p1t" value="• Gérer les utilisateurs (créer, modifier, supprimer)&#xa;• Gérer les rôles &amp; permissions&#xa;• Configurer les API (VT, AbuseIPDB, NVD...)&#xa;• Configurer MISP / Telegram / LLM&#xa;• Gérer les planifications automatiques"
+          style="text;html=1;align=left;verticalAlign=top;fontColor=#922B21;fontSize=11;spacingLeft=10;"
+          vertex="1" parent="g_p1">
+          <mxGeometry x="10" y="32" width="476" height="152" as="geometry"/>
+        </mxCell>
+
+        <!-- P2 CTI -->
+        <mxCell id="g_p2" value="Analyse CTI &amp; Intelligence (Analyste CTI)"
+          style="swimlane;fontStyle=1;align=center;startSize=28;fillColor=#EAF2FB;strokeColor=#2E86C1;fontColor=#1A5276;fontSize=11;rounded=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="755" y="268" width="500" height="198" as="geometry"/>
+        </mxCell>
+        <mxCell id="g_p2t" value="• Pipeline CTI multi-source (12+ sources OSINT)&#xa;• Résultats : IoCs, CVEs, MITRE, événements corrélés&#xa;• Intelligence Leaks Telegram (LLM, PDF)&#xa;• Export STIX 2.1 / Intégration MISP&#xa;• Planification automatique des pipelines"
+          style="text;html=1;align=left;verticalAlign=top;fontColor=#1A5276;fontSize=11;spacingLeft=10;"
+          vertex="1" parent="g_p2">
+          <mxGeometry x="10" y="32" width="476" height="152" as="geometry"/>
+        </mxCell>
+
+        <!-- P3 Monitoring commun -->
+        <mxCell id="g_p3" value="Monitoring &amp; Tableau de Bord (Admin + Analyste CTI)"
+          style="swimlane;fontStyle=1;align=center;startSize=28;fillColor=#F9F3FF;strokeColor=#8E44AD;fontColor=#6C3483;fontSize=11;rounded=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="225" y="490" width="1030" height="148" as="geometry"/>
+        </mxCell>
+        <mxCell id="g_p3t" value="• Consulter les statistiques globales de la plateforme&#xa;• Visualiser la heatmap MITRE ATT&amp;CK&#xa;• Consulter la géolocalisation des menaces (carte)&#xa;• Logs d&apos;exécution temps réel (WebSocket)&#xa;• Stopper un pipeline en cours"
+          style="text;html=1;align=left;verticalAlign=top;fontColor=#6C3483;fontSize=11;spacingLeft=10;"
+          vertex="1" parent="g_p3">
+          <mxGeometry x="10" y="32" width="1005" height="102" as="geometry"/>
+        </mxCell>
+
+        <!-- ASSOCIATIONS -->
+        <mxCell id="gea1" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#1ABC9C;strokeWidth=2;" edge="1" source="g_user"    target="g_p0" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="gea2" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#E74C3C;strokeWidth=2;" edge="1" source="g_admin"   target="g_p1" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="gea3" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2E86C1;strokeWidth=2;" edge="1" source="g_analyst" target="g_p2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="gea4" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#E74C3C;strokeWidth=2;" edge="1" source="g_admin"   target="g_p3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="gea5" value="" style="html=1;endArrow=open;endFill=0;strokeColor=#2E86C1;strokeWidth=2;" edge="1" source="g_analyst" target="g_p3" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="gea6" value="&lt;&lt;déclenche&gt;&gt;" style="html=1;endArrow=open;endFill=0;strokeColor=#8E44AD;strokeWidth=2;fontColor=#8E44AD;fontSize=9;" edge="1" source="g_system" target="g_p2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- LÉGENDE -->
+        <mxCell id="g_leg" value="&lt;b&gt;Légende&lt;/b&gt;&#xa;——► hérite de (triangle vide = généralisation)&#xa;——  association (plein)&#xa;- - &lt;&lt;include&gt;&gt; (rouge pointillé)&#xa;- - &lt;&lt;extend&gt;&gt; (violet pointillé)"
+          style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=14;fillColor=#FEF9E7;strokeColor=#D4AC0D;fontColor=#7D6608;fontSize=10;align=left;spacingLeft=8;"
+          vertex="1" parent="1">
+          <mxGeometry x="225" y="665" width="300" height="105" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+</mxfile>

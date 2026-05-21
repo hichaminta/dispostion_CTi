@@ -377,30 +377,25 @@ class ThreatCorrelator:
     def __init__(self, input_dir, output_dir):
         self.input_dir  = input_dir
         self.output_dir = output_dir
-        self.tracking_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "correlation_tracking.json")
-        self.processed_files = self._load_tracking()
         self.events = {}
+        self.has_new_data = False
 
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
         self._load_existing_events()
 
-    def _load_tracking(self):
-        if os.path.exists(self.tracking_file):
-            try:
-                with open(self.tracking_file) as f:
-                    return set(json.load(f))
-            except:
-                return set()
-        return set()
-
-    def _save_tracking(self):
-        with open(self.tracking_file, 'w') as f:
-            json.dump(list(self.processed_files), f, indent=4)
-
     def _load_existing_events(self):
-        output_file = os.path.join(self.output_dir, "correlated_events_soc_enriched.json")
+        try:
+            files = [f for f in os.listdir(self.output_dir) if f.startswith("correlation_file_") and f.endswith(".json")]
+            if not files:
+                output_file = os.path.join(self.output_dir, "correlated_events_soc_enriched.json")
+            else:
+                latest_file = max(files)
+                output_file = os.path.join(self.output_dir, latest_file)
+        except Exception:
+            output_file = os.path.join(self.output_dir, "correlated_events_soc_enriched.json")
+
         if not os.path.exists(output_file):
             return
         try:
@@ -445,20 +440,36 @@ class ThreatCorrelator:
     def process_files(self):
         logger.info("Phase 1 — Loading and Grouping Data...")
         all_files = [f for f in os.listdir(self.input_dir) if f.endswith('_enriched.json')]
-        new_files  = [f for f in all_files if f not in self.processed_files]
 
-        if not new_files:
-            logger.info("No new files to process.")
+        if not all_files:
+            logger.info("No files to process.")
             return
 
-        for filename in new_files:
+        for filename in all_files:
             filepath = os.path.join(self.input_dir, filename)
             try:
                 with open(filepath, encoding='utf-8') as f:
                     data = json.load(f)
-                self._process_records(data)
-                self.processed_files.add(filename)
-                logger.info(f"[OK] {filename}")
+                
+                new_records = []
+                needs_save = False
+                for record in data:
+                    if record.get('passer_par_correler') != 1:
+                        new_records.append(record)
+                        record['passer_par_correler'] = 1
+                        needs_save = True
+
+                if new_records:
+                    self.has_new_data = True
+                    self._process_records(new_records)
+                    logger.info(f"[OK] {filename} : {len(new_records)} new records processed.")
+                else:
+                    logger.info(f"[SKIP] {filename} : No new records found.")
+                    
+                if needs_save:
+                    with open(filepath, 'w', encoding='utf-8') as f:
+                        json.dump(data, f, indent=4)
+                    
             except Exception as e:
                 logger.error(f"Error loading {filename}: {e}")
 
@@ -911,14 +922,17 @@ class ThreatCorrelator:
         return cleaned
 
     def finalize_and_save(self):
+        if not self.has_new_data:
+            logger.info("No new data processed. Skipping new correlation file generation.")
+            return
         if not self.events:
             logger.info("No events to save.")
             return
         cleaned = self._validate_and_clean()
-        output_file = os.path.join(self.output_dir, "correlated_events_soc_enriched.json")
+        timestamp = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+        output_file = os.path.join(self.output_dir, f"correlation_file_{timestamp}.json")
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(cleaned, f, indent=4, ensure_ascii=False)
-        self._save_tracking()
 
         # Résumé
         counts = {"CRITICAL":0,"HIGH":0,"MEDIUM":0,"LOW":0}

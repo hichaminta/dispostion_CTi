@@ -81,8 +81,20 @@ class STIXReporter:
 
     def __init__(self, input_file=None):
         self.base_dir    = BASE_DIR
-        # Lit le bundle STIX (stix_export.json)
-        self.input_file  = input_file or OUTPUT_FILE
+        
+        if input_file:
+            self.input_file = input_file
+        else:
+            out_dir = os.path.join(self.base_dir, "output_correlation")
+            try:
+                files = [f for f in os.listdir(out_dir) if f.startswith("stix_export_") and f.endswith(".json")]
+                if not files:
+                    self.input_file = os.path.join(out_dir, "stix_export.json")
+                else:
+                    self.input_file = max([os.path.join(out_dir, f) for f in files], key=os.path.getmtime)
+            except Exception:
+                self.input_file = os.path.join(out_dir, "stix_export.json")
+
         self.reports_dir = os.path.join(self.base_dir, "bultein_de_security")
         os.makedirs(self.reports_dir, exist_ok=True)
 
@@ -260,7 +272,15 @@ class STIXReporter:
             indicators_sorted = [i for i in indicators_sorted if i.get("id") in linked_ids]
 
         # Chargement de la corrélation d'enrichissement si présente
-        corr_file = os.path.join(os.path.dirname(self.input_file), "correlated_events_soc_enriched.json")
+        try:
+            corr_dir = os.path.dirname(self.input_file)
+            corr_files = [f for f in os.listdir(corr_dir) if f.startswith("correlation_file_") and f.endswith(".json")]
+            if not corr_files:
+                corr_file = os.path.join(corr_dir, "correlated_events_soc_enriched.json")
+            else:
+                corr_file = max([os.path.join(corr_dir, f) for f in corr_files], key=os.path.getmtime)
+        except Exception:
+            corr_file = os.path.join(os.path.dirname(self.input_file), "correlated_events_soc_enriched.json")
         corr_events = []
         if os.path.exists(corr_file):
             try:

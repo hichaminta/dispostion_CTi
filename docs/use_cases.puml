@@ -1,0 +1,360 @@
+@startuml USE_CASES_GLOBAL
+!theme plain
+skinparam backgroundColor #1a1a2e
+skinparam actorBackgroundColor #16213e
+skinparam actorBorderColor #0f3460
+skinparam usecaseBackgroundColor #0f3460
+skinparam usecaseBorderColor #e94560
+skinparam usecaseFontColor #ffffff
+skinparam actorFontColor #e94560
+skinparam arrowColor #e94560
+skinparam packageBackgroundColor #16213e
+skinparam packageBorderColor #0f3460
+skinparam packageFontColor #e94560
+skinparam titleFontColor #e94560
+skinparam titleFontSize 20
+
+title BlueSec CTI Platform — Diagramme de Cas d'Utilisation Global
+
+' ===== ACTEURS =====
+actor "Administrateur" as Admin #e94560
+actor "Analyste CTI" as Analyst #00b4d8
+actor "Système\n(Scheduler)" as System #90e0ef
+
+' ===== SYSTÈME =====
+rectangle "BlueSec CTI Platform" {
+
+  ' --- Gestion Utilisateurs & Rôles (Admin) ---
+  package "Gestion des Accès" {
+    usecase "Gérer les utilisateurs" as UC_Users
+    usecase "Gérer les rôles" as UC_Roles
+    usecase "Configurer le système" as UC_Config
+  }
+
+  ' --- Pipeline CTI ---
+  package "Pipeline CTI Multi-Source" {
+    usecase "Lancer un pipeline" as UC_Run
+    usecase "Lancer un pipeline ciblé" as UC_Targeted
+    usecase "Stopper un pipeline" as UC_Stop
+    usecase "Planifier des exécutions" as UC_Schedule
+    usecase "Consulter l'historique" as UC_History
+  }
+
+  ' --- Analyse & Résultats ---
+  package "Analyse & Résultats CTI" {
+    usecase "Consulter les IoCs extraits" as UC_IOC
+    usecase "Consulter les CVEs" as UC_CVE
+    usecase "Consulter les données enrichies" as UC_Enriched
+    usecase "Consulter le mapping MITRE" as UC_Mitre
+    usecase "Consulter les événements corrélés" as UC_Correlated
+  }
+
+  ' --- Intelligence Leaks ---
+  package "Intelligence Leaks (Telegram)" {
+    usecase "Gérer les canaux Telegram" as UC_Channels
+    usecase "Consulter les leaks" as UC_Leaks
+    usecase "Analyser un fichier CSV" as UC_CSV
+    usecase "Générer un bulletin PDF" as UC_Bulletin
+  }
+
+  ' --- Export & Intégration ---
+  package "Export & Intégration" {
+    usecase "Exporter en STIX 2.1" as UC_STIX
+    usecase "Intégrer dans MISP" as UC_MISP
+  }
+
+  ' --- Monitoring Temps Réel ---
+  package "Monitoring" {
+    usecase "Consulter les logs temps réel" as UC_Logs
+    usecase "Consulter les statistiques" as UC_Stats
+  }
+}
+
+' ===== ASSOCIATIONS ADMIN =====
+Admin --> UC_Users
+Admin --> UC_Roles
+Admin --> UC_Config
+Admin --> UC_Schedule
+Admin --> UC_Stop
+Admin --> UC_Stats
+Admin --> UC_Logs
+
+' ===== ASSOCIATIONS ANALYSTE =====
+Analyst --> UC_Run
+Analyst --> UC_Targeted
+Analyst --> UC_Stop
+Analyst --> UC_History
+Analyst --> UC_IOC
+Analyst --> UC_CVE
+Analyst --> UC_Enriched
+Analyst --> UC_Mitre
+Analyst --> UC_Correlated
+Analyst --> UC_Channels
+Analyst --> UC_Leaks
+Analyst --> UC_CSV
+Analyst --> UC_Bulletin
+Analyst --> UC_STIX
+Analyst --> UC_MISP
+Analyst --> UC_Logs
+Analyst --> UC_Stats
+
+' ===== ASSOCIATIONS SYSTÈME =====
+System --> UC_Run : <<déclenche>>
+System --> UC_Schedule : <<exécute>>
+
+@enduml
+
+
+@startuml USE_CASES_ADMIN
+!theme plain
+skinparam backgroundColor #1a1a2e
+skinparam actorBackgroundColor #e94560
+skinparam actorBorderColor #c1121f
+skinparam usecaseBackgroundColor #0f3460
+skinparam usecaseBorderColor #e94560
+skinparam usecaseFontColor #ffffff
+skinparam actorFontColor #ffffff
+skinparam arrowColor #e94560
+skinparam packageBackgroundColor #16213e
+skinparam packageBorderColor #e94560
+skinparam packageFontColor #e94560
+skinparam noteFontColor #e0e0e0
+skinparam noteBackgroundColor #0d1b2a
+skinparam titleFontColor #e94560
+skinparam titleFontSize 18
+
+title BlueSec — Cas d'Utilisation : Administrateur
+
+actor "Administrateur" as Admin
+
+rectangle "Système BlueSec CTI" {
+
+  ' ===== GESTION UTILISATEURS =====
+  package "Gestion des Utilisateurs" #16213e {
+    usecase "Créer un utilisateur" as UC_CreateUser
+    usecase "Modifier un utilisateur" as UC_EditUser
+    usecase "Supprimer un utilisateur" as UC_DeleteUser
+    usecase "Consulter la liste des utilisateurs" as UC_ListUsers
+    usecase "Réinitialiser le mot de passe" as UC_ResetPwd
+    usecase "Activer / Désactiver un compte" as UC_ToggleUser
+  }
+
+  ' ===== GESTION DES RÔLES =====
+  package "Gestion des Rôles & Permissions" #16213e {
+    usecase "Créer un rôle" as UC_CreateRole
+    usecase "Attribuer un rôle à un utilisateur" as UC_AssignRole
+    usecase "Modifier les permissions d'un rôle" as UC_EditRole
+    usecase "Supprimer un rôle" as UC_DeleteRole
+    usecase "Consulter les rôles existants" as UC_ListRoles
+  }
+
+  ' ===== CONFIGURATION SYSTÈME =====
+  package "Configuration du Système" #16213e {
+    usecase "Configurer les clés API\n(VirusTotal, AbuseIPDB, OTX...)" as UC_APIKeys
+    usecase "Configurer l'intégration MISP" as UC_MISPConfig
+    usecase "Configurer les credentials Telegram" as UC_TelegramConfig
+    usecase "Choisir le fournisseur LLM\n(Gemini / OpenAI / Ollama)" as UC_LLMConfig
+    usecase "Configurer les sources CTI" as UC_SourcesConfig
+  }
+
+  ' ===== PLANIFICATION =====
+  package "Gestion des Planifications" #16213e {
+    usecase "Créer une planification" as UC_CreateSched
+    usecase "Modifier une planification" as UC_EditSched
+    usecase "Supprimer une planification" as UC_DeleteSched
+    usecase "Activer / Désactiver une planification" as UC_ToggleSched
+  }
+
+  ' ===== SUPERVISION =====
+  package "Supervision & Monitoring" #16213e {
+    usecase "Consulter les statistiques globales" as UC_GlobalStats
+    usecase "Consulter les logs d'exécution" as UC_ExecLogs
+    usecase "Stopper un pipeline en cours" as UC_StopPipeline
+    usecase "Consulter l'historique des runs" as UC_RunHistory
+  }
+}
+
+' ===== ASSOCIATIONS =====
+Admin --> UC_CreateUser
+Admin --> UC_EditUser
+Admin --> UC_DeleteUser
+Admin --> UC_ListUsers
+Admin --> UC_ResetPwd
+Admin --> UC_ToggleUser
+
+Admin --> UC_CreateRole
+Admin --> UC_AssignRole
+Admin --> UC_EditRole
+Admin --> UC_DeleteRole
+Admin --> UC_ListRoles
+
+Admin --> UC_APIKeys
+Admin --> UC_MISPConfig
+Admin --> UC_TelegramConfig
+Admin --> UC_LLMConfig
+Admin --> UC_SourcesConfig
+
+Admin --> UC_CreateSched
+Admin --> UC_EditSched
+Admin --> UC_DeleteSched
+Admin --> UC_ToggleSched
+
+Admin --> UC_GlobalStats
+Admin --> UC_ExecLogs
+Admin --> UC_StopPipeline
+Admin --> UC_RunHistory
+
+' ===== INCLUSIONS =====
+UC_AssignRole .> UC_ListUsers : <<include>>
+UC_AssignRole .> UC_ListRoles : <<include>>
+UC_DeleteUser .> UC_ListUsers : <<include>>
+UC_EditUser .> UC_ListUsers : <<include>>
+
+' ===== EXTENSIONS =====
+UC_DeleteUser .> UC_ResetPwd : <<extend>>
+UC_CreateUser .> UC_AssignRole : <<extend>>
+
+note right of Admin
+  L'administrateur est le seul acteur
+  autorisé à créer/supprimer des comptes
+  et à attribuer des rôles.
+  Il gère également la configuration
+  globale des API et intégrations.
+end note
+
+@enduml
+
+
+@startuml USE_CASES_CTI_ANALYST
+!theme plain
+skinparam backgroundColor #0d1b2a
+skinparam actorBackgroundColor #00b4d8
+skinparam actorBorderColor #0077b6
+skinparam usecaseBackgroundColor #023e8a
+skinparam usecaseBorderColor #00b4d8
+skinparam usecaseFontColor #ffffff
+skinparam actorFontColor #ffffff
+skinparam arrowColor #00b4d8
+skinparam packageBackgroundColor #03045e
+skinparam packageBorderColor #0077b6
+skinparam packageFontColor #90e0ef
+skinparam noteFontColor #caf0f8
+skinparam noteBackgroundColor #023e8a
+skinparam titleFontColor #00b4d8
+skinparam titleFontSize 18
+
+title BlueSec — Cas d'Utilisation : Analyste CTI
+
+actor "Analyste CTI" as Analyst
+actor "Système\n(Scheduler)" as System #90e0ef
+
+rectangle "Système BlueSec CTI" {
+
+  ' ===== PIPELINE CTI =====
+  package "Exécution Pipeline CTI" #03045e {
+    usecase "Lancer un pipeline complet\n(toutes sources)" as UC_FullRun
+    usecase "Lancer un pipeline ciblé\n(source unique)" as UC_TargetedRun
+    usecase "Exécuter une étape spécifique\n(collecte / extraction / enrichissement)" as UC_StepRun
+    usecase "Stopper un pipeline" as UC_Stop
+    usecase "Consulter l'historique des runs" as UC_History
+    usecase "Visualiser les logs temps réel" as UC_LiveLogs
+  }
+
+  ' ===== ANALYSE RESULTATS =====
+  package "Analyse des Résultats CTI" #03045e {
+    usecase "Consulter les IoCs extraits\n(IP, domaine, URL, hash, email)" as UC_IOC
+    usecase "Consulter les CVEs identifiées" as UC_CVE
+    usecase "Consulter les données enrichies\n(géoloc, réputation, VirusTotal)" as UC_Enriched
+    usecase "Consulter le mapping\nMITRE ATT&CK" as UC_Mitre
+    usecase "Consulter les événements corrélés\n(CRITICAL / HIGH / MEDIUM / LOW)" as UC_Correlated
+    usecase "Filtrer et rechercher les événements" as UC_FilterEvents
+  }
+
+  ' ===== INTELLIGENCE LEAKS =====
+  package "Intelligence Leaks (Telegram)" #03045e {
+    usecase "Gérer les canaux Telegram\n(ajouter / supprimer)" as UC_Channels
+    usecase "Consulter les leaks détectés" as UC_Leaks
+    usecase "Voir les détails d'un leak\n(acteur, sévérité, données exposées)" as UC_LeakDetail
+    usecase "Analyser un fichier CSV/Excel\n(détection de données sensibles)" as UC_CSV
+    usecase "Générer un bulletin PDF\npar leak" as UC_BulletinLeak
+  }
+
+  ' ===== EXPORT & INTEGRATION =====
+  package "Export & Intégration" #03045e {
+    usecase "Exporter les événements\nen STIX 2.1" as UC_STIX
+    usecase "Pousser les événements\nvers MISP" as UC_MISP
+    usecase "Générer un rapport PDF\nglobal" as UC_BulletinGlobal
+  }
+
+  ' ===== PLANIFICATION =====
+  package "Planification" #03045e {
+    usecase "Créer une planification\nautomatique" as UC_CreateSched
+    usecase "Activer / Désactiver\nune planification" as UC_ToggleSched
+  }
+
+  ' ===== STATISTIQUES =====
+  package "Tableau de Bord & Statistiques" #03045e {
+    usecase "Consulter les statistiques\nglobales de la plateforme" as UC_Stats
+    usecase "Visualiser la heatmap\nMITRE ATT&CK" as UC_Heatmap
+    usecase "Consulter la géolocalisation\ndes menaces" as UC_GeoStats
+  }
+}
+
+' ===== ASSOCIATIONS ANALYSTE =====
+Analyst --> UC_FullRun
+Analyst --> UC_TargetedRun
+Analyst --> UC_StepRun
+Analyst --> UC_Stop
+Analyst --> UC_History
+Analyst --> UC_LiveLogs
+
+Analyst --> UC_IOC
+Analyst --> UC_CVE
+Analyst --> UC_Enriched
+Analyst --> UC_Mitre
+Analyst --> UC_Correlated
+Analyst --> UC_FilterEvents
+
+Analyst --> UC_Channels
+Analyst --> UC_Leaks
+Analyst --> UC_LeakDetail
+Analyst --> UC_CSV
+Analyst --> UC_BulletinLeak
+
+Analyst --> UC_STIX
+Analyst --> UC_MISP
+Analyst --> UC_BulletinGlobal
+
+Analyst --> UC_CreateSched
+Analyst --> UC_ToggleSched
+
+Analyst --> UC_Stats
+Analyst --> UC_Heatmap
+Analyst --> UC_GeoStats
+
+' ===== ASSOCIATIONS SYSTÈME =====
+System --> UC_FullRun : <<déclenche\nautomatiquement>>
+
+' ===== INCLUSIONS =====
+UC_FullRun .> UC_LiveLogs : <<include>>
+UC_TargetedRun .> UC_LiveLogs : <<include>>
+UC_Correlated .> UC_FilterEvents : <<include>>
+UC_LeakDetail .> UC_Leaks : <<include>>
+
+' ===== EXTENSIONS =====
+UC_Correlated .> UC_STIX : <<extend>>
+UC_Correlated .> UC_MISP : <<extend>>
+UC_Leaks .> UC_BulletinLeak : <<extend>>
+UC_CSV .> UC_BulletinGlobal : <<extend>>
+UC_Mitre .> UC_Heatmap : <<extend>>
+
+note right of Analyst
+  L'analyste CTI est le principal
+  utilisateur opérationnel.
+  Il interagit avec les deux pipelines :
+  - Pipeline CTI (12+ sources OSINT)
+  - Pipeline Leaks (Telegram)
+  et gère l'export vers MISP/STIX.
+end note
+
+@enduml

@@ -1,0 +1,545 @@
+@startuml SEQ_ADMIN_CREATE_USER
+!theme plain
+skinparam backgroundColor #1a1a2e
+skinparam sequenceArrowColor #e94560
+skinparam sequenceLifeLineBorderColor #e94560
+skinparam sequenceLifeLineBackgroundColor #0f3460
+skinparam participantBackgroundColor #0f3460
+skinparam participantBorderColor #e94560
+skinparam participantFontColor #ffffff
+skinparam actorBackgroundColor #e94560
+skinparam actorBorderColor #c1121f
+skinparam actorFontColor #ffffff
+skinparam noteBackgroundColor #16213e
+skinparam noteBorderColor #e94560
+skinparam noteFontColor #e0e0e0
+skinparam sequenceGroupBackgroundColor #16213e
+skinparam sequenceGroupBorderColor #e94560
+skinparam titleFontColor #e94560
+skinparam titleFontSize 16
+
+title Séquence 1 — Admin : Créer un utilisateur et attribuer un rôle
+
+actor "Administrateur" as Admin
+participant "Frontend\n(React Dashboard)" as UI
+participant "Backend\n(FastAPI)" as API
+participant "Auth Module\n(Users DB)" as Auth
+participant "Roles Module\n(Roles DB)" as Roles
+database "JSON Database\n(users.json)" as DB
+
+== Authentification Admin ==
+Admin -> UI : Se connecter (login + mot de passe)
+UI -> API : POST /auth/login {email, password}
+API -> Auth : Vérifier les credentials
+Auth -> DB : SELECT user WHERE email=?
+DB --> Auth : Retourner l'utilisateur
+Auth --> API : Token JWT généré
+API --> UI : { access_token, role: "admin" }
+UI --> Admin : Tableau de bord Admin affiché
+
+== Créer un nouvel utilisateur ==
+Admin -> UI : Accéder à "Gestion Utilisateurs"
+UI -> API : GET /admin/users
+API -> DB : Lire users.json
+DB --> API : Liste des utilisateurs
+API --> UI : [{ id, nom, email, role, actif }]
+UI --> Admin : Afficher la liste des utilisateurs
+
+Admin -> UI : Cliquer "Créer un utilisateur"
+UI --> Admin : Afficher le formulaire de création
+
+Admin -> UI : Remplir (nom, email, password, rôle)
+UI -> UI : Validation côté client (format email, MDP fort)
+
+alt Validation OK
+  UI -> API : POST /admin/users { nom, email, password, role_id }
+  API -> Auth : Hasher le mot de passe (bcrypt)
+  Auth --> API : password_hash
+  API -> DB : Insérer nouveau user { id, nom, email, hash, role_id, actif: true }
+  DB --> API : { user_id: "usr_123" }
+  API --> UI : { success: true, user_id: "usr_123" }
+  UI --> Admin : Notification "Utilisateur créé avec succès"
+else Validation KO (email déjà utilisé)
+  API --> UI : { error: "Email déjà enregistré" }
+  UI --> Admin : Message d'erreur affiché
+end
+
+== Attribuer / Modifier un rôle ==
+Admin -> UI : Sélectionner l'utilisateur créé
+UI -> API : GET /admin/roles
+API -> Roles : Lire roles.json
+Roles --> API : [{ id, nom, permissions[] }]
+API --> UI : Liste des rôles disponibles
+UI --> Admin : Menu déroulant des rôles
+
+Admin -> UI : Sélectionner le rôle "cti_analyst"
+UI -> API : PUT /admin/users/usr_123/role { role_id: "cti_analyst" }
+API -> DB : UPDATE user SET role_id = "cti_analyst" WHERE id = "usr_123"
+DB --> API : OK
+API --> UI : { success: true }
+UI --> Admin : Notification "Rôle attribué avec succès"
+
+note over Admin, DB
+  L'utilisateur peut maintenant se connecter
+  avec les permissions du rôle "cti_analyst"
+end note
+
+@enduml
+
+
+@startuml SEQ_ADMIN_CONFIG_API
+!theme plain
+skinparam backgroundColor #1a1a2e
+skinparam sequenceArrowColor #e94560
+skinparam sequenceLifeLineBorderColor #e94560
+skinparam sequenceLifeLineBackgroundColor #0f3460
+skinparam participantBackgroundColor #0f3460
+skinparam participantBorderColor #e94560
+skinparam participantFontColor #ffffff
+skinparam actorBackgroundColor #e94560
+skinparam actorBorderColor #c1121f
+skinparam actorFontColor #ffffff
+skinparam noteBackgroundColor #16213e
+skinparam noteBorderColor #e94560
+skinparam noteFontColor #e0e0e0
+skinparam titleFontColor #e94560
+skinparam titleFontSize 16
+
+title Séquence 2 — Admin : Configurer les clés API & Intégrations
+
+actor "Administrateur" as Admin
+participant "Frontend\n(SettingsModal)" as UI
+participant "Backend\n(FastAPI)" as API
+participant "Config Manager\n(.env / settings)" as Config
+participant "VirusTotal API" as VT
+participant "MISP Server" as MISP
+
+== Ouvrir la configuration ==
+Admin -> UI : Cliquer sur l'icône Paramètres
+UI --> Admin : Modal de configuration affiché\n(clés masquées: ****xxxx)
+
+== Configurer les clés API d'enrichissement ==
+Admin -> UI : Saisir la clé VirusTotal API
+Admin -> UI : Saisir la clé AbuseIPDB
+Admin -> UI : Saisir la clé NVD (CVEs)
+Admin -> UI : Cliquer "Tester la connexion VT"
+
+UI -> API : POST /settings/test { service: "virustotal", api_key: "..." }
+API -> VT : GET /api/v3/ip_addresses/8.8.8.8\nHeaders: x-apikey: [key]
+VT --> API : { data: { attributes: {...} } }
+API --> UI : { status: "OK", quota_remaining: 500 }
+UI --> Admin : Indicateur vert "VirusTotal connecté"
+
+Admin -> UI : Cliquer "Sauvegarder les clés API"
+UI -> API : PUT /settings { vt_key, abuseipdb_key, nvd_key, ... }
+API -> Config : Écrire dans .env\nVT_API_KEY=...\nABUSEIPDB_KEY=...
+Config --> API : OK
+API --> UI : { success: true }
+UI --> Admin : Notification "Paramètres sauvegardés"
+
+== Configurer l'intégration MISP ==
+Admin -> UI : Aller à l'onglet "MISP Integration"
+Admin -> UI : Saisir l'URL MISP (ex: https://misp.example.com)
+Admin -> UI : Saisir la clé d'authentification MISP
+Admin -> UI : Cliquer "Tester la connexion MISP"
+
+UI -> API : POST /settings/test { service: "misp", url: "...", key: "..." }
+API -> MISP : GET /servers/getVersion\nAuthorization: [key]
+
+alt MISP accessible
+  MISP --> API : { version: "2.4.170" }
+  API --> UI : { status: "OK", version: "2.4.170" }
+  UI --> Admin : Indicateur vert "MISP connecté v2.4.170"
+else MISP inaccessible
+  MISP --> API : Connection timeout
+  API --> UI : { status: "ERROR", message: "Serveur MISP inaccessible" }
+  UI --> Admin : Indicateur rouge "Connexion échouée"
+end
+
+Admin -> UI : Sauvegarder la configuration MISP
+UI -> API : PUT /settings/misp { url, key, org_id }
+API -> Config : Persister dans .env
+Config --> API : OK
+API --> UI : { success: true }
+
+@enduml
+
+
+@startuml SEQ_ANALYST_RUN_PIPELINE
+!theme plain
+skinparam backgroundColor #0d1b2a
+skinparam sequenceArrowColor #00b4d8
+skinparam sequenceLifeLineBorderColor #00b4d8
+skinparam sequenceLifeLineBackgroundColor #023e8a
+skinparam participantBackgroundColor #023e8a
+skinparam participantBorderColor #00b4d8
+skinparam participantFontColor #ffffff
+skinparam actorBackgroundColor #00b4d8
+skinparam actorBorderColor #0077b6
+skinparam actorFontColor #ffffff
+skinparam noteBackgroundColor #03045e
+skinparam noteBorderColor #00b4d8
+skinparam noteFontColor #caf0f8
+skinparam sequenceGroupBackgroundColor #03045e
+skinparam sequenceGroupBorderColor #0077b6
+skinparam titleFontColor #00b4d8
+skinparam titleFontSize 16
+
+title Séquence 3 — Analyste CTI : Lancer un Pipeline Complet
+
+actor "Analyste CTI" as Analyst
+participant "Frontend\n(Dashboard)" as UI
+participant "Backend\n(FastAPI)" as API
+participant "Worker\n(Task Engine)" as Worker
+participant "WebSocket\n(Temps Réel)" as WS
+participant "Pipeline\n(Subprocess)" as Pipeline
+database "JSON Database\n(runs.json)" as DB
+participant "Sources OSINT\n(12+ sources)" as Sources
+
+== Lancement du pipeline ==
+Analyst -> UI : Sélectionner source (ex: "all" ou "AlienVault OTX")
+Analyst -> UI : Cliquer "Lancer le Pipeline"
+UI -> API : POST /runs { source_name: "all", steps: ["collecte","extraction","enrichissement","correlation"] }
+API -> DB : Créer un run { run_id: uuid, status: "running", steps: [] }
+DB --> API : { run_id: "run_abc123" }
+API -> Worker : Enqueue task (run_id, source, steps)
+API --> UI : { run_id: "run_abc123", status: "running" }
+
+== Connexion WebSocket pour logs temps réel ==
+UI -> WS : ws://localhost:8000/ws/run_abc123
+WS --> UI : Connexion établie
+
+== Étape 1 : Collecte ==
+Worker -> Pipeline : subprocess "python collecte.py --source=all"
+Pipeline -> Sources : Requêtes HTTP vers 12 sources\n(AlienVault, MalwareBazaar, ThreatFox...)
+Sources --> Pipeline : Données brutes JSON
+Pipeline --> Worker : stdout "Collecte terminée: 1240 entrées"
+Worker -> DB : UPDATE step "collecte" { status: "success", count: 1240 }
+Worker -> WS : broadcast { step: "collecte", status: "success", logs: [...] }
+WS --> UI : Message WebSocket reçu
+UI --> Analyst : Étape "Collecte" ✓ (1240 entrées)
+
+== Étape 2 : Extraction IoC/CVE ==
+Worker -> Pipeline : subprocess "python extraction.py"
+Pipeline --> Worker : "Extraction: 847 IoCs, 123 CVEs identifiées"
+Worker -> DB : UPDATE step "extraction" { status: "success", ioc_count: 847, cve_count: 123 }
+Worker -> WS : broadcast { step: "extraction", ioc_count: 847, cve_count: 123 }
+WS --> UI : Message WebSocket reçu
+UI --> Analyst : Étape "Extraction" ✓ (847 IoCs, 123 CVEs)
+
+== Étape 3 : Enrichissement Multi-Source ==
+Worker -> Pipeline : subprocess "python enrichissement.py"
+note over Pipeline
+  AbuseIPDB → scores réputation IPs
+  VirusTotal → analyse hashs & URLs
+  Géolocalisation → binary search local
+  NVD → détails CVEs (CVSS score)
+  MITRE ATT&CK → mapping techniques
+end note
+Pipeline --> Worker : "Enrichissement: 847/847 IoCs traités"
+Worker -> DB : UPDATE step "enrichissement" { status: "success" }
+Worker -> WS : broadcast { step: "enrichissement", status: "success" }
+UI --> Analyst : Étape "Enrichissement" ✓
+
+== Étape 4 : Corrélation ==
+Worker -> Pipeline : subprocess "python correlation.py"
+Pipeline --> Worker : "Corrélation: 34 événements groupés\n12 CRITICAL, 18 HIGH, 4 MEDIUM"
+Worker -> DB : UPDATE step "correlation" { status: "success", events: 34 }
+Worker -> WS : broadcast { step: "correlation", critical: 12, high: 18 }
+UI --> Analyst : Étape "Corrélation" ✓ (34 événements)
+
+== Fin du pipeline ==
+Worker -> DB : UPDATE run { status: "success", finished_at: now() }
+Worker -> WS : broadcast { run_id: "run_abc123", status: "success" }
+WS --> UI : Pipeline terminé
+UI --> Analyst : Pipeline complet ✓\nNotification : "34 événements corrélés disponibles"
+
+@enduml
+
+
+@startuml SEQ_ANALYST_CORRELATED_STIX
+!theme plain
+skinparam backgroundColor #0d1b2a
+skinparam sequenceArrowColor #00b4d8
+skinparam sequenceLifeLineBorderColor #00b4d8
+skinparam sequenceLifeLineBackgroundColor #023e8a
+skinparam participantBackgroundColor #023e8a
+skinparam participantBorderColor #00b4d8
+skinparam participantFontColor #ffffff
+skinparam actorBackgroundColor #00b4d8
+skinparam actorBorderColor #0077b6
+skinparam actorFontColor #ffffff
+skinparam noteBackgroundColor #03045e
+skinparam noteBorderColor #00b4d8
+skinparam noteFontColor #caf0f8
+skinparam titleFontColor #00b4d8
+skinparam titleFontSize 16
+
+title Séquence 4 — Analyste CTI : Consulter les Événements Corrélés & Exporter STIX/MISP
+
+actor "Analyste CTI" as Analyst
+participant "Frontend\n(CorrelatedEvents)" as UI
+participant "Backend\n(FastAPI)" as API
+participant "STIX Exporter" as STIX
+participant "MISP Integrator\n(PyMISP)" as MISPInt
+participant "MISP Server" as MISP
+database "output_correlation/\n*.json" as FS
+
+== Consultation des événements corrélés ==
+Analyst -> UI : Naviguer vers "Événements Corrélés"
+UI -> API : GET /correlated?priority=CRITICAL&page=1&limit=50
+API -> FS : Lire correlated_events_soc_enriched.json
+FS --> API : [ { event_id, event_name, priority_score, iocs[], mitre_attack[], ... } ]
+API --> UI : 12 événements CRITICAL, 18 HIGH...
+
+UI --> Analyst : Liste des événements avec badges CRITICAL/HIGH/MEDIUM/LOW
+
+== Filtrer et rechercher ==
+Analyst -> UI : Filtrer par priority="CRITICAL"
+Analyst -> UI : Rechercher "ransomware"
+UI -> UI : Filtrage côté client (nom, tags, IoCs)
+UI --> Analyst : 5 événements CRITICAL liés à "ransomware"
+
+Analyst -> UI : Cliquer sur un événement
+UI -> API : GET /correlated/evt_001
+API -> FS : Lire les détails de l'événement
+FS --> API : { iocs: [45 IoCs], mitre: ["T1486 Data Encrypted","T1059"], actor: "LockBit 3.0" }
+API --> UI : Détails complets de l'événement
+UI --> Analyst : Vue détaillée :\n- 45 IoCs (IPs, hashes, domaines)\n- MITRE ATT&CK : T1486, T1059\n- Acteur : LockBit 3.0
+
+== Export STIX 2.1 ==
+Analyst -> UI : Cliquer "Exporter STIX 2.1"
+UI -> API : POST /export/stix { run_id: "run_abc123" }
+API -> STIX : generate_stix_bundle(events, iocs, mitre)
+
+note over STIX
+  Génère un bundle STIX 2.1 :
+  - Malware objects
+  - AttackPattern (MITRE)
+  - ThreatActor
+  - Indicator (IoCs)
+  - Relationship objects
+end note
+
+STIX -> FS : Écrire stix_export_run_abc123.json
+FS --> STIX : Fichier créé (2.3 MB)
+STIX --> API : { file_path: "stix_export_run_abc123.json", objects: 234 }
+API --> UI : { download_url: "/export/stix_export_run_abc123.json" }
+UI --> Analyst : Téléchargement STIX déclenché ✓
+
+== Intégration MISP ==
+Analyst -> UI : Cliquer "Pousser vers MISP"
+UI -> API : POST /misp/push { run_id: "run_abc123", events: [evt_001, evt_002] }
+API -> MISPInt : push_events_to_misp(events)
+
+loop Pour chaque événement corrélé
+  MISPInt -> MISP : PyMISP.add_event({ info, threat_level, distribution })
+  MISP --> MISPInt : { event_id: "misp_evt_456" }
+  MISPInt -> MISP : PyMISP.add_attribute(event_id, ioc_type, ioc_value)
+  MISP --> MISPInt : Attribut ajouté
+end
+
+MISPInt -> FS : UPDATE misp_tracking.json\n{ last_sync: now(), count: 34 }
+MISPInt --> API : { synced: 34, failed: 0 }
+API --> UI : { success: true, misp_events: 34 }
+UI --> Analyst : Notification "34 événements synchronisés dans MISP ✓"
+
+@enduml
+
+
+@startuml SEQ_ANALYST_LEAK_TELEGRAM
+!theme plain
+skinparam backgroundColor #0d1b2a
+skinparam sequenceArrowColor #00b4d8
+skinparam sequenceLifeLineBorderColor #00b4d8
+skinparam sequenceLifeLineBackgroundColor #023e8a
+skinparam participantBackgroundColor #023e8a
+skinparam participantBorderColor #00b4d8
+skinparam participantFontColor #ffffff
+skinparam actorBackgroundColor #00b4d8
+skinparam actorBorderColor #0077b6
+skinparam actorFontColor #ffffff
+skinparam noteBackgroundColor #03045e
+skinparam noteBorderColor #00b4d8
+skinparam noteFontColor #caf0f8
+skinparam sequenceGroupBackgroundColor #03045e
+skinparam sequenceGroupBorderColor #00b4d8
+skinparam titleFontColor #00b4d8
+skinparam titleFontSize 16
+
+title Séquence 5 — Analyste CTI : Intelligence Leaks (Telegram) & Bulletin PDF
+
+actor "Analyste CTI" as Analyst
+participant "Frontend\n(Leaks Page)" as UI
+participant "Backend\n(FastAPI\nLeaks Router)" as API
+participant "Telegram\nCollector\n(Telethon)" as TG
+participant "LLM Analyzer\n(Gemini/OpenAI)" as LLM
+participant "Bulletin\nGenerator\n(FPDF)" as PDF
+database "Leaks DB\n(leaks.json)" as DB
+participant "Canaux\nTelegram" as TGServer
+
+== Configuration des canaux Telegram ==
+Analyst -> UI : Aller à "Leaks Intelligence"
+UI -> API : GET /leaks/channels
+API -> DB : Lire channels.json
+DB --> API : [{ channel_id, name, active }]
+API --> UI : Liste des canaux configurés
+UI --> Analyst : Afficher les canaux surveillés
+
+Analyst -> UI : Ajouter un nouveau canal "t.me/darkweb_leaks"
+UI -> API : POST /leaks/channels { url: "t.me/darkweb_leaks" }
+API -> DB : Insérer canal { id: "ch_001", url: "...", actif: true }
+DB --> API : OK
+API --> UI : { success: true }
+UI --> Analyst : Canal ajouté à la surveillance
+
+== Collecte des données Telegram ==
+Analyst -> UI : Cliquer "Scanner les canaux"
+UI -> API : POST /leaks/run
+API -> TG : Telethon.start_crawler(channels=[...])
+
+loop Pour chaque canal actif
+  TG -> TGServer : GetHistory(channel_id, limit=200)
+  TGServer --> TG : Messages + fichiers attachés
+  TG -> TG : Filtrer messages avec fichiers\n(CSV, SQL, XLSX, TXT)
+  TG -> TG : Télécharger les fichiers joints
+
+  note over TG
+    Détection de données sensibles :
+    - Emails, mots de passe, CIN
+    - Données bancaires (IBAN, CVV)
+    - Salaires, données RH
+  end note
+
+  TG -> DB : Sauvegarder les messages bruts
+end
+
+TG --> API : { messages_collected: 87, files: 12 }
+
+== Analyse LLM (double-passe) ==
+API -> LLM : Passe 1 — Filtrer le bruit\nprompt: "Ces messages contiennent-ils des fuites réelles ?"
+LLM --> API : { real_leaks: 23, noise_removed: 64 }
+
+API -> LLM : Passe 2 — Consolider les incidents\nprompt: "Regrouper les incidents similaires, extraire acteur/cible/données"
+LLM --> API : [ { incident_id, acteur, cible, données_exposées, sévérité: "HIGH" } ]
+
+API -> DB : Sauvegarder les incidents consolidés
+DB --> API : 8 incidents uniques créés
+
+API --> UI : { leaks: 8, severities: { CRITICAL:2, HIGH:4, MEDIUM:2 } }
+UI --> Analyst : "8 nouveaux leaks détectés"\nBadges CRITICAL:2, HIGH:4
+
+== Consultation d'un leak ==
+Analyst -> UI : Cliquer sur un leak CRITICAL
+UI -> API : GET /leaks/incidents/inc_001
+API -> DB : Lire les détails de l'incident
+DB --> API : { acteur: "GhostSec", cible: "Banque Atlas Maroc",\ndonnées: ["emails:12000","passwords:12000","CIN:8500"],\ndate: "2026-05-15", canal: "t.me/darkweb_leaks" }
+API --> UI : Détails complets
+UI --> Analyst : Vue détaillée du leak :\n- Acteur : GhostSec\n- Cible : Banque Atlas Maroc\n- 12 000 comptes exposés\n- Données : emails, MDP, CIN
+
+== Génération du bulletin PDF ==
+Analyst -> UI : Cliquer "Générer le Bulletin PDF"
+UI -> API : POST /leaks/bulletin/inc_001
+API -> PDF : generate_bulletin(incident_data)
+
+note over PDF
+  Template BlueSec :
+  - En-tête avec logo BlueSec
+  - Résumé exécutif
+  - Tableau des données exposées
+  - Chronologie de l'incident
+  - Recommandations (IOC à bloquer)
+  - Pied de page avec classification TLP
+end note
+
+PDF -> DB : Écrire bultein_de_security/bulletin_inc_001.pdf
+DB --> PDF : Fichier créé
+PDF --> API : { file_path: "bulletin_inc_001.pdf", pages: 6 }
+API --> UI : { download_url: "/bulletins/bulletin_inc_001.pdf" }
+UI --> Analyst : Téléchargement du bulletin PDF ✓\n(6 pages, classifié TLP:AMBER)
+
+@enduml
+
+
+@startuml SEQ_SCHEDULER_AUTO
+!theme plain
+skinparam backgroundColor #0d1b2a
+skinparam sequenceArrowColor #90e0ef
+skinparam sequenceLifeLineBorderColor #90e0ef
+skinparam sequenceLifeLineBackgroundColor #023e8a
+skinparam participantBackgroundColor #023e8a
+skinparam participantBorderColor #90e0ef
+skinparam participantFontColor #ffffff
+skinparam actorBackgroundColor #90e0ef
+skinparam actorBorderColor #0077b6
+skinparam actorFontColor #0d1b2a
+skinparam noteBackgroundColor #03045e
+skinparam noteBorderColor #90e0ef
+skinparam noteFontColor #caf0f8
+skinparam titleFontColor #90e0ef
+skinparam titleFontSize 16
+
+title Séquence 6 — Planification : Exécution Automatique du Pipeline
+
+actor "Administrateur\nou Analyste CTI" as User
+participant "Frontend\n(Planifications)" as UI
+participant "Backend\n(FastAPI)" as API
+participant "Scheduler\n(Background)" as Sched
+participant "Worker\n(Task Engine)" as Worker
+participant "WebSocket" as WS
+database "schedules.json" as SchedDB
+database "runs.json" as RunDB
+
+== Créer une planification ==
+User -> UI : Aller à "Planifications"
+UI -> API : GET /schedules
+API -> SchedDB : Lire schedules.json
+SchedDB --> API : [{ id, source, step, interval, actif }]
+API --> UI : Liste des planifications
+UI --> User : Afficher les planifications actives
+
+User -> UI : Cliquer "Nouvelle Planification"
+UI --> User : Formulaire :\n- Source : AlienVault OTX\n- Étape : Complet\n- Intervalle : toutes les 6h
+User -> UI : Soumettre la planification
+
+UI -> API : POST /schedules { source: "otx", step: "all", interval_hours: 6 }
+API -> SchedDB : Insérer { id: "sched_007", cron: "0 */6 * * *", actif: true }
+SchedDB --> API : OK
+API -> Sched : Enregistrer le job cron
+Sched --> API : Job enregistré (prochain run dans 6h)
+API --> UI : { success: true, next_run: "2026-05-21T18:00:00" }
+UI --> User : Planification créée ✓\nProchain run : aujourd'hui à 18h00
+
+== Déclenchement automatique (6h plus tard) ==
+Sched -> Sched : Heure déclenchée (18:00:00)
+Sched -> API : Déclencher POST /runs (interne)\n{ source: "otx", trigger: "schedule", sched_id: "sched_007" }
+API -> RunDB : Créer run { run_id: "run_auto_001", trigger: "auto" }
+RunDB --> API : OK
+API -> Worker : Enqueue task
+
+note over Worker
+  Même pipeline qu'un run manuel :
+  Collecte → Extraction → Enrichissement
+  → Corrélation → STIX Export
+end note
+
+Worker -> WS : Broadcast début du run automatique
+WS --> UI : Notification "Run automatique démarré (OTX)"
+UI --> User : Indicateur "Run en cours" sur le Dashboard
+
+Worker -> Worker : Exécuter toutes les étapes...
+Worker -> RunDB : UPDATE run { status: "success", finished_at: now() }
+Worker -> WS : Broadcast run terminé
+WS --> UI : Notification "Run OTX terminé ✓ — 156 IoCs, 3 CVEs"
+UI --> User : Afficher nouveau run dans l'historique
+
+== Gestion de la planification ==
+User -> UI : Désactiver la planification
+UI -> API : PUT /schedules/sched_007 { actif: false }
+API -> SchedDB : UPDATE { actif: false }
+API -> Sched : Retirer le job cron
+Sched --> API : Job supprimé
+API --> UI : { success: true }
+UI --> User : Planification désactivée ✓
+
+@enduml
