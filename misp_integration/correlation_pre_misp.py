@@ -848,6 +848,14 @@ class ThreatCorrelator:
                 event["risk_score"] = round(raw, 1)
                 event["risk_level"] = RiskScorer._get_level(event["risk_score"])
 
+                if event.get("threat_type") == "threat_report":
+                    tags_set = set(event["tags"]) if isinstance(event["tags"], list) else event["tags"]
+                    if "ransomware" in tags_set and "recent_threat" in tags_set:
+                        event["risk_score"] = max(event["risk_score"], 65.0)
+                        event["risk_level"] = RiskScorer._get_level(event["risk_score"])
+                        event["priority_score"] = "HIGH"
+                        event["soc_action"]     = "investigate"
+
                 s = event["risk_score"]
                 if s >= 90:
                     event["priority_score"] = "CRITICAL"

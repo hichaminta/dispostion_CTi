@@ -238,4 +238,8 @@ class PriorityScorer:
         if e.get("suspicious_keywords"): bonus += 5
         score += min(30, bonus)
 
+        ioc_type = ioc.get("type", "")
+        if ioc_type in ("sha256", "sha1", "md5") and source_confidence >= 85 and score < 30:
+            score = 30.0
+
         return round(min(100.0, score), 1)

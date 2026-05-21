@@ -1,698 +1,76 @@
 import json
 import os
-import uuid
+import sys
+import re
 from datetime import datetime, timezone
 
+# Force UTF-8 stdout on Windows to avoid cp1252 UnicodeEncodeError
+if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+
 BASE_DIR    = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-INPUT_FILE  = os.path.join(BASE_DIR, "output_correlation", "correlated_events_soc_enriched.json")
 OUTPUT_FILE = os.path.join(BASE_DIR, "output_correlation", "stix_export.json")
 
-# ─────────────────────────────────────────────────────────
-#  Mappages
-# ─────────────────────────────────────────────────────────
-# attack_type -> liste de malware_types STIX (plus précis que 1 seul type)
-ATTACK_TYPE_TO_MALWARE_TYPES = {
-    # Malware
-    "Botnet":           ["bot", "trojan"],
-    "RAT":              ["remote-access-trojan", "backdoor"],
-    "Stealer":          ["spyware", "credential-stealer", "keylogger"],
-    "Ransomware":       ["ransomware"],
-    "Dropper":          ["dropper", "downloader"],
-    "Wiper":            ["wiper"],
-    "Cryptominer":      ["resource-exploitation"],
-    "ExploitKit":       ["exploit-kit"],
-    "Rootkit":          ["rootkit", "backdoor"],
-    "Packer":           ["trojan"],
-    "Backdoor":         ["backdoor"],
-    "Bootkit":          ["bootkit", "rootkit"],
-    "Webshell":         ["webshell", "backdoor"],
-    "Adware":           ["adware"],
-    "Spyware":          ["spyware", "screen-capture"],
-    "WidespreadMalware":["trojan"],
-    # Phishing
-    "Phishing":         ["trojan"],
-    "Credential":       ["spyware", "credential-stealer"],
-    "BEC":              ["trojan"],
-    "Spearphish":       ["trojan"],
-    "Smishing":         ["trojan"],
-    # Vulnerability
-    "RCE":              ["exploit-kit"],
-    "LPE":              ["exploit-kit"],
-    "SQLi":             ["exploit-kit"],
-    "XSS":              ["exploit-kit"],
-    "SSRF":             ["exploit-kit"],
-    "DoS":              ["ddos"],
-    "AuthBypass":       ["exploit-kit"],
-    "ZeroDay":          ["exploit-kit"],
-    "Exploit":          ["exploit-kit"],
-    # Fallback
-    "Unknown":          ["unknown"],
-    "Other":            ["unknown"],
+# MITRE ATT&CK ID to Tactic and Name mapping for enrichment
+MITRE_NAMES = {
+    "T1566": ("Initial Access", "Phishing"),
+    "T1566.001": ("Initial Access", "Spearphishing Attachment"),
+    "T1497": ("Defense Evasion", "Virtualization/Sandbox Evasion"),
+    "T1071.001": ("Command &amp; Control", "Web Protocols (HTTP/S C2)"),
+    "T1059.001": ("Execution", "PowerShell"),
+    "T1059.007": ("Execution", "JavaScript"),
+    "T1059.005": ("Execution", "Visual Basic"),
+    "T1105": ("Command &amp; Control", "Ingress Tool Transfer"),
+    "T1204": ("Execution", "User Execution"),
+    "T1110": ("Credential Access", "Brute Force"),
+    "T1190": ("Initial Access", "Exploit Public-Facing Application"),
+    "T1486": ("Impact", "Data Encrypted for Impact"),
+    "T1027": ("Defense Evasion", "Obfuscated Files or Information"),
+    "T1071": ("Command &amp; Control", "Application Layer Protocol"),
+    "TA0002": ("Execution", "Execution"),
+    "TA0006": ("Credential Access", "Credential Access"),
+    "TA0010": ("Exfiltration", "Exfiltration"),
+    "TA0003": ("Persistence", "Persistence"),
+    "TA0011": ("Command &amp; Control", "Command and Control"),
+    "T1047": ("Execution", "Windows Management Instrumentation"),
+    "T1055": ("Defense Evasion", "Process Injection"),
+    "T1570": ("Lateral Movement", "Lateral Tool Transfer"),
+    "T1083": ("Discovery", "File and Directory Discovery"),
+    "T1078": ("Defense Evasion", "Valid Accounts"),
+    "T1210": ("Lateral Movement", "Exploitation of Remote Services"),
+    "T1068": ("Privilege Escalation", "Exploitation for Privilege Escalation"),
+    "T1090": ("Command &amp; Control", "Proxy"),
+    "T1555": ("Credential Access", "Credentials from Password Stores"),
+    "T1583.001": ("Resource Development", "Acquire Infrastructure: Domains"),
+    "T1498": ("Impact", "Network Denial of Service"),
+    "T1499": ("Impact", "Endpoint Denial of Service"),
 }
 
-# malware_family -> (galaxy MISP, cluster, malware_types spécifiques)
-# MISP utilisera le label misp-galaxy:malpedia="<cluster>" pour identifier la famille exacte
-MALWARE_FAMILY_MAP = {
-    # Botnets bancaires
-    "qakbot":         ("malpedia", "QakBot",          ["trojan", "banker", "bot"]),
-    "emotet":         ("malpedia", "Emotet",           ["trojan", "banker", "spam-bot"]),
-    "trickbot":       ("malpedia", "TrickBot",         ["trojan", "banker"]),
-    "dridex":         ("malpedia", "Dridex",           ["trojan", "banker"]),
-    "icedid":         ("malpedia", "IcedID",           ["trojan", "banker"]),
-    # RATs
-    "quasar rat":     ("malpedia", "Quasar RAT",       ["remote-access-trojan"]),
-    "remcos":         ("malpedia", "Remcos",           ["remote-access-trojan"]),
-    "njrat":          ("malpedia", "njRAT",            ["remote-access-trojan"]),
-    "asyncrat":       ("malpedia", "AsyncRAT",         ["remote-access-trojan"]),
-    "havoc":          ("malpedia", "Havoc",            ["remote-access-trojan"]),
-    "cobalt strike":  ("malpedia", "Cobalt Strike",    ["remote-access-trojan"]),
-    # Stealers
-    "unknown stealer":("malpedia", "Unknown Stealer",  ["spyware", "credential-stealer"]),
-    "redline":        ("malpedia", "RedLine Stealer",  ["spyware", "credential-stealer"]),
-    "lumma":          ("malpedia", "LummaC2",          ["spyware", "credential-stealer"]),
-    "agenttesla":     ("malpedia", "AgentTesla",       ["spyware", "credential-stealer"]),
-    "formbook":       ("malpedia", "FormBook",         ["spyware", "credential-stealer"]),
-    "vidar":          ("malpedia", "Vidar",            ["spyware", "credential-stealer"]),
-    # Ransomware
-    "lockbit":        ("malpedia", "LockBit",          ["ransomware"]),
-    "ryuk":           ("malpedia", "Ryuk",             ["ransomware"]),
-    "conti":          ("malpedia", "Conti",            ["ransomware"]),
-    "blackcat":       ("malpedia", "BlackCat",         ["ransomware"]),
-    "alphv":          ("malpedia", "BlackCat",         ["ransomware"]),
-    "yurei":          ("malpedia", "Yurei",            ["ransomware"]),
-    # Droppers / Loaders
-    "clearfake":      ("malpedia", "ClearFake",        ["dropper"]),
-    "bumblebee":      ("malpedia", "Bumblebee",        ["dropper"]),
-    "guloader":       ("malpedia", "GuLoader",         ["dropper"]),
-    # Botnets IoT
-    "mirai":          ("malpedia", "Mirai",            ["worm", "bot"]),
-    "mozi":           ("malpedia", "Mozi",             ["worm", "bot"]),
-    "gafgyt":         ("malpedia", "BASHLITE",         ["worm", "bot"]),
-}
-# backward compat
-ATTACK_TYPE_TO_MALWARE_TYPE = {k: v[0] for k, v in {
-    "Botnet": ("trojan",), "RAT": ("remote-access-trojan",),
-    "Stealer": ("spyware",), "Ransomware": ("ransomware",),
-    "Dropper": ("dropper",), "Wiper": ("worm",),
-}.items()}
-
-ATTACK_TYPE_TO_KILL_CHAIN = {
-    # Malware
-    "Botnet":           [("mitre-attack", "resource-development"),
-                         ("mitre-attack", "command-and-control"),
-                         ("mitre-attack", "execution")],
-    "RAT":              [("mitre-attack", "initial-access"),
-                         ("mitre-attack", "execution"),
-                         ("mitre-attack", "persistence"),
-                         ("mitre-attack", "command-and-control")],
-    "Stealer":          [("mitre-attack", "credential-access"),
-                         ("mitre-attack", "collection"),
-                         ("mitre-attack", "exfiltration")],
-    "Ransomware":       [("mitre-attack", "execution"),
-                         ("mitre-attack", "impact")],
-    "Dropper":          [("mitre-attack", "initial-access"),
-                         ("mitre-attack", "execution"),
-                         ("mitre-attack", "defense-evasion")],
-    "Wiper":            [("mitre-attack", "execution"),
-                         ("mitre-attack", "impact")],
-    "Cryptominer":      [("mitre-attack", "execution"),
-                         ("mitre-attack", "impact")],
-    "ExploitKit":       [("mitre-attack", "initial-access"),
-                         ("mitre-attack", "execution")],
-    "Rootkit":          [("mitre-attack", "persistence"),
-                         ("mitre-attack", "privilege-escalation"),
-                         ("mitre-attack", "defense-evasion")],
-    "Packer":           [("mitre-attack", "defense-evasion"),
-                         ("mitre-attack", "execution")],
-    "Backdoor":         [("mitre-attack", "persistence"),
-                         ("mitre-attack", "command-and-control")],
-    "Bootkit":          [("mitre-attack", "persistence"),
-                         ("mitre-attack", "privilege-escalation")],
-    "Webshell":         [("mitre-attack", "persistence"),
-                         ("mitre-attack", "execution"),
-                         ("mitre-attack", "command-and-control")],
-    "Adware":           [("mitre-attack", "execution"),
-                         ("mitre-attack", "impact")],
-    "Spyware":          [("mitre-attack", "collection"),
-                         ("mitre-attack", "credential-access")],
-    "WidespreadMalware":[("mitre-attack", "execution"),
-                         ("mitre-attack", "command-and-control")],
-    # Phishing
-    "Phishing":         [("mitre-attack", "initial-access"),
-                         ("mitre-attack", "credential-access")],
-    "Credential":       [("mitre-attack", "credential-access"),
-                         ("mitre-attack", "collection"),
-                         ("mitre-attack", "exfiltration")],
-    "BEC":              [("mitre-attack", "initial-access"),
-                         ("mitre-attack", "collection")],
-    "Spearphish":       [("mitre-attack", "initial-access"),
-                         ("mitre-attack", "credential-access")],
-    "Smishing":         [("mitre-attack", "initial-access"),
-                         ("mitre-attack", "credential-access")],
-    # Vulnerability
-    "RCE":              [("mitre-attack", "initial-access"),
-                         ("mitre-attack", "execution")],
-    "LPE":              [("mitre-attack", "privilege-escalation")],
-    "SQLi":             [("mitre-attack", "initial-access"),
-                         ("mitre-attack", "credential-access")],
-    "XSS":              [("mitre-attack", "initial-access"),
-                         ("mitre-attack", "execution")],
-    "SSRF":             [("mitre-attack", "initial-access"),
-                         ("mitre-attack", "discovery")],
-    "DoS":              [("mitre-attack", "impact")],
-    "AuthBypass":       [("mitre-attack", "initial-access"),
-                         ("mitre-attack", "privilege-escalation")],
-    "ZeroDay":          [("mitre-attack", "initial-access"),
-                         ("mitre-attack", "execution")],
-    "Exploit":          [("mitre-attack", "initial-access"),
-                         ("mitre-attack", "execution")],
-    # Fallback
-    "Unknown":          [("mitre-attack", "execution")],
-    "Other":            [("mitre-attack", "execution")],
-}
-
-INDICATOR_TYPE_MAP = {
-    "CRITICAL": "malicious-activity",
-    "HIGH":     "malicious-activity",
-    "MEDIUM":   "anomalous-activity",
-    "LOW":      "anomalous-activity",
-}
-
-RELATIONSHIP_TYPES = {
-    # (source_type, target_type) -> relationship_type
-    ("indicator",        "malware"):       "indicates",
-    ("indicator",        "campaign"):      "indicates",
-    ("indicator",        "vulnerability"): "indicates",
-    ("indicator",        "infrastructure"):"indicates",
-    ("malware",          "attack-pattern"):"uses",
-    ("campaign",         "malware"):       "uses",
-    ("campaign",         "identity"):      "targets",
-    ("malware",          "vulnerability"): "exploits",
-    ("campaign",         "threat-actor"):  "attributed-to",
-}
-
-
-class STIXExporter:
-    """Exporte correlated_events_soc_enriched.json → STIX 2.1 bundle complet."""
-
-    def __init__(self):
-        self.identity_id = f"identity--{uuid.uuid4()}"
-        self.objects      = []
-        self._now_str     = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        self._add_identity()
-
-    # ── Helpers ─────────────────────────────────────────
-    def _ts(self, iso_str=None):
-        if iso_str:
-            try:
-                s = iso_str.replace("+00:00", "Z").replace(" ", "T")
-                if "." not in s:
-                    s = s.replace("Z", ".000000Z")
-                # Fix: ajouter Z si absent (ex: 2026-03-31T16:35:37.820000)
-                if not s.endswith("Z"):
-                    s = s + "Z"
-                return s
-            except Exception:
-                pass
-        return self._now_str
-
-    def _stix_pattern(self, ioc_type, value):
-        t = ioc_type.lower()
-        v = str(value).replace("'", "\\'")
-        m = {
-            # CIDRs: MISP rejette ipv4-addr pour les blocs réseau -> network-traffic
-            "ip":       f"[network-traffic:dst_ref.type = 'ipv4-addr' AND network-traffic:dst_ref.value = '{v}']" if "/" in v else f"[ipv4-addr:value = '{v}']",
-            "ipv4":     f"[network-traffic:dst_ref.type = 'ipv4-addr' AND network-traffic:dst_ref.value = '{v}']" if "/" in v else f"[ipv4-addr:value = '{v}']",
-            "ipv6":     f"[ipv6-addr:value = '{v}']",
-            "domain":   f"[domain-name:value = '{v}']",
-            "hostname": f"[domain-name:value = '{v}']",
-            "url":      f"[url:value = '{v}']",
-            "md5":      f"[file:hashes.'MD5' = '{v}']",
-            "sha1":     f"[file:hashes.'SHA-1' = '{v}']",
-            "sha256":   f"[file:hashes.'SHA-256' = '{v}']",
-            "sha3_384": f"[file:hashes.'SHA3-384' = '{v}']",
-            "hash":     f"[file:hashes.'MD5' = '{v}']",
-            "cve":      f"[vulnerability:name = '{v}']",
-        }
-        return m.get(t, f"[x-unknown:value = '{v}']")
-
-    def _mitre_refs(self, techniques):
-        refs = []
-        for t in (techniques or []):
-            if t and t != "Unknown":
-                refs.append({
-                    "source_name": "mitre-attack",
-                    "external_id": t,
-                    "url": f"https://attack.mitre.org/techniques/{t}/"
-                })
-        return refs
-
-    def _cve_refs(self, group_id):
-        """Construit les refs CVE + NVD depuis le group_id."""
-        cve_id = group_id.replace("CVE-", "", 1) if group_id.startswith("CVE-CVE-") else group_id.replace("CVE-", "", 1)
-        # Normaliser : CVE-CVE-2002-0367 -> CVE-2002-0367
-        if cve_id.startswith("CVE-"):
-            pass
-        else:
-            cve_id = "CVE-" + cve_id
-        return [
-            {"source_name": "cve",  "external_id": cve_id},
-            {"source_name": "nvd",  "url": f"https://nvd.nist.gov/vuln/detail/{cve_id}"},
-        ]
-
-    def _kill_chain(self, attack_type):
-        phases = ATTACK_TYPE_TO_KILL_CHAIN.get(attack_type, [])
-        return [{"kill_chain_name": kc, "phase_name": ph} for kc, ph in phases]
-
-    def _ioc_description(self, ioc, event):
-        """Description enrichie de l'IOC — toutes les données disponibles."""
-        e     = ioc.get("enrichment", {})
-        lines = []
-
-        # Priorité et scoring
-        ioc_prio = ioc.get("priority_score", event.get("priority_score", "LOW"))
-        lines.append(f"IOC Priority : {ioc_prio} | Risk Score : {ioc.get('risk_score', 0)}")
-        lines.append(f"SOC Action   : {ioc.get('soc_action', 'monitor').upper()}")
-        conf = ioc.get("confidence_label") or event.get("confidence_score","")
-        if conf:
-            lines.append(f"Confidence   : {conf}")
-
-        # Contexte menace
-        atk = ioc.get("attack_type") or event.get("attack_type","")
-        if atk and atk not in ("Other","Unknown"):
-            lines.append(f"Attack Type  : {atk}")
-        family = ioc.get("malware_family") or e.get("malware_family","")
-        if family:
-            lines.append(f"Malware Family: {family}")
-        tlp = ioc.get("tlp") or e.get("tlp","TLP:CLEAR")
-        lines.append(f"TLP          : {tlp}")
-
-        # Géolocalisation
-        country = ioc.get("country") or e.get("country") or e.get("countryCode","")
-        isp     = ioc.get("isp") or e.get("isp","")
-        asn     = ioc.get("asn") or e.get("asn","")
-        as_own  = ioc.get("as_owner") or e.get("as_owner","")
-        if country: lines.append(f"Country      : {country}")
-        if isp:     lines.append(f"ISP          : {isp}")
-        if asn:     lines.append(f"ASN          : {asn} ({as_own})")
-
-        # VirusTotal
-        vt_mal = ioc.get("vt_malicious_count")
-        if vt_mal is None: vt_mal = e.get("vt_malicious_count")
-        vt_tot = e.get("vt_total_engines","?")
-        if vt_mal is not None:
-            lines.append(f"VirusTotal   : {vt_mal}/{vt_tot} malicious engines")
-            if e.get("vt_reputation") is not None:
-                lines.append(f"VT Reputation: {e['vt_reputation']}")
-            if e.get("vt_tags"):
-                lines.append(f"VT Tags      : {', '.join(e['vt_tags'])}")
-
-        # AbuseIPDB
-        abuse = ioc.get("abuse_score")
-        if abuse is None: abuse = e.get("abuseConfidenceScore")
-        if abuse is not None:
-            reports = e.get("totalReports", 0)
-            lines.append(f"AbuseIPDB    : {abuse}% confidence ({reports} reports)")
-            if e.get("lastReportedAt"):
-                lines.append(f"Last Reported: {e['lastReportedAt']}")
-
-        # URLScan
-        urlscan_rep  = ioc.get("urlscan_report")  or e.get("urlscan_report_url","")
-        urlscan_shot = ioc.get("urlscan_screenshot") or e.get("urlscan_screenshot_url","")
-        risk_flag    = ioc.get("risk_flag") or e.get("risk_flag","")
-        typosquat    = ioc.get("typosquat_flag")
-        susp_kw      = e.get("suspicious_keywords",[])
-        if urlscan_rep:  lines.append(f"URLScan      : {urlscan_rep}")
-        if urlscan_shot: lines.append(f"Screenshot   : {urlscan_shot}")
-        if risk_flag:    lines.append(f"URLScan Risk : {risk_flag.upper()}")
-        if typosquat:    lines.append("Typosquatting: detected")
-        if susp_kw:      lines.append(f"Susp. Keywords: {', '.join(susp_kw)}")
-
-        # Statut (feodotracker C2)
-        status = e.get("status","")
-        port   = e.get("port","")
-        if status: lines.append(f"C2 Status    : {status.upper()}")
-        if port:   lines.append(f"Port         : {port}")
-
-        # MalwareBazaar hashes
-        for h in ("sha1","sha3_384","tlsh","ssdeep","imphash"):
-            if e.get(h): lines.append(f"{h.upper():<12}: {e[h]}")
-        if e.get("file_size"):
-            lines.append(f"File Size    : {e['file_size']} bytes")
-        if e.get("reporter"):
-            lines.append(f"Reporter     : {e['reporter']}")
-        if e.get("intel_downloads"):
-            lines.append(f"Downloads    : {e['intel_downloads']}")
-
-        # Sources
-        srcs = ioc.get("sources",[])
-        if srcs: lines.append(f"Sources      : {', '.join(srcs)}")
-
-        # First/last seen
-        if ioc.get("first_seen"): lines.append(f"First Seen   : {ioc['first_seen']}")
-        if ioc.get("last_seen"):  lines.append(f"Last Seen    : {ioc['last_seen']}")
-
-        return "\n".join(lines)
-
-    def _event_description(self, event):
-        lines = [
-            f"Priority     : {event.get('priority_score','LOW')}",
-            f"Risk Score   : {event.get('risk_score',0)}",
-            f"SOC Action   : {event.get('soc_action','monitor').upper()}",
-            f"Attack Type  : {event.get('attack_type','Unknown')}",
-            f"Confidence   : {event.get('confidence_score',0)}%",
-            f"Event Type   : {event.get('event_type','')}",
-        ]
-        if event.get("source_list"):
-            lines.append(f"Sources      : {', '.join(event['source_list'])}")
-        if event.get("first_seen"):
-            lines.append(f"First Seen   : {event['first_seen']}")
-        if event.get("last_seen"):
-            lines.append(f"Last Seen    : {event['last_seen']}")
-        if event.get("correlation_strength"):
-            lines.append(f"Corr. Strength: {event['correlation_strength']}")
-        return "\n".join(lines)
-
-    def _add_identity(self):
-        self.objects.append({
-            "type":           "identity",
-            "spec_version":   "2.1",
-            "id":             self.identity_id,
-            "created":        self._now_str,
-            "modified":       self._now_str,
-            "name":           "SOC-PFE-CTI",
-            "identity_class": "organization",
-            "description":    "Plateforme CTI Interne SOC",
-        })
-
-    # ── Création des objets STIX principaux ─────────────
-    def _make_main_object(self, event, now):
-        etype    = event.get("event_type", "suspicious")
-        at       = event.get("attack_type", "Other")
-        ext_refs = self._mitre_refs(event.get("mitre_techniques", []))
-        labels   = [t for t in event.get("tags", []) if t]
-        ts_first = self._ts(event.get("first_seen"))
-        ts_last  = self._ts(event.get("last_seen"))
-
-        base = {
-            "spec_version":    "2.1",
-            "created_by_ref":  self.identity_id,
-            "created":         now,
-            "modified":        now,
-            "name":            event.get("event_name", event.get("group_id")),
-            "description":     self._event_description(event),
-            "labels":          labels,
-            "confidence":      int(event.get("confidence_score", 0)),
-            "external_references": ext_refs,
-            "x_soc_priority":  event.get("priority_score"),
-            "x_soc_risk":      event.get("risk_score"),
-            "x_soc_action":    event.get("soc_action"),
-            "x_soc_group_id":  event.get("group_id"),
-        }
-
-        # Fix: CAMPAIGN- toujours en objet campaign, même si event_type="malware"
-        if event.get("group_id", "").startswith("CAMPAIGN-") and etype != "phishing":
-            etype = "campaign"
-
-        if etype == "malware":
-            mid = f"malware--{uuid.uuid4()}"
-            kc  = self._kill_chain(at) or [{"kill_chain_name": "mitre-attack", "phase_name": "execution"}]
-            # Chercher la famille malware : IOCs > group_id > tags
-            family_raw = ""
-            for ioc in event.get("iocs", []):
-                fam = ioc.get("malware_family") or ioc.get("enrichment", {}).get("malware_family", "")
-                if fam:
-                    family_raw = fam
-                    break
-            # Fallback: extraire depuis group_id (MAL-QAKBOT -> qakbot -> QakBot)
-            if not family_raw:
-                gid = event.get("group_id", "")
-                if gid.startswith("MAL-"):
-                    family_raw = gid.replace("MAL-", "").replace("-", " ").title().strip()
-            # Fallback: extraire depuis les tags (yurei ransomware -> Yurei)
-            if not family_raw:
-                for tag in event.get("tags", []):
-                    parts = tag.lower().split()
-                    if len(parts) >= 2 and any(kw in parts for kw in ["ransomware","botnet","rat","stealer","trojan","worm","dropper"]):
-                        candidate = parts[0].title()
-                        if candidate.lower() in MALWARE_FAMILY_MAP:
-                            family_raw = candidate
-                            break
-            # Résoudre les malware_types et galaxy label depuis la famille
-            family_key = family_raw.lower().strip()
-            if family_key in MALWARE_FAMILY_MAP:
-                galaxy, cluster, mtypes = MALWARE_FAMILY_MAP[family_key]
-                galaxy_label = f'misp-galaxy:{galaxy}="{cluster}"'
-                # Ajouter le label galaxy dans les labels de l objet
-                if galaxy_label not in base["labels"]:
-                    base["labels"].append(galaxy_label)
-                # Ajouter aussi le nom exact de la famille comme label
-                base["labels"].append(f"malware-family:{cluster.lower().replace(' ', "-")}")
-            else:
-                # Fallback depuis attack_type
-                mtypes = ATTACK_TYPE_TO_MALWARE_TYPES.get(at, ["trojan"])
-                if family_raw:
-                    base["labels"].append(f"malware-family:{family_raw.lower().replace(' ', "-")}")
-
-            # Description enrichie avec la famille
-            if family_raw and family_raw not in base["description"]:
-                base["description"] = "Malware Family: " + family_raw + "\n" + base["description"]
-
-
-            base.update({
-                "type":              "malware",
-                "id":                mid,
-                "is_family":         True,
-                "malware_types":     mtypes,
-                "kill_chain_phases": kc,
-                "first_seen":        ts_first,
-                "last_seen":         ts_last,
-            })
-
-        elif etype == "vulnerability":
-            mid = f"vulnerability--{uuid.uuid4()}"
-            cve_refs = self._cve_refs(event.get("group_id",""))
-            base.update({
-                "type":               "vulnerability",
-                "id":                 mid,
-                "external_references": cve_refs + ext_refs,
-                "x_cvss_score":       event.get("cvss_score", 0),
-            })
-
-        elif etype == "phishing":
-            mid = f"campaign--{uuid.uuid4()}"
-            base.update({
-                "type":      "campaign",
-                "id":        mid,
-                "objective": "Credential harvesting / Phishing",
-                "first_seen": ts_first,
-                "last_seen":  ts_last,
-            })
-
-        elif event.get("group_id","").startswith("CAMPAIGN-"):
-            mid = f"campaign--{uuid.uuid4()}"
-            base.update({
-                "type":       "campaign",
-                "id":         mid,
-                "objective":  f"Threat campaign: {at}",
-                "first_seen": ts_first,
-                "last_seen":  ts_last,
-            })
-
-        else:
-            mid = f"infrastructure--{uuid.uuid4()}"
-            base.update({
-                "type":                "infrastructure",
-                "id":                  mid,
-                "infrastructure_types": ["malicious-server"],
-            })
-
-        return mid, base
-
-    def _make_indicator(self, ioc, event, now):
-        ioc_type = ioc.get("type","")
-        value    = ioc.get("value","")
-        priority = ioc.get("priority_score") or event.get("priority_score","LOW")
-        ind_type = INDICATOR_TYPE_MAP.get(priority, "anomalous-activity")
-        ts_valid = self._ts(ioc.get("first_seen") or event.get("first_seen"))
-
-        # External refs : MITRE depuis IOC ou event
-        mitre = ioc.get("mitre_techniques") or event.get("mitre_techniques",[])
-        ext_refs = self._mitre_refs(mitre)
-        urlscan  = ioc.get("urlscan_report") or ioc.get("enrichment",{}).get("urlscan_report_url","")
-        if urlscan:
-            ext_refs.append({"source_name": "urlscan", "url": urlscan})
-
-        # Labels IOC
-        labels = [f"soc:action={ioc.get('soc_action','monitor')}"]
-        tlp = ioc.get("tlp") or ioc.get("enrichment",{}).get("tlp","")
-        if tlp: labels.append(tlp)
-        fam = ioc.get("malware_family") or ioc.get("enrichment",{}).get("malware_family","")
-        if fam: labels.append(f"malware-family:{fam.lower()}")
-        country = ioc.get("country") or ioc.get("enrichment",{}).get("country","")
-        if country: labels.append(f"country:{country.lower()}")
-        rf = ioc.get("risk_flag") or ioc.get("enrichment",{}).get("risk_flag","")
-        if rf == "high": labels.append("urlscan:risk=high")
-        if ioc.get("typosquat_flag") or ioc.get("enrichment",{}).get("typosquat_flag"):
-            labels.append("urlscan:typosquat=true")
-
-        ind_id = f"indicator--{uuid.uuid4()}"
-        indicator = {
-            "type":            "indicator",
-            "spec_version":    "2.1",
-            "id":              ind_id,
-            "created_by_ref":  self.identity_id,
-            "created":         now,
-            "modified":        now,
-            "name":            f"{ioc_type.upper()} - {value}",
-            "description":     self._ioc_description(ioc, event),
-            "indicator_types": [ind_type],
-            "pattern":         self._stix_pattern(ioc_type, value),
-            "pattern_type":    "stix",
-            "valid_from":      ts_valid,
-            "confidence":      int(ioc.get("source_confidence") or event.get("confidence_score", 0)),
-            "labels":          labels,
-            "external_references": ext_refs,
-            "x_ioc_risk_score":  ioc.get("risk_score", 0),
-            "x_ioc_priority":    priority,
-            "x_ioc_risk_level":  ioc.get("risk_level","low"),
-            "x_ioc_sources":     ioc.get("sources",[]),
-            "x_ioc_relations":   ioc.get("relations",[]),
-        }
-        return ind_id, indicator
-
-    def _make_relationship(self, src_id, tgt_id, rel_type, now):
-        return {
-            "type":              "relationship",
-            "spec_version":      "2.1",
-            "id":                f"relationship--{uuid.uuid4()}",
-            "created_by_ref":    self.identity_id,
-            "created":           now,
-            "modified":          now,
-            "relationship_type": rel_type,
-            "source_ref":        src_id,
-            "target_ref":        tgt_id,
-        }
-
-    def _make_attack_pattern(self, technique, now):
-        ap_id = f"attack-pattern--{uuid.uuid4()}"
-        return ap_id, {
-            "type":          "attack-pattern",
-            "spec_version":  "2.1",
-            "id":            ap_id,
-            "created_by_ref": self.identity_id,
-            "created":       now,
-            "modified":      now,
-            "name":          technique,
-            "external_references": [{
-                "source_name": "mitre-attack",
-                "external_id": technique,
-                "url": f"https://attack.mitre.org/techniques/{technique}/"
-            }]
-        }
-
-    # ── Conversion principale ────────────────────────────
-    def convert_all(self, events_data):
-        for event in events_data:
-            now   = self._ts(event.get("first_seen")) or self._now_str
-            etype = event.get("event_type", "suspicious")
-
-            # Objet principal
-            main_id, main_obj = self._make_main_object(event, now)
-            self.objects.append(main_obj)
-            event_refs = [main_id]
-
-            # Attack patterns depuis MITRE techniques (max 3)
-            ap_ids = []
-            for tech in event.get("mitre_techniques", [])[:3]:
-                if tech and tech != "Unknown":
-                    ap_id, ap_obj = self._make_attack_pattern(tech, now)
-                    self.objects.append(ap_obj)
-                    ap_ids.append(ap_id)
-                    # malware/campaign uses attack-pattern
-                    if main_obj["type"] in ("malware","campaign"):
-                        rel = self._make_relationship(main_id, ap_id, "uses", now)
-                        self.objects.append(rel)
-                        event_refs.append(ap_id)
-                        event_refs.append(rel["id"])
-
-            # Indicateurs
-            for ioc in event.get("iocs", []):
-                ind_id, ind_obj = self._make_indicator(ioc, event, now)
-                self.objects.append(ind_obj)
-                event_refs.append(ind_id)
-
-                # indicator indicates main_object
-                rel = self._make_relationship(ind_id, main_id, "indicates", now)
-                self.objects.append(rel)
-                event_refs.append(rel["id"])
-
-            # Relations supplémentaires depuis event.relations
-            for rel_data in event.get("relations", []):
-                # On ne peut pas faire de relations STIX sans résoudre les IDs
-                # On stocke en custom property sur le report
-                pass
-
-            # Report groupant tout
-            rep_id = f"report--{uuid.uuid4()}"
-            report = {
-                "type":          "report",
-                "spec_version":  "2.1",
-                "id":            rep_id,
-                "created_by_ref": self.identity_id,
-                "created":       now,
-                "modified":      now,
-                "published":     now,
-                "name":          f"SOC Report: {event.get('event_name', event.get('group_id'))}",
-                "description":   self._event_description(event),
-                "report_types":  ["threat-report"],
-                "object_refs":   list(dict.fromkeys(event_refs)),
-                "labels":        [t for t in event.get("tags",[]) if t],
-                "x_soc_sources": event.get("source_list",[]),
-                "x_correlation_strength": event.get("correlation_strength",0),
-            }
-            self.objects.append(report)
-
-    def export(self, input_file=None, output_file=None):
-        src = input_file or INPUT_FILE
-        dst = output_file or OUTPUT_FILE
-
-        if not os.path.exists(src):
-            print(f"Erreur : {src} introuvable.")
-            return False
-
-        with open(src, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        print(f"Conversion de {len(data)} événements → STIX 2.1 ...")
-        self.convert_all(data)
-
-        bundle = {
-            "type":    "bundle",
-            "id":      f"bundle--{uuid.uuid4()}",
-            "x_soc_export_date": self._now_str,
-            "objects": self.objects,
-        }
-
-        os.makedirs(os.path.dirname(dst), exist_ok=True)
-        with open(dst, "w", encoding="utf-8") as f:
-            json.dump(bundle, f, indent=4, ensure_ascii=False)
-
-        # Stats
-        types = {}
-        for o in self.objects:
-            t = o["type"]
-            types[t] = types.get(t, 0) + 1
-
-        print(f"\nBundle STIX généré : {dst}")
-        print(f"Total objets : {len(self.objects)}")
-        for t, n in sorted(types.items()):
-            print(f"  {t:<22} : {n}")
-        return True
+def parse_pattern(pattern):
+    """Extrait le type et la valeur d'un indicateur STIX depuis son pattern."""
+    if not pattern:
+        return "Unknown", ""
+    # IP
+    m = re.search(r"ipv4-addr:value\s*=\s*'([^']+)'", pattern)
+    if m: return "IP", m.group(1)
+    # Domain
+    m = re.search(r"domain-name:value\s*=\s*'([^']+)'", pattern)
+    if m: return "Domain", m.group(1)
+    # URL
+    m = re.search(r"url:value\s*=\s*'([^']+)'", pattern)
+    if m: return "URL", m.group(1)
+    # Email
+    m = re.search(r"email-addr:value\s*=\s*'([^']+)'", pattern)
+    if m: return "Email", m.group(1)
+    # File hashes (supports optionally quoted hash types)
+    m = re.search(r"file:hashes\.['\"]?[a-zA-Z0-9_-]+['\"]?\s*=\s*'([^']+)'", pattern)
+    if m: return "Hash", m.group(1)
+    
+    return "Unknown", ""
 
 
 class STIXReporter:
-    """Génère un bulletin PDF de threat intelligence depuis les événements corrélés."""
+    """Génère un bulletin PDF de threat intelligence depuis le bundle STIX 2.1."""
 
     PRIORITY_COLORS = {
         "CRITICAL": (220, 38,  38),
@@ -701,139 +79,822 @@ class STIXReporter:
         "LOW":      (37,  99, 235),
     }
 
-    def __init__(self):
+    def __init__(self, input_file=None):
         self.base_dir    = BASE_DIR
-        self.input_file  = INPUT_FILE
+        # Lit le bundle STIX (stix_export.json)
+        self.input_file  = input_file or OUTPUT_FILE
         self.reports_dir = os.path.join(self.base_dir, "bultein_de_security")
         os.makedirs(self.reports_dir, exist_ok=True)
 
-    def _load_events(self):
+    def _load_events_from_stix(self):
+        """Méthode de compatibilité descendante."""
         if not os.path.exists(self.input_file):
             return []
         with open(self.input_file, "r", encoding="utf-8") as f:
-            return json.load(f)
+            bundle = json.load(f)
+            
+        events = []
+        objects = bundle.get("objects", [])
+        main_types = {"malware", "vulnerability", "campaign", "infrastructure"}
+        
+        for obj in objects:
+            if obj.get("type") in main_types:
+                event = {
+                    "event_name": obj.get("name", "Unknown"),
+                    "group_id": obj.get("x_soc_group_id", ""),
+                    "event_type": obj.get("type"),
+                    "attack_type": obj.get("type").title(),
+                    "priority_score": obj.get("x_soc_priority", "LOW"),
+                    "risk_score": obj.get("x_soc_risk", 0),
+                    "soc_action": obj.get("x_soc_action", "monitor"),
+                    "confidence_score": obj.get("confidence", 0),
+                    "first_seen": obj.get("first_seen") or obj.get("created", ""),
+                    "last_seen": obj.get("last_seen") or obj.get("modified", ""),
+                    "iocs": [],
+                    "tags": obj.get("labels", []),
+                    "mitre_techniques": [ref["external_id"] for ref in obj.get("external_references", []) if ref.get("source_name") == "mitre-attack"]
+                }
+                
+                obj_id = obj.get("id")
+                ioc_count = 0
+                for rel in objects:
+                    if rel.get("type") == "relationship" and rel.get("relationship_type") == "indicates" and rel.get("target_ref") == obj_id:
+                        ioc_count += 1
+                
+                event["iocs"] = [None] * ioc_count
+                
+                for rep in objects:
+                    if rep.get("type") == "report" and obj_id in rep.get("object_refs", []):
+                        event["source_list"] = rep.get("x_soc_sources", [])
+                        break
+                        
+                events.append(event)
+                
+        return events
 
-    def generate_pdf(self, output_path: str = None) -> str | None:
+    def generate_pdf(self, output_path: str = None, threat_filter_id: str = None) -> str | None:
+        """Génère un bulletin de sécurité PDF professionnel de style AREPSCTR.
+
+        Si threat_filter_id est fourni, génère un bulletin ciblé sur cette seule menace
+        et ses IOCs associés via les relations STIX 'indicates'.
+        """
         try:
-            from fpdf import FPDF
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib import colors
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import cm
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
         except ImportError:
-            print("[STIXReporter] fpdf2 non installé — pip install fpdf2")
+            print("[STIXReporter] reportlab non installé — installez avec: pip install reportlab")
             return None
 
-        events = self._load_events()
-        if not events:
-            print("[STIXReporter] Aucun événement corrélé trouvé.")
+        if not os.path.exists(self.input_file):
+            print(f"[STIXReporter] Fichier bundle STIX introuvable: {self.input_file}")
             return None
 
-        now_str  = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        date_tag = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        if not output_path:
-            output_path = os.path.join(self.reports_dir, f"cti_bulletin_{date_tag}.pdf")
+        try:
+            with open(self.input_file, "r", encoding="utf-8") as f:
+                bundle = json.load(f)
+        except Exception as e:
+            print(f"[STIXReporter] Erreur lors du décodage du fichier STIX: {e}")
+            return None
 
-        # ── Triage events ────────────────────────────────────────────
+        objects = bundle.get("objects", [])
+        if not objects:
+            print("[STIXReporter] Aucun objet STIX trouvé dans le bundle.")
+            return None
+
+        # ── Triage et Extraction des Données ──────────────────────────────────
+        main_types = {"malware", "vulnerability", "campaign", "infrastructure"}
+        threats = [o for o in objects if o.get("type") in main_types]
+
         priority_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
-        events_sorted  = sorted(events, key=lambda e: priority_order.get(e.get("priority_score", "LOW"), 3))
+        threats_sorted = sorted(
+            threats,
+            key=lambda x: (priority_order.get(x.get("x_soc_priority", "LOW").upper(), 4), -x.get("x_soc_risk", 0.0))
+        )
 
-        counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
-        for ev in events_sorted:
-            p = ev.get("priority_score", "LOW")
-            counts[p] = counts.get(p, 0) + 1
+        # Si un filtre par threat est demandé, ne garder que ce threat
+        if threat_filter_id:
+            threats_sorted = [t for t in threats_sorted if t.get("id") == threat_filter_id]
 
-        # ── PDF ─────────────────────────────────────────────────────
-        pdf = FPDF()
-        pdf.set_auto_page_break(auto=True, margin=15)
-        pdf.add_page()
+        # Identification du threat principal pour l'exécutif résumé
+        if threats_sorted:
+            top_threat = threats_sorted[0]
+        else:
+            top_threat = {
+                "name": "SOC STIX Import Event Bundle",
+                "x_soc_priority": "LOW",
+                "type": "indicator-bundle",
+                "confidence": 100,
+                "x_soc_action": "monitor",
+                "attack_type": "Multi-source",
+                "first_seen": datetime.now(timezone.utc).isoformat(),
+                "last_seen": datetime.now(timezone.utc).isoformat()
+            }
 
-        # Header
-        pdf.set_fill_color(15, 23, 42)
-        pdf.rect(0, 0, 210, 30, "F")
-        pdf.set_text_color(255, 255, 255)
-        pdf.set_font("Helvetica", "B", 16)
-        pdf.set_y(8)
-        pdf.cell(0, 8, "CTI THREAT INTELLIGENCE BULLETIN", align="C", ln=True)
-        pdf.set_font("Helvetica", "", 9)
-        pdf.cell(0, 6, f"Generated: {now_str}  |  Source: SOC-PFE-CTI Platform", align="C", ln=True)
-        pdf.ln(10)
+        # ── Configuration du TLP et de la Classification ──────────────────────
+        max_priority = top_threat.get("x_soc_priority", "LOW").upper()
+        if max_priority in ["CRITICAL", "HIGH"]:
+            tlp_text = "TLP:RED"
+            tlp_color = colors.HexColor("#d32f2f")
+            classif_text = "TLP:RED - Confidentiel"
+        elif max_priority == "MEDIUM":
+            tlp_text = "TLP:AMBER"
+            tlp_color = colors.HexColor("#e65100")
+            classif_text = "TLP:AMBER - Limité"
+        else:
+            tlp_text = "TLP:CLEAR"
+            tlp_color = colors.HexColor("#555555")
+            classif_text = "TLP:CLEAR - Public"
 
-        # Stats summary bar
-        pdf.set_text_color(30, 30, 30)
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(0, 7, f"Total Events: {len(events_sorted)}", ln=True)
-        pdf.ln(2)
+        # Période observée
+        dates = []
+        for obj in objects:
+            for k in ["first_seen", "last_seen", "created", "modified", "valid_from"]:
+                val = obj.get(k)
+                if val:
+                    try:
+                        dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
+                        dates.append(dt)
+                    except ValueError:
+                        pass
+        if dates:
+            observed_period = f"{min(dates).strftime('%Y-%m-%d')} \u2192 {max(dates).strftime('%Y-%m-%d')}"
+        else:
+            observed_period = "N/A"
 
-        col_w = 42
-        for p, c in counts.items():
-            r, g, b = self.PRIORITY_COLORS.get(p, (100, 100, 100))
-            pdf.set_fill_color(r, g, b)
-            pdf.set_text_color(255, 255, 255)
-            pdf.set_font("Helvetica", "B", 10)
-            pdf.cell(col_w, 9, f"  {p}: {c}", fill=True, border=0)
-        pdf.ln(14)
+        # Type de menace formaté
+        threat_type_raw = top_threat.get("type", "Unknown")
+        threat_type_map = {
+            "campaign": "Campagne de Phishing",
+            "malware": "Logiciel malveillant (Malware)",
+            "vulnerability": "Exploitation de Vulnérabilité",
+            "infrastructure": "Infrastructure malveillante"
+        }
+        threat_type_desc = threat_type_map.get(threat_type_raw, threat_type_raw.title())
 
-        # Events
-        pdf.set_text_color(30, 30, 30)
-        for i, ev in enumerate(events_sorted):
-            prio   = ev.get("priority_score", "LOW")
-            r, g, b = self.PRIORITY_COLORS.get(prio, (80, 80, 80))
+        # Acteur suspecté
+        actors = []
+        for label in top_threat.get("labels", []):
+            if label.startswith("actor:"):
+                actors.append(label.split(":", 1)[1].title())
+        suspected_actor = ", ".join(actors) if actors else (top_threat.get("x_soc_group_id") or "Inconnu")
 
-            # Event header band
-            pdf.set_fill_color(r, g, b)
-            pdf.set_text_color(255, 255, 255)
-            pdf.set_font("Helvetica", "B", 10)
-            name = ev.get("event_name", ev.get("group_id", "Unknown"))[:80]
-            pdf.cell(0, 8, f"  [{prio}]  {name}", fill=True, ln=True)
+        # ── Extraction et Tri des Indicateurs ───────────────────────────────
+        indicators = [o for o in objects if o.get("type") == "indicator"]
+        indicators_sorted = sorted(
+            indicators,
+            key=lambda x: (priority_order.get(x.get("x_ioc_priority", "LOW").upper(), 4), -x.get("x_ioc_risk_score", 0.0))
+        )
 
-            # Event body
-            pdf.set_text_color(30, 30, 30)
-            pdf.set_font("Helvetica", "", 9)
-            pdf.set_fill_color(248, 248, 252)
+        # Si filtre par threat : ne garder que les IOCs liés à ce threat via "indicates"
+        if threat_filter_id:
+            linked_ids = {
+                rel.get("source_ref")
+                for rel in objects
+                if rel.get("type") == "relationship"
+                and rel.get("relationship_type") == "indicates"
+                and rel.get("target_ref") == threat_filter_id
+            }
+            indicators_sorted = [i for i in indicators_sorted if i.get("id") in linked_ids]
 
-            lines = [
-                f"Group ID   : {ev.get('group_id','')}",
-                f"Type       : {ev.get('event_type','')}  |  Attack: {ev.get('attack_type','')}",
-                f"Risk Score : {ev.get('risk_score', 0)}  |  Confidence: {ev.get('confidence_score', 0)}%",
-                f"SOC Action : {ev.get('soc_action','monitor').upper()}",
-                f"Sources    : {', '.join(ev.get('source_list', []))}",
-                f"IOCs       : {len(ev.get('iocs', []))}  |  First Seen: {str(ev.get('first_seen',''))[:10]}  |  Last Seen: {str(ev.get('last_seen',''))[:10]}",
+        # Chargement de la corrélation d'enrichissement si présente
+        corr_file = os.path.join(os.path.dirname(self.input_file), "correlated_events_soc_enriched.json")
+        corr_events = []
+        if os.path.exists(corr_file):
+            try:
+                with open(corr_file, "r", encoding="utf-8") as f:
+                    corr_events = json.load(f)
+            except Exception as e:
+                print(f"[STIXReporter] Warning: impossible de charger le fichier de corrélation: {e}")
+
+        # ── Styles ReportLab ──────────────────────────────────────────────────
+        styles = getSampleStyleSheet()
+        
+        title_style = ParagraphStyle(
+            name='CtiSectionTitle',
+            parent=styles['Heading2'],
+            fontName='Helvetica-Bold',
+            fontSize=10,
+            leading=13,
+            textColor=colors.HexColor("#17365d"),
+            backColor=colors.HexColor("#f2f2f2"),
+            borderPadding=4,
+            spaceBefore=10,
+            spaceAfter=5,
+            keepWithNext=True
+        )
+        
+        cell_style = ParagraphStyle(
+            name='CtiTableCell',
+            parent=styles['Normal'],
+            fontName='Helvetica',
+            fontSize=7.5,
+            leading=9.5,
+            textColor=colors.HexColor("#333333")
+        )
+        
+        cell_bold_style = ParagraphStyle(
+            name='CtiTableCellBold',
+            parent=cell_style,
+            fontName='Helvetica-Bold',
+            textColor=colors.HexColor("#17365d")
+        )
+        
+        cell_header_style = ParagraphStyle(
+            name='CtiTableHeader',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=7.5,
+            leading=9.5,
+            textColor=colors.whitesmoke,
+            alignment=1
+        )
+        
+        code_style = ParagraphStyle(
+            name='CtiCode',
+            parent=styles['Normal'],
+            fontName='Courier',
+            fontSize=7,
+            leading=8.5,
+            textColor=colors.HexColor("#111111"),
+            backColor=colors.HexColor("#f8f8fa"),
+            borderPadding=6,
+            spaceBefore=4,
+            spaceAfter=4
+        )
+
+        # ── 1. Résumé Exécutif ───────────────────────────────────────────────
+        _tbl_style = TableStyle([
+            ('BACKGROUND', (0,0), (0,-1), colors.HexColor("#f9fafb")),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#e5e7eb")),
+            ('TOPPADDING', (0,0), (-1,-1), 3),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+            ('LEFTPADDING', (0,0), (-1,-1), 6),
+            ('RIGHTPADDING', (0,0), (-1,-1), 6),
+        ])
+
+        t_threats_overview = None  # présent uniquement en mode consolidé
+
+        if threat_filter_id:
+            # ── Mode par threat : résumé ciblé ──────────────────────────────
+            severity = top_threat.get("x_soc_priority", "LOW").upper()
+            severity_hex = "#10b981" if severity == "LOW" else "#eab308" if severity == "MEDIUM" else "#f97316" if severity == "HIGH" else "#ef4444"
+            summary_data = [
+                [Paragraph("Campagne / Événement", cell_bold_style), Paragraph(top_threat.get("name", "Unknown"), cell_style)],
+                [Paragraph("Sévérité", cell_bold_style), Paragraph(f"<font color='{severity_hex}'><b>{severity}</b></font>", cell_style)],
+                [Paragraph("Type de menace", cell_bold_style), Paragraph(threat_type_desc, cell_style)],
+                [Paragraph("Confidence", cell_bold_style), Paragraph(f"{top_threat.get('confidence', 0)} %", cell_style)],
+                [Paragraph("Acteur suspecté", cell_bold_style), Paragraph(suspected_actor, cell_style)],
+                [Paragraph("Vecteur", cell_bold_style), Paragraph(top_threat.get("attack_type", "Inconnu"), cell_style)],
+                [Paragraph("Période observée", cell_bold_style), Paragraph(observed_period, cell_style)],
+                [Paragraph("Impact SOC", cell_bold_style), Paragraph(top_threat.get("x_soc_action", "monitor").upper(), cell_style)],
             ]
-            # MITRE techniques
-            techs = ev.get("mitre_techniques", [])
-            if techs:
-                lines.append(f"MITRE      : {', '.join(techs[:6])}")
-            # DFIR-specific fields
-            if ev.get("threat_actors"):
-                lines.append(f"Actors     : {', '.join(ev['threat_actors'])}")
-            if ev.get("targeted_sectors"):
-                lines.append(f"Targets    : {', '.join(ev['targeted_sectors'][:5])}")
-            if ev.get("article_reference"):
-                lines.append(f"Reference  : {ev['article_reference'][:80]}")
-            # Tags (only meaningful ones)
-            tags = [t for t in ev.get("tags", []) if not t.startswith(("soc_", "reliability:"))][:6]
-            if tags:
-                lines.append(f"Tags       : {', '.join(tags)}")
+            t_summary = Table(summary_data, colWidths=[5.0 * cm, 12.0 * cm])
+            t_summary.setStyle(_tbl_style)
 
-            for line in lines:
-                pdf.set_x(12)
-                pdf.cell(0, 5, line, ln=True)
-            pdf.ln(4)
+        else:
+            # ── Mode consolidé : statistiques globales de la collection ──────
+            counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+            for t in threats_sorted:
+                p = t.get("x_soc_priority", "LOW").upper()
+                counts[p] = counts.get(p, 0) + 1
 
-        # Footer
-        pdf.set_y(-15)
-        pdf.set_font("Helvetica", "I", 8)
-        pdf.set_text_color(120, 120, 120)
-        pdf.cell(0, 6, f"CTI Bulletin — SOC-PFE-CTI — {now_str} — TLP:CLEAR", align="C")
+            collection_date = (bundle.get("x_soc_export_date") or "")[:10] or "N/A"
 
-        pdf.output(output_path)
-        print(f"[STIXReporter] Bulletin PDF généré : {output_path}")
-        return output_path
+            summary_data = [
+                [Paragraph("Date de collection", cell_bold_style), Paragraph(collection_date, cell_style)],
+                [Paragraph("Période observée", cell_bold_style), Paragraph(observed_period, cell_style)],
+                [Paragraph("Total menaces", cell_bold_style), Paragraph(str(len(threats_sorted)), cell_style)],
+                [Paragraph("CRITICAL / HIGH", cell_bold_style),
+                 Paragraph(f"<font color='#ef4444'><b>{counts['CRITICAL']}</b></font>"
+                           f"&nbsp;/&nbsp;<font color='#f97316'><b>{counts['HIGH']}</b></font>", cell_style)],
+                [Paragraph("MEDIUM / LOW", cell_bold_style),
+                 Paragraph(f"<font color='#eab308'><b>{counts['MEDIUM']}</b></font>"
+                           f"&nbsp;/&nbsp;<font color='#10b981'><b>{counts['LOW']}</b></font>", cell_style)],
+                [Paragraph("Total IOCs", cell_bold_style), Paragraph(str(len(indicators_sorted)), cell_style)],
+                [Paragraph("TLP Classification", cell_bold_style), Paragraph(tlp_text, cell_style)],
+                [Paragraph("Sévérité maximale", cell_bold_style),
+                 Paragraph(f"<font color='{('#ef4444' if max_priority == 'CRITICAL' else '#f97316' if max_priority == 'HIGH' else '#eab308' if max_priority == 'MEDIUM' else '#10b981')}'>"
+                           f"<b>{max_priority}</b></font>", cell_style)],
+            ]
+            t_summary = Table(summary_data, colWidths=[5.0 * cm, 12.0 * cm])
+            t_summary.setStyle(_tbl_style)
+
+            # Tableau de vue d'ensemble de toutes les menaces
+            _hdr = TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#17365d")),
+                ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#e5e7eb")),
+                ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f9fafb")]),
+                ('TOPPADDING', (0,0), (-1,-1), 3),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+                ('LEFTPADDING', (0,0), (-1,-1), 6),
+                ('RIGHTPADDING', (0,0), (-1,-1), 6),
+            ])
+            threat_rows = [[
+                Paragraph("Menace", cell_header_style),
+                Paragraph("Type", cell_header_style),
+                Paragraph("Priorité", cell_header_style),
+                Paragraph("Risk", cell_header_style),
+                Paragraph("IOCs", cell_header_style),
+                Paragraph("Action SOC", cell_header_style),
+            ]]
+            for t in threats_sorted:
+                prio = t.get("x_soc_priority", "LOW").upper()
+                prio_hex = "#10b981" if prio == "LOW" else "#eab308" if prio == "MEDIUM" else "#f97316" if prio == "HIGH" else "#ef4444"
+                tid_ref = t.get("id")
+                ioc_cnt = sum(
+                    1 for rel in objects
+                    if rel.get("type") == "relationship"
+                    and rel.get("relationship_type") == "indicates"
+                    and rel.get("target_ref") == tid_ref
+                )
+                threat_rows.append([
+                    Paragraph(t.get("name", "—")[:55], cell_style),
+                    Paragraph(t.get("type", "—").title(), cell_style),
+                    Paragraph(f"<font color='{prio_hex}'><b>{prio}</b></font>", cell_style),
+                    Paragraph(f"{t.get('x_soc_risk', 0.0):.1f}", cell_style),
+                    Paragraph(str(ioc_cnt), cell_style),
+                    Paragraph(t.get("x_soc_action", "monitor").upper(), cell_style),
+                ])
+            t_threats_overview = Table(threat_rows, colWidths=[5.5*cm, 2.5*cm, 2.0*cm, 1.5*cm, 1.2*cm, 4.3*cm])
+            t_threats_overview.setStyle(_hdr)
+
+        # ── 2. Table IOCs ─────────────────────────────────────────────────────
+        ioc_rows = [[
+            Paragraph("Type", cell_header_style),
+            Paragraph("Valeur", cell_header_style),
+            Paragraph("Source", cell_header_style),
+            Paragraph("Sévérité", cell_header_style),
+            Paragraph("STIX ID", cell_header_style)
+        ]]
+        
+        for ind in indicators_sorted:
+            itype, val = parse_pattern(ind.get("pattern", ""))
+            src = ", ".join(ind.get("x_ioc_sources", ["MISP"]))
+            prio = ind.get("x_ioc_priority", "LOW").upper()
+            prio_color = "#10b981" if prio == "LOW" else "#eab308" if prio == "MEDIUM" else "#f97316" if prio == "HIGH" else "#ef4444"
+            sid = ind.get("id", "").split('--')[-1][:8] + "..."
+            
+            ioc_rows.append([
+                Paragraph(itype, cell_style),
+                Paragraph(val, cell_style),
+                Paragraph(src, cell_style),
+                Paragraph(f"<font color='{prio_color}'><b>{prio}</b></font>", cell_style),
+                Paragraph(sid, cell_style)
+            ])
+            
+        if len(ioc_rows) == 1:
+            ioc_rows.append([Paragraph("-", cell_style), Paragraph("Aucun indicateur disponible", cell_style), Paragraph("-", cell_style), Paragraph("-", cell_style), Paragraph("-", cell_style)])
+
+        t_ioc = Table(ioc_rows, colWidths=[2.5 * cm, 6.0 * cm, 3.0 * cm, 2.5 * cm, 3.0 * cm])
+        t_ioc.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#17365d")),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#e5e7eb")),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f9fafb")]),
+            ('TOPPADDING', (0,0), (-1,-1), 3),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+            ('LEFTPADDING', (0,0), (-1,-1), 6),
+            ('RIGHTPADDING', (0,0), (-1,-1), 6),
+        ]))
+
+        # ── 3. Table Enrichissement ──────────────────────────────────────────
+        enrich_rows = [[
+            Paragraph("IOC", cell_header_style),
+            Paragraph("Géolocalisation / Contexte", cell_header_style),
+            Paragraph("Score / Réputation", cell_header_style),
+            Paragraph("Detections VT", cell_header_style),
+            Paragraph("MISP Event", cell_header_style)
+        ]]
+        
+        for ind in indicators_sorted:
+            itype, val = parse_pattern(ind.get("pattern", ""))
+            enrich = None
+            misp_event = None
+            for ev in corr_events:
+                for ioc in ev.get("iocs", []):
+                    if ioc.get("value") == val:
+                        enrich = ioc.get("enrichment", {})
+                        misp_event = ev.get("group_id")
+                        break
+                if enrich is not None:
+                    break
+                    
+            if enrich is not None:
+                # Géolocalisation
+                geo_parts = []
+                cc = enrich.get("countryCode") or enrich.get("country_code") or enrich.get("urlscan_country")
+                cname = enrich.get("country")
+                if cc:
+                    geo_parts.append(cc)
+                if cname:
+                    geo_parts.append(cname)
+                isp = enrich.get("isp") or enrich.get("as_owner")
+                if isp:
+                    geo_parts.append(f"({isp})")
+                geoloc = " — ".join(geo_parts) if geo_parts else "—"
+                
+                # Réputation / Score
+                score = "—"
+                if "abuseConfidenceScore" in enrich:
+                    score = f"AbuseIPDB: {enrich['abuseConfidenceScore']}%"
+                elif enrich.get("risk_flag"):
+                    flag = enrich["risk_flag"].lower()
+                    s_val = 90 if flag == "high" else 60 if flag == "medium" else 15
+                    score = f"URLScan: {s_val}/100"
+                elif enrich.get("vt_reputation") is not None:
+                    score = f"VT Rep: {enrich['vt_reputation']}"
+                    
+                # VT Detections
+                det = "—"
+                if "vt_malicious_count" in enrich:
+                    det = f"{enrich.get('vt_malicious_count', 0)} / {enrich.get('vt_total_engines', 0)}"
+                    
+                mevent = f"#{misp_event}" if misp_event else "—"
+            else:
+                geoloc = "—"
+                score = "—"
+                det = "—"
+                mevent = "—"
+                
+            enrich_rows.append([
+                Paragraph(val, cell_style),
+                Paragraph(geoloc, cell_style),
+                Paragraph(score, cell_style),
+                Paragraph(det, cell_style),
+                Paragraph(mevent, cell_style)
+            ])
+            
+        if len(enrich_rows) == 1:
+            enrich_rows.append([Paragraph("-", cell_style), Paragraph("Pas d'enrichissement disponible", cell_style), Paragraph("-", cell_style), Paragraph("-", cell_style), Paragraph("-", cell_style)])
+
+        t_enrich = Table(enrich_rows, colWidths=[4.5 * cm, 4.5 * cm, 2.5 * cm, 2.5 * cm, 3.0 * cm])
+        t_enrich.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#17365d")),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#e5e7eb")),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f9fafb")]),
+            ('TOPPADDING', (0,0), (-1,-1), 3),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+            ('LEFTPADDING', (0,0), (-1,-1), 6),
+            ('RIGHTPADDING', (0,0), (-1,-1), 6),
+        ]))
+
+        # ── 4. Table MITRE ATT&CK ─────────────────────────────────────────────
+        observed_techniques = set()
+        for obj in objects:
+            if obj.get("type") == "attack-pattern":
+                name = obj.get("name")
+                if name:
+                    observed_techniques.add(name)
+                for ref in obj.get("external_references", []):
+                    if ref.get("source_name") == "mitre-attack" and ref.get("external_id"):
+                        observed_techniques.add(ref.get("external_id"))
+
+        checklist_techniques = [
+            ("T1566.001", "Initial Access", "Spearphishing Attachment"),
+            ("T1071.001", "Command &amp; Control", "Web Protocols (HTTP/S C2)"),
+            ("T1539", "Credential Access", "Steal Web Session Cookie"),
+            ("T1486", "Impact", "Data Encrypted for Impact"),
+            ("T1027", "Defense Evasion", "Obfuscated Files or Information")
+        ]
+
+        checklist_ids = {t[0] for t in checklist_techniques}
+        for tid in sorted(observed_techniques):
+            base_tid = tid.split('.')[0]
+            if tid not in checklist_ids and base_tid not in checklist_ids:
+                tinfo = MITRE_NAMES.get(tid) or MITRE_NAMES.get(base_tid)
+                if tinfo:
+                    tactic, tname = tinfo
+                else:
+                    tactic, tname = "Other", tid
+                checklist_techniques.append((tid, tactic, tname))
+
+        mitre_rows = [[
+            Paragraph("ID Technique", cell_header_style),
+            Paragraph("Tactique", cell_header_style),
+            Paragraph("Technique", cell_header_style),
+            Paragraph("Observé", cell_header_style)
+        ]]
+        
+        for tid, tactic, tname in checklist_techniques:
+            observed = "✗"
+            if tid in observed_techniques or tid.split('.')[0] in observed_techniques:
+                observed = "✓"
+            
+            obs_color = "#10b981" if observed == "✓" else "#ef4444"
+            
+            mitre_rows.append([
+                Paragraph(tid, cell_style),
+                Paragraph(tactic, cell_style),
+                Paragraph(tname, cell_style),
+                Paragraph(f"<font color='{obs_color}'><b>{observed}</b></font>", cell_style)
+            ])
+            
+        t_mitre = Table(mitre_rows, colWidths=[3.0 * cm, 5.0 * cm, 6.0 * cm, 3.0 * cm])
+        t_mitre.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#17365d")),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#e5e7eb")),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f9fafb")]),
+            ('TOPPADDING', (0,0), (-1,-1), 3),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+            ('LEFTPADDING', (0,0), (-1,-1), 6),
+            ('RIGHTPADDING', (0,0), (-1,-1), 6),
+        ]))
+
+        # ── 5. Structure du Bundle STIX ───────────────────────────────────────
+        preview_objects = []
+        identities = [o for o in objects if o.get("type") == "identity"]
+        if identities:
+            preview_objects.append({
+                "type": "identity",
+                "id": identities[0].get("id"),
+                "name": identities[0].get("name")
+            })
+        if indicators_sorted:
+            preview_objects.append({
+                "type": "indicator",
+                "id": indicators_sorted[0].get("id"),
+                "pattern": indicators_sorted[0].get("pattern"),
+                "valid_from": indicators_sorted[0].get("valid_from")
+            })
+        if threats_sorted:
+            preview_objects.append({
+                "type": threats_sorted[0].get("type"),
+                "id": threats_sorted[0].get("id"),
+                "name": threats_sorted[0].get("name"),
+                "x_soc_priority": threats_sorted[0].get("x_soc_priority")
+            })
+        relationships = [o for o in objects if o.get("type") == "relationship"]
+        if relationships:
+            preview_objects.append({
+                "type": "relationship",
+                "id": relationships[0].get("id"),
+                "source_ref": relationships[0].get("source_ref"),
+                "target_ref": relationships[0].get("target_ref"),
+                "relationship_type": relationships[0].get("relationship_type")
+            })
+            
+        stix_bundle_preview = {
+            "type": "bundle",
+            "id": bundle.get("id", "bundle--dynamic-id"),
+            "objects": preview_objects
+        }
+        stix_json = json.dumps(stix_bundle_preview, indent=2)
+
+        p_stix_desc = Paragraph(
+            f"Le bundle STIX est automatiquement injecté dans MISP via l'API REST (POST /events). Chaque indicateur est corrélé aux événements existants et taggé {tlp_text} / PAP:RED selon la politique SOC.",
+            styles['Normal']
+        )
+        p_stix_code = Paragraph(
+            stix_json.replace(" ", "&nbsp;").replace("\n", "<br/>"),
+            code_style
+        )
+
+        # ── 6. Recommandations SOC ────────────────────────────────────────────
+        recommandations = []
+        has_ips = any(parse_pattern(ind.get("pattern",""))[0] in ["IP", "Domain", "URL"] for ind in indicators_sorted)
+        has_hashes = any(parse_pattern(ind.get("pattern",""))[0] == "Hash" for ind in indicators_sorted)
+        has_phish = any(t.get("type") == "campaign" for t in threats_sorted)
+        has_vuln = any(t.get("type") == "vulnerability" for t in threats_sorted)
+        
+        if has_ips:
+            recommandations.append(("R1", "Bloquer les IPs / domaines listés en section 2 sur le firewall périmétrique et proxy web.", "IMMÉDIATE", "SOC L1"))
+        else:
+            recommandations.append(("R1", "Surveiller les connexions réseau inhabituelles vers les IOCs suspectés.", "HAUTE", "SOC L1"))
+            
+        if has_hashes:
+            recommandations.append(("R2", "Soumettre les hashes de fichiers à l'EDR pour hunting rétrospectif (30 jours).", "HAUTE", "SOC L2"))
+        else:
+            recommandations.append(("R2", "Vérifier l'intégrité des hôtes et systèmes d'écriture suspectes.", "MOYENNE", "SOC L2"))
+            
+        if has_phish:
+            recommandations.append(("R3", "Notifier les utilisateurs ciblés par la campagne de phishing et réinitialiser les identifiants compromis.", "HAUTE", "CISO"))
+        elif has_vuln:
+            recommandations.append(("R3", "Appliquer d'urgence les correctifs de sécurité prioritaires sur les systèmes affectés.", "HAUTE", "Admin Sys"))
+        else:
+            recommandations.append(("R3", "Informer les équipes opérationnelles et sensibiliser à la menace.", "MOYENNE", "SOC Manager"))
+            
+        recommandations.append(("R4", "Déployer et activer les règles de détection (Sigma/Yara) correspondantes dans le SIEM/EDR.", "MOYENNE", "SOC L2"))
+        recommandations.append(("R5", "Exporter le bundle STIX 2.1 vers les partenaires ISAC et plateformes de partage de confiance.", "BASSE", "CTI Lead"))
+
+        reco_rows = [[
+            Paragraph("#", cell_header_style),
+            Paragraph("Action", cell_header_style),
+            Paragraph("Priorité", cell_header_style),
+            Paragraph("Responsable", cell_header_style)
+        ]]
+        
+        for rid, action, prio, resp in recommandations:
+            prio_color = "#ef4444" if prio == "IMMÉDIATE" else "#f97316" if prio == "HAUTE" else "#eab308" if prio == "MOYENNE" else "#10b981"
+            
+            reco_rows.append([
+                Paragraph(rid, cell_bold_style),
+                Paragraph(action, cell_style),
+                Paragraph(f"<font color='{prio_color}'><b>{prio}</b></font>", cell_style),
+                Paragraph(resp, cell_style)
+            ])
+            
+        t_reco = Table(reco_rows, colWidths=[1.5 * cm, 10.0 * cm, 2.5 * cm, 3.0 * cm])
+        t_reco.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#17365d")),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#e5e7eb")),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f9fafb")]),
+            ('TOPPADDING', (0,0), (-1,-1), 3),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+            ('LEFTPADDING', (0,0), (-1,-1), 6),
+            ('RIGHTPADDING', (0,0), (-1,-1), 6),
+        ]))
+
+        # ── Construction du Document PDF ──────────────────────────────────────
+        now_utc = datetime.now(timezone.utc)
+        months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+        date_str = f"{now_utc.day} {months[now_utc.month - 1]} {now_utc.year} — {now_utc.strftime('%H:%M')}Z"
+        ref_id = f"CTI-BULL-{now_utc.year}-001"
+
+        date_tag = now_utc.strftime("%Y%m%d_%H%M%S")
+        if not output_path:
+            if threat_filter_id and threats_sorted:
+                safe_name = re.sub(r"[^\w\-]", "_", threats_sorted[0].get("name", "threat"))[:35]
+                output_path = os.path.join(self.reports_dir, f"bulletin_{safe_name}_{date_tag}.pdf")
+            else:
+                output_path = os.path.join(self.reports_dir, f"cti_bulletin_{date_tag}.pdf")
+
+        doc = SimpleDocTemplate(
+            output_path,
+            pagesize=A4,
+            leftMargin=2.0 * cm,
+            rightMargin=2.0 * cm,
+            topMargin=4.2 * cm,
+            bottomMargin=2.6 * cm
+        )
+
+        def draw_header_footer(canvas, doc):
+            canvas.saveState()
+            
+            # Header line
+            canvas.setStrokeColor(colors.HexColor("#17365d"))
+            canvas.setLineWidth(1)
+            canvas.line(2.0 * cm, A4[1] - 3.6 * cm, A4[0] - 2.0 * cm, A4[1] - 3.6 * cm)
+            
+            # Header Text Left
+            canvas.setFont('Helvetica-Bold', 10)
+            canvas.setFillColor(colors.HexColor("#17365d"))
+            canvas.drawString(2.0 * cm, A4[1] - 1.2 * cm, "BLUESEC SOC · CYBER THREAT INTELLIGENCE")
+            
+            # Header Text Right: Confidentiality
+            canvas.setFont('Helvetica-Bold', 9)
+            canvas.setFillColor(tlp_color)
+            canvas.drawRightString(A4[0] - 2.0 * cm, A4[1] - 1.2 * cm, classif_text)
+            
+            # Header Main Title
+            canvas.setFont('Helvetica-Bold', 16)
+            canvas.setFillColor(colors.HexColor("#17365d"))
+            canvas.drawString(2.0 * cm, A4[1] - 2.2 * cm, "Security Bulletin")
+            
+            # Header Subtitle
+            canvas.setFont('Helvetica-Oblique', 9)
+            canvas.setFillColor(colors.HexColor("#555555"))
+            canvas.drawString(2.0 * cm, A4[1] - 2.7 * cm, "Rapport d'analyse CTI — Export STIX 2.1")
+            
+            # Header Meta Right
+            canvas.setFont('Helvetica', 8)
+            canvas.setFillColor(colors.HexColor("#555555"))
+            canvas.drawRightString(A4[0] - 2.0 * cm, A4[1] - 2.2 * cm, date_str)
+            canvas.drawRightString(A4[0] - 2.0 * cm, A4[1] - 2.6 * cm, f"Réf : {ref_id}")
+            canvas.drawRightString(A4[0] - 2.0 * cm, A4[1] - 3.0 * cm, "STIX 2.1 Compatible")
+            
+            # Footer Line
+            canvas.setStrokeColor(colors.HexColor("#17365d"))
+            canvas.setLineWidth(1)
+            canvas.line(2.0 * cm, 2.0 * cm, A4[0] - 2.0 * cm, 2.0 * cm)
+            
+            # Footer Text Left
+            canvas.setFont('Helvetica', 7.5)
+            canvas.setFillColor(colors.HexColor("#666666"))
+            canvas.drawString(2.0 * cm, 1.4 * cm, "Généré automatiquement par le CTI Pipeline BlueSec | MISP v2.4 · VirusTotal · URLScan.io · GeoIP")
+            
+            # Footer Text Right
+            canvas.drawRightString(A4[0] - 2.0 * cm, 1.4 * cm, f"Classification : {tlp_text} | Page {doc.page}")
+            
+            canvas.restoreState()
+
+        # Construction de l'arborescence des flowables
+        story = []
+        n = 1  # numérotation des sections
+
+        # Section 1 — Résumé Exécutif
+        story.append(Paragraph(f"{n}. Résumé Exécutif", title_style)); n += 1
+        story.append(t_summary)
+        story.append(Spacer(1, 0.4 * cm))
+
+        # Section 2 — Vue d'ensemble des menaces (mode consolidé uniquement)
+        if t_threats_overview is not None:
+            story.append(Paragraph(f"{n}. Vue d'ensemble des Menaces", title_style)); n += 1
+            story.append(t_threats_overview)
+            story.append(Spacer(1, 0.4 * cm))
+
+        # Section IOCs
+        story.append(Paragraph(f"{n}. Indicateurs de Compromission (IOCs)", title_style)); n += 1
+        story.append(t_ioc)
+        story.append(Spacer(1, 0.4 * cm))
+
+        # Section Enrichissement
+        story.append(Paragraph(f"{n}. Enrichissement &amp; Corrélation", title_style)); n += 1
+        story.append(t_enrich)
+        story.append(Spacer(1, 0.4 * cm))
+
+        # Section MITRE
+        story.append(Paragraph(f"{n}. Tactiques &amp; Techniques MITRE ATT&amp;CK", title_style)); n += 1
+        story.append(t_mitre)
+
+        story.append(PageBreak())
+
+        # Section STIX
+        story.append(Paragraph(f"{n}. Export STIX 2.1 — Structure du Bundle", title_style)); n += 1
+        story.append(p_stix_desc)
+        story.append(Spacer(1, 0.2 * cm))
+        story.append(p_stix_code)
+        story.append(Spacer(1, 0.4 * cm))
+
+        # Section Recommandations
+        story.append(Paragraph(f"{n}. Recommandations SOC", title_style))
+        story.append(t_reco)
+
+        try:
+            doc.build(story, onFirstPage=draw_header_footer, onLaterPages=draw_header_footer)
+            print(f"[STIXReporter] Bulletin PDF généré avec succès : {output_path}")
+            return output_path
+        except Exception as e:
+            print(f"[STIXReporter] Erreur lors de la construction du PDF : {e}")
+            return None
+
+
+    def generate_pdf_per_threat(self) -> list:
+        """Génère un bulletin PDF distinct pour chaque menace du bundle STIX."""
+        if not os.path.exists(self.input_file):
+            print(f"[STIXReporter] Fichier STIX introuvable: {self.input_file}")
+            return []
+
+        try:
+            with open(self.input_file, "r", encoding="utf-8") as f:
+                bundle = json.load(f)
+        except Exception as e:
+            print(f"[STIXReporter] Erreur de décodage STIX: {e}")
+            return []
+
+        objects = bundle.get("objects", [])
+        main_types = {"malware", "vulnerability", "campaign", "infrastructure"}
+        threats = [o for o in objects if o.get("type") in main_types]
+
+        priority_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+        threats_sorted = sorted(
+            threats,
+            key=lambda x: (priority_order.get(x.get("x_soc_priority", "LOW").upper(), 4), -x.get("x_soc_risk", 0.0))
+        )
+
+        if not threats_sorted:
+            print("[STIXReporter] Aucune menace trouvée dans le bundle STIX.")
+            return []
+
+        print(f"[STIXReporter] {len(threats_sorted)} menace(s) trouvée(s) — génération des bulletins...")
+        generated = []
+
+        for threat in threats_sorted:
+            tid   = threat.get("id")
+            tname = threat.get("name", "unknown")
+            tprio = threat.get("x_soc_priority", "LOW")
+            print(f"  -> Bulletin : {tname} [{tprio}]")
+            path = self.generate_pdf(threat_filter_id=tid)
+            if path:
+                generated.append(path)
+
+        print(f"\n[STIXReporter] {len(generated)} bulletin(s) générés dans : {self.reports_dir}")
+        return generated
 
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Export STIX 2.1 depuis correlated_events")
-    parser.add_argument("-i", "--input",  help="Fichier JSON corrélé (input)")
-    parser.add_argument("-o", "--output", help="Fichier STIX bundle (output)")
+    parser = argparse.ArgumentParser(description="Génère un bulletin PDF consolidé à partir d'un bundle STIX 2.1")
+    parser.add_argument("-i", "--input", help="Fichier STIX bundle (input)", default=OUTPUT_FILE)
+    parser.add_argument("--per-threat", action="store_true",
+                        help="Génère un bulletin PDF séparé par menace (au lieu du rapport unique)")
     args = parser.parse_args()
 
-    exporter = STIXExporter()
-    exporter.export(input_file=args.input, output_file=args.output)
+    reporter = STIXReporter(input_file=args.input)
+    if args.per_threat:
+        reporter.generate_pdf_per_threat()
+    else:
+        reporter.generate_pdf()

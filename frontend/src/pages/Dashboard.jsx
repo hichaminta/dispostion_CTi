@@ -88,6 +88,11 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
   const [consoleFilter, setConsoleFilter] = useState(null);
   const logEndRef = useRef(null);
 
+  // Scheduler state
+  const [scheduleStatus, setScheduleStatus] = useState({ active: false, interval_minutes: 60, next_run: null });
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleIntervalInput, setScheduleIntervalInput] = useState(60);
+
   useEffect(() => {
     fetchAll();
     const interval = setInterval(fetchAll, 5000);
@@ -137,6 +142,14 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
       console.error("Fetch runs error:", e);
     }
 
+    // Appel du statut de planification
+    try {
+      const scheduleRes = await axios.get(`${API_BASE}/api/schedule/status`);
+      setScheduleStatus(scheduleRes.data);
+    } catch (e) {
+      console.error("Fetch schedule status error:", e);
+    }
+
     // Appel des stats (optionnel, ne doit pas bloquer)
     try {
       const statsRes = await axios.get(`${API_BASE}/stats`);
@@ -159,6 +172,17 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
       console.error("Fetch geo stats error:", e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleSchedule = async (start) => {
+    try {
+      const action = start ? "start" : "stop";
+      await axios.post(`${API_BASE}/api/schedule`, { action, interval_minutes: scheduleIntervalInput });
+      setShowScheduleModal(false);
+      fetchAll();
+    } catch(e) {
+      alert("Erreur lors de la planification: " + (e.response?.data?.detail || e.message));
     }
   };
 
@@ -344,6 +368,14 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
               <span className="text-slate-300 font-semibold text-xs">Plateforme Active</span>
             </div>
             <span className="text-xs text-slate-600 font-mono hidden sm:block">auto-refresh 5s</span>
+            {scheduleStatus.active && (
+              <div className="flex items-center gap-2 bg-brand-500/10 border border-brand-500/30 rounded-lg px-3 py-1.5 ml-2 cursor-pointer hover:bg-brand-500/20 transition-colors" onClick={() => setShowScheduleModal(true)}>
+                <Clock className="w-3.5 h-3.5 text-brand-400 animate-pulse" />
+                <span className="text-brand-300 font-semibold text-xs">
+                  Prochaine exécution : {scheduleStatus.next_run ? format(new Date(scheduleStatus.next_run), 'HH:mm:ss') : '...'}
+                </span>
+              </div>
+            )}
           </div>
           <div className="flex flex-col items-end gap-2">
             {/* HUD Pipeline Control Panel */}
@@ -709,21 +741,21 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
               {/* Separator */}
               <div className="w-px h-10 bg-slate-700 mx-2" />
 
-              {/* Intelligence Engine Toggle */}
+              {/* Planifier Button */}
               <button
-                onClick={() => setShowScoringDetails(!showScoringDetails)}
-                className={`group flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 border ${
-                  showScoringDetails 
-                    ? 'bg-purple-500/20 border-purple-500/50 text-purple-300' 
-                    : 'bg-slate-900/40 border-white/5 text-slate-500 hover:text-purple-400 hover:border-purple-500/30'
+                onClick={() => setShowScheduleModal(true)}
+                className={`flex items-center gap-2 px-4 py-3 rounded-xl font-black transition-all duration-300 shadow-xl active:scale-95 text-sm ml-2 overflow-hidden relative group/master ${
+                  scheduleStatus.active
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-500/30'
+                    : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
                 }`}
+                title="Planifier le pipeline"
               >
-                <Cpu className={`w-4 h-4 ${showScoringDetails ? 'animate-spin-slow' : ''}`} />
-                <span className="text-[10px] font-black uppercase tracking-widest">Intelligence Engine</span>
-                {showScoringDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                <Clock className={`w-4 h-4 ${scheduleStatus.active ? 'animate-pulse text-emerald-400' : ''}`} />
+                <span className="tracking-wide uppercase hidden xl:block">
+                  {scheduleStatus.active ? 'Planifié' : 'Planifier'}
+                </span>
               </button>
-
-              <div className="w-px h-10 bg-slate-700 mx-2" />
 
               {/* Full pipeline button */}
               <button
@@ -748,83 +780,83 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
         </div>
       </div>
 
-        {/* ── Intelligence Engine HUD ────────────────────────────── */}
-        {showScoringDetails && (
-          <div className="mb-10 animate-in zoom-in-95 fade-in duration-500">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Module 1: Classification */}
-              <div className="bg-slate-900/60 border border-brand-500/20 rounded-3xl p-6 backdrop-blur-xl relative group hover:border-brand-500/50 transition-all">
-                <div className="absolute top-4 right-4 opacity-10 group-hover:opacity-30 transition-opacity">
-                  <ScanEye size={40} className="text-brand-400" />
-                </div>
-                <h4 className="text-brand-400 text-[10px] font-black uppercase tracking-widest mb-1">Module Intelligence</h4>
-                <h3 className="text-white text-lg font-black mb-4">Threat Classifier</h3>
-                <div className="space-y-2 mb-6">
-                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-                    <CheckCircle2 size={10} className="text-emerald-500" />
-                    Identification Malware/Phishing
-                  </div>
-                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-                    <CheckCircle2 size={10} className="text-emerald-500" />
-                    Deep Analysis (RAT, Stealer, RCE)
-                  </div>
-                </div>
-                <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
-                  <span className="text-[9px] font-mono text-slate-600">classifier.py</span>
-                  <button className="text-[10px] font-bold text-brand-400 hover:underline">Détails Script</button>
-                </div>
-              </div>
 
-              {/* Module 2: Reliability */}
-              <div className="bg-slate-900/60 border border-purple-500/20 rounded-3xl p-6 backdrop-blur-xl relative group hover:border-purple-500/50 transition-all">
-                <div className="absolute top-4 right-4 opacity-10 group-hover:opacity-30 transition-opacity">
-                  <Shield size={40} className="text-purple-400" />
-                </div>
-                <h4 className="text-purple-400 text-[10px] font-black uppercase tracking-widest mb-1">Module Trust</h4>
-                <h3 className="text-white text-lg font-black mb-4">Source Reliability</h3>
-                <div className="space-y-2 mb-6">
-                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-                    <CheckCircle2 size={10} className="text-emerald-500" />
-                    Source Confidence Mapping
-                  </div>
-                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-                    <CheckCircle2 size={10} className="text-emerald-500" />
-                    Consensus Validation (0-100)
-                  </div>
-                </div>
-                <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
-                  <span className="text-[9px] font-mono text-slate-600">reliability.py</span>
-                  <button className="text-[10px] font-bold text-purple-400 hover:underline">Détails Script</button>
-                </div>
-              </div>
 
-              {/* Module 3: Scorer */}
-              <div className="bg-slate-900/60 border border-orange-500/20 rounded-3xl p-6 backdrop-blur-xl relative group hover:border-orange-500/50 transition-all">
-                <div className="absolute top-4 right-4 opacity-10 group-hover:opacity-30 transition-opacity">
-                  <Zap size={40} className="text-orange-400" />
+
+
+        {/* Modal de Planification */}
+        {showScheduleModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
+              <button onClick={() => setShowScheduleModal(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white font-bold">
+                X
+              </button>
+              
+              <h2 className="text-xl font-black text-white mb-2 flex items-center gap-2">
+                <Clock className="w-5 h-5 text-brand-400" />
+                Planification du Pipeline
+              </h2>
+              <p className="text-sm text-slate-400 mb-6">
+                Configurez l'exécution automatique du pipeline complet ("Unified Extraction").
+              </p>
+              
+              <div className="space-y-4 mb-8">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Fréquence d'exécution</label>
+                  <select 
+                    value={scheduleIntervalInput} 
+                    onChange={(e) => setScheduleIntervalInput(Number(e.target.value))}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 transition-colors"
+                  >
+                    <option value={10}>Toutes les 10 minutes</option>
+                    <option value={60}>Toutes les heures (1h)</option>
+                    <option value={360}>Toutes les 6 heures (6h)</option>
+                    <option value={720}>Toutes les 12 heures (12h)</option>
+                    <option value={1440}>Tous les jours (24h)</option>
+                  </select>
                 </div>
-                <h4 className="text-orange-400 text-[10px] font-black uppercase tracking-widest mb-1">Module Scoring</h4>
-                <h3 className="text-white text-lg font-black mb-4">Priority & Risk Scorer</h3>
-                <div className="space-y-2 mb-6">
-                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-                    <CheckCircle2 size={10} className="text-emerald-500" />
-                    CVSS & EPSS Real-time Scoring
+                
+                {scheduleStatus.active && (
+                  <div className="p-3 bg-brand-500/10 border border-brand-500/20 rounded-xl">
+                    <div className="flex items-center gap-2 text-brand-400 text-xs font-bold uppercase tracking-wide">
+                      <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
+                      Planification Actuellement Active
+                    </div>
+                    {scheduleStatus.next_run && (
+                      <div className="mt-1 text-slate-400 text-xs font-mono">
+                        Prochaine exécution : {format(new Date(scheduleStatus.next_run), 'dd/MM/yyyy HH:mm:ss')}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-                    <CheckCircle2 size={10} className="text-emerald-500" />
-                    Additive Risk Matrix (0-100)
-                  </div>
-                </div>
-                <div className="flex items-center justify-between mt-auto pt-4 border-t border-white/5">
-                  <span className="text-[9px] font-mono text-slate-600">scorer.py</span>
-                  <button className="text-[10px] font-bold text-orange-400 hover:underline">Détails Script</button>
-                </div>
+                )}
+              </div>
+              
+              <div className="flex gap-3">
+                {scheduleStatus.active ? (
+                  <button 
+                    onClick={() => toggleSchedule(false)}
+                    className="flex-1 py-3 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold rounded-xl border border-red-500/30 transition-colors"
+                  >
+                    Arrêter
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => toggleSchedule(true)}
+                    className="flex-1 py-3 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl shadow-lg shadow-brand-600/20 transition-colors"
+                  >
+                    Démarrer
+                  </button>
+                )}
+                <button 
+                  onClick={() => setShowScheduleModal(false)}
+                  className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-colors"
+                >
+                  Fermer
+                </button>
               </div>
             </div>
           </div>
         )}
-
-
 
         {/* ── Dashboard Menu / System ────────────────────────────────── */}
         <div className="flex items-center gap-4 mb-8">
@@ -978,69 +1010,7 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
           </div>
         )}
 
-        {/* ── Enrichment Breakdown ──────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
-          <div className="lg:col-span-2 bg-slate-900/40 rounded-3xl border border-white/5 p-6 glass-panel relative overflow-hidden">
-            <div className="absolute inset-0 hud-grid opacity-10" />
-            <div className="flex items-center justify-between mb-6 relative z-10">
-              <h2 className="text-lg font-black text-white flex items-center gap-2">
-                <Globe className="w-5 h-5 text-cyber-blue" />
-                Intelligence Enrichment Breakdown
-              </h2>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 px-3 py-1 bg-cyber-blue/10 rounded-full border border-cyber-blue/20">
-                  <span className="text-[10px] font-black text-cyber-blue uppercase tracking-widest">Enrichment Coverage</span>
-                  <span className="text-xs font-mono font-bold text-white">{enrichmentStats.coverage}%</span>
-                </div>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 relative z-10">
-              {countryStats.length > 0 ? countryStats.map((item, idx) => (
-                <div key={item.country} className="flex flex-col items-center p-3 bg-white/5 rounded-2xl border border-white/5 hover:border-cyber-blue/30 transition-all group">
-                   <div className="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center mb-2 group-hover:scale-110 transition-all relative overflow-hidden border border-white/10 shadow-lg">
-                      <img 
-                        src={`https://flagcdn.com/w80/${item.country.toLowerCase()}.png`} 
-                        alt={item.country}
-                        className="w-full h-full object-cover"
-                        onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
-                      />
-                      <span className="hidden text-lg font-bold">📍</span>
-                      {idx < 3 && (
-                        <div className="absolute -top-1 -right-1 bg-slate-900/80 rounded-full w-5 h-5 flex items-center justify-center text-[10px] border border-white/10 shadow-sm">
-                          {idx === 0 ? '🏆' : idx === 1 ? '🥈' : '🥉'}
-                        </div>
-                      )}
-                   </div>
-                   <span className="text-xs font-semibold text-slate-400 uppercase truncate w-full text-center">{item.country}</span>
-                   <span className="text-sm font-mono font-bold text-cyber-blue">{item.count}</span>
-                </div>
-              )) : (
-                <div className="col-span-full py-8 text-center text-slate-500 font-mono text-xs italic">
-                  Collecting enrichment data... Run enrichment pipeline to see metrics.
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-indigo-500/10 to-slate-900/40 rounded-3xl border border-indigo-500/20 p-6 relative overflow-hidden flex flex-col justify-center">
-             <div className="absolute top-0 right-0 p-4 opacity-10">
-                <Zap className="w-24 h-24 text-indigo-500" />
-             </div>
-             <h3 className="text-sm font-black text-indigo-400 uppercase tracking-[0.2em] mb-2">Targeted Insight</h3>
-             <p className="text-2xl font-black text-white mb-4 leading-tight">Enhanced Data Integration</p>
-             <p className="text-xs text-slate-400 mb-6 leading-relaxed">
-               Current intelligence shows high activity in <span className="text-cyber-blue font-bold">{countryStats[0]?.country || 'Global'}</span> sources. 
-               The pipeline has processed <span className="text-white font-bold">{fmtNum(stats?.total_ioc)}</span> indicators with multi-engine enrichment.
-             </p>
-             <div className="flex items-center gap-3">
-                <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
-                   <div className="h-full bg-indigo-500 rounded-full shadow-[0_0_10px_#6366f1]" style={{ width: `${enrichmentStats.coverage}%` }} />
-                </div>
-                <span className="text-[10px] font-bold text-indigo-400">{enrichmentStats.coverage}%</span>
-             </div>
-          </div>
-        </div>
 
         {/* ── Global Sources Operations Grid ─────────────────────────── */}
         <div className="mb-10">
@@ -1290,6 +1260,11 @@ const SourceStatusRow = ({ source, runs, onRun, onRunPhase, isStarting, onExplor
     });
   });
 
+  // Fallback is always bundled inside the URLScan step — mirror its status
+  if (!phaseStatusMap["Fallback"] && phaseStatusMap["URLScan"]) {
+    phaseStatusMap["Fallback"] = phaseStatusMap["URLScan"];
+  }
+
   const getPhaseStatus = (phaseFull) => {
     return phaseStatusMap[phaseFull] || 'pending';
   };
@@ -1323,10 +1298,9 @@ const SourceStatusRow = ({ source, runs, onRun, onRunPhase, isStarting, onExplor
       
       {PIPELINE_PHASES.map(phase => {
         const status = getPhaseStatus(phase.full);
-        const isNVD = source.id === 'nvd' || source.id === 'alienvault';
-        
-        // Disable certain phases for CVE-only sources if they don't make sense
-        const isDisabled = isNVD && (phase.id === 'urlscan' || phase.id === 'fallback' || phase.id === 'vt');
+        // Only NVD is CVE-only — AlienVault has IPs/domains and needs all enrichment phases
+        const isCveOnly = source.id === 'nvd';
+        const isDisabled = isCveOnly && (phase.id === 'urlscan' || phase.id === 'fallback' || phase.id === 'vt');
 
         return (
           <td key={phase.id} className="px-1 py-5">

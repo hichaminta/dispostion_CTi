@@ -1,0 +1,173 @@
+BLUESEC SOC · CYBER THREAT INTELLIGENCE
+Security Bulletin
+Rapport d'analyse CTI — Export STIX 2.1
+20 May 2026 — 16:14Z
+Réf : CTI-BULL-2025-001
+TLP:RED
+Confidentiel — BlueSec SOC | CTI Pipeline v1.0
+Page 1
+STIX 2.1 Compatible
+1. Résumé Exécutif
+Campagne détectée
+APT-PHISH-2025-Q2
+Sévérité
+CRITIQUE
+Type de menace
+Phishing / C2 / Credential Harvesting
+Confidence
+85 %
+Acteur suspecté
+UNC2452 (SolarWinds cluster)
+Vecteur
+Email / URL malveillante
+Période observée
+2025-05-01 → 2025-05-18
+Impact SOC
+Détection active
+2. Indicateurs de Compromission (IOCs)
+Type
+Valeur
+Source
+Sévérité
+STIX ID
+IP
+185.220.101.47
+VirusTotal
+CRITIQUE
+indicator--a1b2...
+URL
+hxxps://secure-login[.]ru/payload
+URLScan.io
+CRITIQUE
+indicator--c3d4...
+Domain
+update-microsoft[.]net
+OTX
+ÉLEVÉE
+indicator--e5f6...
+Hash
+MD5
+d41d8cd98f00b204e9800998ecf8427e
+VT / MISP
+ÉLEVÉE
+indicator--a7b8...
+Email
+noreply@micros0ft-support[.]com
+PhishTank
+MOYENNE
+indicator--c9d0...
+IP
+45.33.32.156
+Abuse.ch
+FAIBLE
+indicator--e1f2...
+3. Enrichissement & Corrélation
+IOC
+Géolocalisation
+URLScan Score
+VT Detections
+MISP Event
+185.220.101.47
+RU — Moscou (AS60729)
+—
+62 / 94
+#EVT-1042
+secure-login[.]ru
+RU — Saint-Pétersbourg
+95/100
+38 / 94
+#EVT-1042
+update-microsoft[.]net
+NL — Amsterdam
+88/100
+25 / 94
+#EVT-1043
+45.33.32.156
+US — Fremont CA
+—
+4 / 94
+#EVT-1044
+4. Tactiques & Techniques MITRE ATT&CK;
+ID
+Tactique
+Technique
+Observé
+T1566.001
+Initial Access
+Spearphishing Attachment
+✓
+T1071.001
+Command & Control
+Web Protocols (HTTP/S C2)
+✓
+T1539
+Credential Access
+Steal Web Session Cookie
+✓
+T1486
+Impact
+Data Encrypted for Impact
+✗
+
+---PAGE---
+BLUESEC SOC · CYBER THREAT INTELLIGENCE
+Security Bulletin
+Rapport d'analyse CTI — Export STIX 2.1
+20 May 2026 — 16:14Z
+Réf : CTI-BULL-2025-001
+TLP:RED
+Confidentiel — BlueSec SOC | CTI Pipeline v1.0
+Page 2
+STIX 2.1 Compatible
+T1027
+Defense Evasion
+Obfuscated Files or Information
+✓
+5. Export STIX 2.1 — Structure du Bundle
+{
+  "type": "bundle",
+  "id": "bundle--f9a3b5c2-...",
+  "objects": [
+    { "type": "indicator",  "id": "indicator--a1b2...",
+      "pattern": "[ipv4-addr:value = '185.220.101.47']",
+      "valid_from": "2025-05-01T00:00:00Z" },
+    { "type": "malware",    "id": "malware--c3d4...",
+      "name": "PhishKit-RU", "is_family": false },
+    { "type": "relationship", "source_ref": "indicator--a1b2...",
+      "target_ref": "malware--c3d4...",
+      "relationship_type": "indicates" }
+  ]
+}
+Le bundle STIX est automatiquement injecté dans MISP via l'API REST (POST /events). Chaque indicateur est corrélé aux
+événements existants et taggé TLP:RED / PAP:RED selon la politique SOC.
+6. Recommandations SOC
+#
+Action
+Priorité
+Responsabl
+e
+R1
+Bloquer les IPs / domains listés en section 2 sur le firewall périmétrique
+IMMÉDIATE
+SOC L1
+R2
+Soumettre les hashes à l'EDR pour hunting rétrospectif (30 jours)
+HAUTE
+SOC L2
+R3
+Notifier les utilisateurs ciblés par le phishing campaign
+HAUTE
+CISO
+R4
+Activer la règle SIGMA correspondante dans le SIEM
+MOYENNE
+SOC L2
+R5
+Exporter le bundle STIX vers les partenaires ISAC
+BASSE
+CTI Lead
+ Généré automatiquement par le CTI Pipeline BlueSec
+MISP v2.4 · VirusTotal · URLScan.io · GeoIP
+ 2026-05-20 16:14 UTC
+Classification : TLP:RED
+ 

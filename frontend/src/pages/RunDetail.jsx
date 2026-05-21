@@ -4,7 +4,8 @@ import logo from '../assets/logo.png';
 import {
   ChevronLeft, Terminal, BarChart3, CheckCircle2,
   XCircle, Loader2, Circle, Shield, Cpu, Database, Zap, Square,
-  Globe, Languages, ScanEye, Activity
+  Globe, Languages, ScanEye, Activity, AlertTriangle, Sparkles,
+  Layers, Share2, FileText, Bug
 } from 'lucide-react';
 
 const API_BASE = `http://${window.location.hostname}:8000`;
@@ -41,12 +42,18 @@ const SRC_LOGO = {
 
 // ─── Config étapes ────────────────────────────────────────────────────────────
 const PIPELINE_STEPS = [
-  { name: "Collecte",             icon: Database,  color: "blue"   },
-  { name: "Extraction CVE / IOC", icon: Cpu,       color: "violet" },
-  { name: "Geolocalisation",      icon: Globe,     color: "emerald"},
-  { name: "URLScan",              icon: ScanEye,   color: "pink"   },
-  { name: "Normalisation",        icon: Shield,    color: "cyan"   },
-  { name: "Intégration MISP",     icon: Zap,       color: "orange" },
+  { name: "Collecte",              icon: Database,       color: "blue"    },
+  { name: "Extraction CVE / IOC",  icon: Cpu,            color: "violet"  },
+  { name: "AbuseIPDB Enrichment",  icon: Shield,         color: "cyan"    },
+  { name: "VirusTotal Enrichment", icon: Bug,            color: "indigo"  },
+  { name: "Geolocalisation",       icon: Globe,          color: "emerald" },
+  { name: "URLScan",               icon: ScanEye,        color: "pink"    },
+  { name: "Enrichissement CVE",    icon: AlertTriangle,  color: "amber"   },
+  { name: "Classification",        icon: Sparkles,       color: "purple"  },
+  { name: "MITRE Mapping",         icon: Layers,         color: "rose"    },
+  { name: "Corrélation SOC",       icon: Activity,       color: "teal"    },
+  { name: "Export STIX",           icon: Share2,         color: "blue"    },
+  { name: "Intégration MISP",      icon: Zap,            color: "orange"  },
 ];
 
 const COLOR_MAP = {
@@ -57,6 +64,10 @@ const COLOR_MAP = {
   cyan:    { bg: "bg-cyan-500/10",    border: "border-cyan-500/30",    text: "text-cyan-400",    ring: "ring-cyan-500",    dot: "bg-cyan-500"    },
   orange:  { bg: "bg-orange-500/10",  border: "border-orange-500/30",  text: "text-orange-400",  ring: "ring-orange-500",  dot: "bg-orange-500"  },
   amber:   { bg: "bg-amber-500/10",   border: "border-amber-500/30",   text: "text-amber-400",   ring: "ring-amber-500",   dot: "bg-amber-500"   },
+  indigo:  { bg: "bg-indigo-500/10",  border: "border-indigo-500/30",  text: "text-indigo-400",  ring: "ring-indigo-500",  dot: "bg-indigo-500"  },
+  purple:  { bg: "bg-purple-500/10",  border: "border-purple-500/30",  text: "text-purple-400",  ring: "ring-purple-500",  dot: "bg-purple-500"  },
+  rose:    { bg: "bg-rose-500/10",    border: "border-rose-500/30",    text: "text-rose-400",    ring: "ring-rose-500",    dot: "bg-rose-500"    },
+  teal:    { bg: "bg-teal-500/10",    border: "border-teal-500/30",    text: "text-teal-400",    ring: "ring-teal-500",    dot: "bg-teal-500"    },
 };
 
 // ─── Icônes de statut ─────────────────────────────────────────────────────────
@@ -399,11 +410,7 @@ const RunDetail = ({ runId, onBack, onExploreSource }) => {
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-6">
           {/* ── Colonne gauche : Steps + Terminal ───────────────────────── */}
           <div className="space-y-4">
-            <div className={`grid gap-3 ${
-              PIPELINE_STEPS.filter(s => stepMap[s.name]).length > 2 
-                ? 'grid-cols-2 md:grid-cols-4' 
-                : 'grid-cols-1 md:grid-cols-2'
-            }`}>
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
               {PIPELINE_STEPS.filter(s => stepMap[s.name]).map((step, idx) => {
                 const stepData = stepMap[step.name];
                 const c = COLOR_MAP[step.color];
@@ -475,20 +482,28 @@ const RunDetail = ({ runId, onBack, onExploreSource }) => {
                 </div>
                 <div className="flex items-center gap-2">
                   {/* Filtre par étape */}
-                  <div className="flex gap-1">
-                    {PIPELINE_STEPS.map(step => {
+                  <div className="flex flex-wrap gap-1 max-w-sm">
+                    {PIPELINE_STEPS.filter(s => stepMap[s.name]).map(step => {
                       const c = COLOR_MAP[step.color];
                       const isF = activeStep === step.name;
+                      const shortLabel = {
+                        "Collecte": "COL", "Extraction CVE / IOC": "EXT",
+                        "AbuseIPDB Enrichment": "ABU", "VirusTotal Enrichment": "VT",
+                        "Geolocalisation": "GEO", "URLScan": "URL",
+                        "Enrichissement CVE": "CVE", "Classification": "CLASS",
+                        "MITRE Mapping": "MITRE", "Corrélation SOC": "COR",
+                        "Export STIX": "STIX", "Intégration MISP": "MISP",
+                      }[step.name] || step.name.slice(0, 3).toUpperCase();
                       return (
                         <button
                           key={step.name}
                           onClick={() => setActiveStep(isF ? null : step.name)}
                           title={step.name}
-                          className={`px-2 py-0.5 rounded text-[10px] font-mono transition-all ${
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold transition-all ${
                             isF ? `${c.bg} ${c.text} ${c.border} border` : 'text-slate-600 hover:text-slate-400'
                           }`}
                         >
-                          {step.name.split(' ')[0]}
+                          {shortLabel}
                         </button>
                       );
                     })}

@@ -47,7 +47,7 @@ const COUNTRY_CODE_TO_NAME = {
 const Results = ({ onBack, initialSourceId }) => {
   const [viewMode, setViewMode] = useState('extracted');
   const [sources, setSources] = useState([]);
-  const [currentSource, setCurrentSource] = useState(initialSourceId);
+  const [currentSource, setCurrentSource] = useState(initialSourceId || null);
   const [data, setData] = useState([]);
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -55,24 +55,32 @@ const Results = ({ onBack, initialSourceId }) => {
   const [search, setSearch] = useState("");
   const [iocType, setIocType] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sourcesLoading, setSourcesLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [countryStats, setCountryStats] = useState([]);
 
-  // Fetch sources list
+  // Fetch sources list — does NOT depend on currentSource to avoid re-fetch loops
   const fetchSources = useCallback(async () => {
+    setSourcesLoading(true);
+    setFetchError(null);
     try {
       const api = viewMode === 'extracted' ? `${API_BASE}/api/extracted` : `${API_BASE}/api/enriched`;
       const res = await axios.get(`${api}/sources`);
       setSources(res.data);
-      if (res.data.length > 0 && !currentSource) {
-        setCurrentSource(res.data[0].id);
-      }
+      setCurrentSource(prev => {
+        if (prev) return prev; // keep existing selection
+        return res.data.length > 0 ? res.data[0].id : null;
+      });
     } catch (err) {
       console.error("Failed to fetch sources:", err);
+      setFetchError("Impossible de contacter le backend. Vérifiez que le serveur est démarré (port 8000).");
+    } finally {
+      setSourcesLoading(false);
     }
-  }, [viewMode, currentSource]);
+  }, [viewMode]);
 
   // Fetch data for current source
   const fetchData = useCallback(async () => {
@@ -216,7 +224,39 @@ const Results = ({ onBack, initialSourceId }) => {
             <span className="px-2 py-0.5 bg-slate-800 rounded text-[9px] font-bold text-slate-400">{sources.length}</span>
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {sources.map(src => {
+            {sourcesLoading ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-3">
+                <Loader2 size={24} className="text-brand-500 animate-spin" />
+                <span className="text-[10px] text-slate-500 font-mono">Chargement...</span>
+              </div>
+            ) : fetchError ? (
+              <div className="p-3 space-y-3">
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-[10px] text-red-400 font-mono leading-relaxed">
+                  {fetchError}
+                </div>
+                <button
+                  onClick={fetchSources}
+                  className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-brand-500/10 border border-brand-500/30 rounded-xl text-[10px] font-black uppercase tracking-widest text-brand-400 hover:bg-brand-500/20 transition-all"
+                >
+                  <RefreshCw size={12} />
+                  Réessayer
+                </button>
+              </div>
+            ) : sources.length === 0 ? (
+              <div className="p-3 space-y-3">
+                <div className="p-3 bg-slate-800/60 border border-white/5 rounded-xl text-[10px] text-slate-400 font-mono leading-relaxed">
+                  Aucun fichier extrait trouvé.<br /><br />
+                  Lancez d'abord le pipeline <span className="text-brand-400 font-bold">Collecte → Extraction</span> depuis le Monitor.
+                </div>
+                <button
+                  onClick={fetchSources}
+                  className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-slate-800 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-brand-400 transition-all"
+                >
+                  <RefreshCw size={12} />
+                  Actualiser
+                </button>
+              </div>
+            ) : sources.map(src => {
               const logo = getSourceLogo(src.name);
               return (
                 <button
@@ -239,8 +279,37 @@ const Results = ({ onBack, initialSourceId }) => {
 
         {/* ── Main Content Area ───────────────────────────────────────── */}
         <main className="flex-1 overflow-y-auto relative p-6">
+          {/* No-source splash */}
+          {!currentSource && !sourcesLoading && (
+            <div className="flex flex-col items-center justify-center h-full gap-6 text-center py-24">
+              <div className="w-20 h-20 rounded-3xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
+                <Database size={36} className="text-brand-500/60" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-2">
+                  {sources.length === 0 ? "Pipeline non exécuté" : "Sélectionnez une source"}
+                </h2>
+                <p className="text-sm text-slate-500 max-w-sm mx-auto">
+                  {sources.length === 0
+                    ? "Lancez le pipeline Collecte + Extraction depuis le Monitor pour générer des données."
+                    : "Cliquez sur une source dans la barre latérale pour explorer ses données."}
+                </p>
+              </div>
+              {sources.length === 0 && (
+                <button
+                  onClick={onBack}
+                  className="flex items-center gap-2 px-6 py-3 bg-brand-500 hover:bg-brand-400 text-white text-sm font-black rounded-xl transition-all active:scale-95 shadow-lg shadow-brand-500/20"
+                >
+                  <PlayCircle size={16} />
+                  Aller au Monitor
+                </button>
+              )}
+            </div>
+          )}
+
+          {currentSource && (
           <div className="max-w-6xl mx-auto space-y-6">
-            
+
             {/* View Header */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
               <div>
@@ -494,6 +563,7 @@ const Results = ({ onBack, initialSourceId }) => {
             </div>
 
           </div>
+          )} {/* end currentSource conditional */}
         </main>
       </div>
 

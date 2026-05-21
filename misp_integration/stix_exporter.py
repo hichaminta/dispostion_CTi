@@ -1,7 +1,12 @@
 import json
 import os
+import sys
 import uuid
 from datetime import datetime, timezone
+
+# Force UTF-8 stdout on Windows to avoid cp1252 UnicodeEncodeError
+if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
 
 BASE_DIR    = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 INPUT_FILE  = os.path.join(BASE_DIR, "output_correlation", "correlated_events_soc_enriched.json")
@@ -663,7 +668,7 @@ class STIXExporter:
         with open(src, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        print(f"Conversion de {len(data)} événements → STIX 2.1 ...")
+        print(f"Conversion de {len(data)} evenements -> STIX 2.1 ...")
         self.convert_all(data)
 
         bundle = {

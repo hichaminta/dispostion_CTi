@@ -25,7 +25,7 @@ if sys.platform == 'win32':
     except Exception as e:
         print(f"[INIT] Failed to set Proactor policy: {e}")
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from . import schemas, database, websockets, worker, leaks_router
 from .database import db
 
@@ -80,7 +80,7 @@ async def create_run(run_in: schemas.RunCreate, background_tasks: BackgroundTask
         "status_global": "running"
     }
     db.create_run(new_run)
-    steps = ["Collecte", "Extraction CVE / IOC", "Geolocalisation", "URLScan", "Enrichissement CVE", "Classification", "MITRE Mapping", "Corrélation SOC", "Export STIX", "Intégration MISP"]
+    steps = ["Collecte", "Extraction CVE / IOC", "AbuseIPDB Enrichment", "VirusTotal Enrichment", "Geolocalisation", "URLScan", "Enrichissement CVE", "Classification", "MITRE Mapping", "Corrélation SOC", "Export STIX", "Intégration MISP"]
     for step_name in steps:
         db.update_step(external_id, {
             "step_name": step_name,
@@ -148,16 +148,25 @@ async def create_targeted_run(run_in: schemas.RunCreate, step_name: str, backgro
         "status_global": "running"
     }
     db.create_run(new_run)
-    
-    # Initialize only the specified step and get the updated run object
-    run_obj = db.update_step(external_id, {
-        "step_name": step_name,
-        "status": "pending",
-        "ioc_count": 0,
-        "cve_count": 0,
-        "logs": [],
-    })
-    
+
+    # For unified enrichment, pre-create all individual phase steps so dots appear immediately
+    ENRICHMENT_SUB_STEPS = [
+        "AbuseIPDB Enrichment", "VirusTotal Enrichment", "Geolocalisation",
+        "URLScan", "Enrichissement CVE", "Classification", "MITRE Mapping",
+    ]
+    is_unified_enrich = (step_name == "Enrichissement" and run_in.source_name == "Unified Extraction")
+    steps_to_init = ENRICHMENT_SUB_STEPS if is_unified_enrich else [step_name]
+
+    run_obj = None
+    for s in steps_to_init:
+        run_obj = db.update_step(external_id, {
+            "step_name": s,
+            "status": "pending",
+            "ioc_count": 0,
+            "cve_count": 0,
+            "logs": [],
+        })
+
     background_tasks.add_task(worker.execute_targeted_task, external_id, run_in.source_name, step_name)
     return run_obj
 
@@ -613,6 +622,288 @@ async def save_ai_settings(body: dict):
 
     return {"status": "success", "message": "Configuration AI sauvegardée."}
 
+ENRICHMENT_KEYS = [
+    ("virustotal_api_key",      "VIRUSTOTAL_API_KEY"),
+    ("abuseipdb_api_key",       "ABUSEIPDB_API_KEY"),
+    ("urlscan_api_key",         "URLScan_API_KEY"),
+    ("nvd_api_key",             "NVD_API_KEY"),
+    ("otx_api_key",             "OTX_API_KEY"),
+    ("threatfox_api_key",       "THREATFOX_API_KEY"),
+    ("urlhaus_api_key",         "URLHAUS_API_KEY"),
+    ("malwarebazaar_api_key",   "MALWAREBAZAAR_API_KEY"),
+    ("pulsedive_api_key",       "PULSEDIVE_API_KEY"),
+]
+
+@app.get("/api/settings/enrichment")
+def get_enrichment_settings():
+    """Returns current enrichment/source API keys (masked)."""
+    config = {}
+    for field, env_var in ENRICHMENT_KEYS:
+        val = os.getenv(env_var, "")
+        config[field] = ("*" * (len(val) - 4) + val[-4:]) if len(val) > 4 else ("*" * len(val))
+    return config
+
+@app.post("/api/settings/enrichment")
+async def save_enrichment_settings(body: dict):
+    """Saves enrichment/source API keys to .env file."""
+    ENV_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+
+    lines = []
+    if os.path.exists(ENV_PATH):
+        with open(ENV_PATH, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+    def set_env_var(lines, key, value):
+        for i, line in enumerate(lines):
+            if line.strip().startswith(f"{key}=") or line.strip().startswith(f"{key} ="):
+                lines[i] = f"{key}={value}\n"
+                return lines
+        lines.append(f"{key}={value}\n")
+        return lines
+
+    for field, env_var in ENRICHMENT_KEYS:
+        val = body.get(field, "")
+        if val and not (val.startswith("*") and "*" in val and len(val) > 4):
+            lines = set_env_var(lines, env_var, val)
+
+    with open(ENV_PATH, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+    from dotenv import load_dotenv
+    load_dotenv(ENV_PATH, override=True)
+
+    return {"status": "success", "message": "Configuration enrichissement sauvegardée."}
+
+@app.get("/api/settings/integrations")
+def get_integration_settings():
+    """Returns MISP and Telegram configuration (keys masked)."""
+    misp_key = os.getenv("MISP_KEY", "")
+    return {
+        "misp_url":        os.getenv("MISP_URL", ""),
+        "misp_key":        ("*" * (len(misp_key) - 4) + misp_key[-4:]) if len(misp_key) > 4 else ("*" * len(misp_key)),
+        "misp_verifycert": os.getenv("MISP_VERIFYCERT", "False"),
+        "telegram_api_id":   os.getenv("TELEGRAM_API_ID", ""),
+        "telegram_api_hash": os.getenv("TELEGRAM_API_HASH", ""),
+        "telegram_phone":    os.getenv("TELEGRAM_PHONE", ""),
+    }
+
+@app.post("/api/settings/integrations")
+async def save_integration_settings(body: dict):
+    """Saves MISP and Telegram configuration to .env file."""
+    ENV_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+
+    lines = []
+    if os.path.exists(ENV_PATH):
+        with open(ENV_PATH, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+    def set_env_var(lines, key, value):
+        for i, line in enumerate(lines):
+            if line.strip().startswith(f"{key}=") or line.strip().startswith(f"{key} ="):
+                lines[i] = f"{key}={value}\n"
+                return lines
+        lines.append(f"{key}={value}\n")
+        return lines
+
+    plain_fields = {
+        "misp_url":          "MISP_URL",
+        "misp_verifycert":   "MISP_VERIFYCERT",
+        "telegram_api_id":   "TELEGRAM_API_ID",
+        "telegram_api_hash": "TELEGRAM_API_HASH",
+        "telegram_phone":    "TELEGRAM_PHONE",
+    }
+    secret_fields = {
+        "misp_key": "MISP_KEY",
+    }
+
+    for field, env_var in plain_fields.items():
+        if field in body:
+            lines = set_env_var(lines, env_var, body[field])
+
+    for field, env_var in secret_fields.items():
+        val = body.get(field, "")
+        if val and not (val.startswith("*") and "*" in val and len(val) > 4):
+            lines = set_env_var(lines, env_var, val)
+
+    with open(ENV_PATH, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+    from dotenv import load_dotenv
+    load_dotenv(ENV_PATH, override=True)
+
+    return {"status": "success", "message": "Configuration intégrations sauvegardée."}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# SCHEDULER ENDPOINTS (MULTIPLE)
+# ──────────────────────────────────────────────────────────────────────────────
+
+schedules_db = {}
+# Format: { "id": { "id", "source_name", "step_name", "interval_minutes", "active", "next_run", "task" } }
+
+async def scheduler_job_loop(schedule_id: str):
+    while True:
+        job = schedules_db.get(schedule_id)
+        if not job or not job.get("active"):
+            break
+
+        now = datetime.now()
+        if job.get("next_run") and now >= job["next_run"]:
+            # Trigger run
+            external_id = str(uuid.uuid4())
+            source_name = job.get("source_name", "Unified Extraction")
+            step_name = job.get("step_name", "Pipeline Complet")
+
+            new_run = {
+                "run_id": external_id,
+                "source_name": source_name,
+                "source_type": "Scheduled",
+                "status_global": "running"
+            }
+            db.create_run(new_run)
+            
+            if step_name == "Pipeline Complet":
+                steps = [
+                    "Collecte", "Extraction CVE / IOC", "AbuseIPDB Enrichment", 
+                    "VirusTotal Enrichment", "Geolocalisation", "URLScan", 
+                    "Enrichissement CVE", "Classification", "MITRE Mapping", 
+                    "Corrélation SOC", "Export STIX", "Intégration MISP"
+                ]
+                for s in steps:
+                    db.update_step(external_id, {
+                        "step_name": s, "status": "pending",
+                        "ioc_count": 0, "cve_count": 0, "logs": [],
+                    })
+                asyncio.create_task(worker.execute_pipeline_task(external_id, source_name))
+            else:
+                db.update_step(external_id, {
+                    "step_name": step_name, "status": "pending",
+                    "ioc_count": 0, "cve_count": 0, "logs": [],
+                })
+                asyncio.create_task(worker.execute_targeted_task(external_id, source_name, step_name))
+
+            # Reschedule
+            job["next_run"] = datetime.now() + timedelta(minutes=job["interval_minutes"])
+        
+        await asyncio.sleep(10)
+
+from pydantic import BaseModel
+from typing import Optional
+
+class ScheduleCreateRequest(BaseModel):
+    source_name: str
+    step_name: str
+    interval_minutes: int
+
+class ScheduleUpdateRequest(BaseModel):
+    action: str
+    interval_minutes: Optional[int] = None
+
+@app.get("/api/schedules")
+def get_schedules():
+    res = []
+    for sid, job in schedules_db.items():
+        res.append({
+            "id": sid,
+            "source_name": job.get("source_name"),
+            "step_name": job.get("step_name"),
+            "interval_minutes": job.get("interval_minutes"),
+            "active": job.get("active"),
+            "next_run": job.get("next_run").isoformat() if job.get("next_run") else None
+        })
+    return res
+
+@app.post("/api/schedules")
+async def create_schedule(req: ScheduleCreateRequest):
+    sid = str(uuid.uuid4())
+    schedules_db[sid] = {
+        "id": sid,
+        "source_name": req.source_name,
+        "step_name": req.step_name,
+        "interval_minutes": req.interval_minutes,
+        "active": True,
+        "next_run": datetime.now(),
+        "task": None
+    }
+    schedules_db[sid]["task"] = asyncio.create_task(scheduler_job_loop(sid))
+    return {"status": "success", "id": sid, "message": "Planification créée et démarrée"}
+
+@app.put("/api/schedules/{schedule_id}")
+async def update_schedule(schedule_id: str, req: ScheduleUpdateRequest):
+    job = schedules_db.get(schedule_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Planification non trouvée")
+    
+    if req.action == "start":
+        if req.interval_minutes:
+            job["interval_minutes"] = req.interval_minutes
+        job["active"] = True
+        job["next_run"] = datetime.now()
+        if job["task"] is None or job["task"].done():
+            job["task"] = asyncio.create_task(scheduler_job_loop(schedule_id))
+        return {"status": "success", "message": "Planification démarrée"}
+    
+    elif req.action == "stop":
+        job["active"] = False
+        job["next_run"] = None
+        if job["task"] and not job["task"].done():
+            job["task"].cancel()
+        job["task"] = None
+        return {"status": "success", "message": "Planification arrêtée"}
+    
+    raise HTTPException(status_code=400, detail="Action invalide")
+
+@app.delete("/api/schedules/{schedule_id}")
+async def delete_schedule(schedule_id: str):
+    job = schedules_db.get(schedule_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Planification non trouvée")
+    
+    job["active"] = False
+    if job["task"] and not job["task"].done():
+        job["task"].cancel()
+    del schedules_db[schedule_id]
+    return {"status": "success", "message": "Planification supprimée"}
+
+# Keep legacy endpoint for compatibility with Dashboard.jsx if needed (until updated)
+@app.get("/api/schedule/status")
+def get_schedule_status_legacy():
+    # Return first active schedule or default
+    active = next((j for j in schedules_db.values() if j["active"]), None)
+    if active:
+        return {
+            "active": True,
+            "interval_minutes": active["interval_minutes"],
+            "next_run": active["next_run"].isoformat() if active.get("next_run") else None
+        }
+    return {"active": False, "interval_minutes": 60, "next_run": None}
+
+@app.post("/api/schedule")
+async def manage_schedule_legacy(req: ScheduleUpdateRequest):
+    # Backward compatibility
+    if req.action == "start":
+        sid = "legacy_global"
+        if sid not in schedules_db:
+            schedules_db[sid] = {
+                "id": sid, "source_name": "Unified Extraction", "step_name": "Pipeline Complet",
+                "interval_minutes": req.interval_minutes or 60, "active": True, "next_run": datetime.now(), "task": None
+            }
+        else:
+            schedules_db[sid]["interval_minutes"] = req.interval_minutes or 60
+            schedules_db[sid]["active"] = True
+            schedules_db[sid]["next_run"] = datetime.now()
+        
+        if schedules_db[sid]["task"] is None or schedules_db[sid]["task"].done():
+            schedules_db[sid]["task"] = asyncio.create_task(scheduler_job_loop(sid))
+        return {"status": "success"}
+    elif req.action == "stop":
+        sid = "legacy_global"
+        if sid in schedules_db:
+            schedules_db[sid]["active"] = False
+            schedules_db[sid]["next_run"] = None
+            if schedules_db[sid]["task"] and not schedules_db[sid]["task"].done():
+                schedules_db[sid]["task"].cancel()
+        return {"status": "success"}
+
 @app.delete("/runs")
 def clear_runs():
     db.clear_runs()
@@ -631,7 +922,10 @@ async def websocket_endpoint(websocket: WebSocket):
 if __name__ == "__main__":
     import uvicorn
     # En lançant uvicorn via ce script, on garantit que la loop policy est fixée avant.
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True, loop="asyncio")
+    # Restreindre le rechargement au dossier 'backend' uniquement. 
+    # Sinon, uvicorn surveille tout le projet et redémarre l'app quand le pipeline génère des fichiers.
+    backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True, loop="asyncio", reload_dirs=[backend_dir])
 # ─── API STIX ────────────────────────────────────────────────────────
 @app.get("/api/stix/data")
 async def get_stix_data():
