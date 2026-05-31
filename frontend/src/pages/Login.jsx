@@ -18,14 +18,63 @@ export default function Login({ onLogin }) {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
+  const [error, setError] = useState(null);
 
-  const handleSubmit = (e) => {
+  const [requirePasswordChange, setRequirePasswordChange] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [credentials, setCredentials] = useState(null);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
+    setError(null);
+    try {
+      const { login } = await import('../auth.js');
+      const userInfo = await login(email, password);
+      onLogin(userInfo);
+    } catch (err) {
+      if (err.requirePasswordChange) {
+        setCredentials({ username: err.username, oldPassword: err.oldPassword });
+        setRequirePasswordChange(true);
+      } else {
+        setError(err.message);
+      }
+    } finally {
       setIsLoading(false);
-      onLogin();
-    }, 1200);
+    }
+  };
+
+  const handleChangePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      setError("Les mots de passe ne correspondent pas");
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('http://localhost:8000/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: credentials.username,
+          old_password: credentials.oldPassword,
+          new_password: newPassword
+        })
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.detail || "Erreur lors du changement de mot de passe");
+      }
+      const { login } = await import('../auth.js');
+      const userInfo = await login(credentials.username, newPassword);
+      onLogin(userInfo);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -157,30 +206,41 @@ export default function Login({ onLogin }) {
 
           {/* Header Title */}
           <div className="w-full mb-6 text-center">
-            <h2 className="text-xl font-bold text-white tracking-tight mb-1">Welcome Back</h2>
-            <p className="text-slate-400 text-[10px] tracking-widest uppercase font-semibold">Secure access to BlueSec CTI</p>
+            <h2 className="text-xl font-bold text-white tracking-tight mb-1">
+              {requirePasswordChange ? 'Update Password' : 'Welcome Back'}
+            </h2>
+            <p className="text-slate-400 text-[10px] tracking-widest uppercase font-semibold">
+              {requirePasswordChange ? 'Password change required' : 'Secure access to BlueSec CTI'}
+            </p>
           </div>
 
           {/* Form */}
+          {!requirePasswordChange ? (
           <form onSubmit={handleSubmit} className="w-full space-y-4">
-            
-            {/* Email Field */}
+
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-2.5 text-red-400 text-xs text-center">
+                {error}
+              </div>
+            )}
+
+            {/* Email / Username Field */}
             <div className="space-y-1">
               <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">
-                Email Address
+                Username
               </label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                   <Mail className={`w-4 h-4 transition-colors duration-300 ${focusedField === 'email' ? 'text-sky-450' : 'text-slate-500'}`} />
                 </div>
                 <input
-                  type="email"
+                  type="text"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   onFocus={() => setFocusedField('email')}
                   onBlur={() => setFocusedField(null)}
                   className="w-full bg-[#060a16]/60 border border-slate-800/80 rounded-xl py-2.5 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-655 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500/40 transition-all duration-300 shadow-inner hover:border-slate-700/80 hover:bg-[#0c1224]/80"
-                  placeholder="admin@bluesec.com"
+                  placeholder="admin_cti"
                   required
                 />
               </div>
@@ -257,6 +317,81 @@ export default function Login({ onLogin }) {
               </div>
             </button>
           </form>
+          ) : (
+          <form onSubmit={handleChangePasswordSubmit} className="w-full space-y-4">
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-2.5 text-red-400 text-xs text-center">
+                {error}
+              </div>
+            )}
+            <div className="space-y-1">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                New Password
+              </label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Lock className={`w-4 h-4 transition-colors duration-300 ${focusedField === 'newPassword' ? 'text-indigo-400' : 'text-slate-500'}`} />
+                </div>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  onFocus={() => setFocusedField('newPassword')}
+                  onBlur={() => setFocusedField(null)}
+                  className="w-full bg-[#060a16]/60 border border-slate-800/80 rounded-xl py-2.5 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-655 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/40 transition-all duration-300 shadow-inner hover:border-slate-700/80 hover:bg-[#0c1224]/80"
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                Confirm Password
+              </label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Lock className={`w-4 h-4 transition-colors duration-300 ${focusedField === 'confirmPassword' ? 'text-indigo-400' : 'text-slate-500'}`} />
+                </div>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onFocus={() => setFocusedField('confirmPassword')}
+                  onBlur={() => setFocusedField(null)}
+                  className="w-full bg-[#060a16]/60 border border-slate-800/80 rounded-xl py-2.5 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-655 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/40 transition-all duration-300 shadow-inner hover:border-slate-700/80 hover:bg-[#0c1224]/80"
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full relative group overflow-hidden rounded-xl p-[1px] mt-5"
+            >
+              <span className="absolute inset-0 bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 opacity-80 group-hover:opacity-100 transition-opacity duration-500 bg-[length:200%_auto] animate-[gradient_3s_linear_infinite]" />
+              <div className="relative bg-[#080d1a] px-4 py-3 rounded-xl flex items-center justify-center gap-2 transition-all duration-300 group-hover:bg-opacity-80">
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-20 bg-gradient-to-r from-sky-400 to-indigo-400 rounded-xl blur-md transition-opacity duration-500" />
+                {isLoading ? (
+                  <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <span className="font-bold text-white tracking-widest text-[10px] uppercase relative z-10">Update & Login</span>
+                    <motion.div
+                      className="relative z-10"
+                      initial={false}
+                      animate={{ x: 0 }}
+                      whileHover={{ x: 3 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                    >
+                      <ArrowRight className="w-3.5 h-3.5 text-white" />
+                    </motion.div>
+                  </>
+                )}
+              </div>
+            </button>
+          </form>
+          )}
 
           {/* Minimal cybersecurity footer logo */}
           <div className="mt-6 flex items-center justify-center gap-1 opacity-20 hover:opacity-50 transition-opacity duration-300 cursor-pointer">

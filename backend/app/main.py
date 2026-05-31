@@ -3,7 +3,7 @@ import json
 import os
 import sys
 import time
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from typing import List
@@ -27,6 +27,7 @@ if sys.platform == 'win32':
 
 from datetime import datetime, timedelta
 from . import schemas, database, websockets, worker, leaks_router
+from .admin import router as admin_router
 from .database import db
 
 OUTPUT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_cve_ioc"))
@@ -37,6 +38,43 @@ DASHBOARD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 
 app = FastAPI(title="CTI Pipeline Tracker API")
 app.include_router(leaks_router.router)
+app.include_router(admin_router)
+
+class ChangePasswordRequest(schemas.BaseModel):
+    username: str
+    old_password: str
+    new_password: str
+
+@app.post("/api/auth/change-password")
+def change_password(req: ChangePasswordRequest):
+    # Local import to avoid circular dependency issues if any
+    from .auth import keycloak_openid, get_keycloak_admin
+    # Use get_keycloak_admin directly
+    admin_client = get_keycloak_admin()
+    
+    try:
+        keycloak_openid.token(req.username, req.old_password)
+    except Exception as e:
+        err_str = str(e)
+        if "Account is not fully set up" in err_str:
+            pass # Expected if password change is required
+        elif "Invalid user credentials" in err_str:
+            raise HTTPException(status_code=400, detail="Ancien mot de passe incorrect")
+        elif "invalid_grant" in err_str:
+             raise HTTPException(status_code=400, detail="Ancien mot de passe incorrect")
+
+    users = admin_client.get_users({"username": req.username})
+    if not users:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    user_id = users[0]["id"]
+    
+    admin_client.set_user_password(user_id=user_id, password=req.new_password, temporary=False)
+    
+    # Explicitly clear ALL required actions (including UPDATE_PASSWORD)
+    # We send only the requiredActions field to avoid Keycloak rejecting read-only fields
+    admin_client.update_user(user_id, {"requiredActions": []})
+        
+    return {"status": "success"}
 
 app.mount("/results", StaticFiles(directory=DASHBOARD_DIR, html=True), name="results")
 app.mount("/data", StaticFiles(directory=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))), name="data")
@@ -962,6 +1000,19 @@ async def manage_schedule_legacy(req: ScheduleUpdateRequest):
                 schedules_db[sid]["task"].cancel()
             save_schedules()
         return {"status": "success"}
+
+@app.delete("/runs/{run_id}")
+def delete_run(run_id: int):
+    run = db.get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    # Prevent deleting a run that is currently running
+    if run.get("status_global") == "running":
+        raise HTTPException(status_code=400, detail="Impossible de supprimer un run en cours d'exécution")
+    deleted = db.delete_run(run_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return {"status": "success", "message": "Run supprimé"}
 
 @app.delete("/runs")
 def clear_runs():

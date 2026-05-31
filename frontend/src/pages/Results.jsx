@@ -10,19 +10,22 @@ import {
 
 const API_BASE = `http://${window.location.hostname}:8000`;
 
-const SOURCE_LOGOS = {
-  'AbuseIPDB': 'https://www.abuseipdb.com/favicon.ico',
+const gf = (domain) => `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
 
-  'Spamhaus': 'https://www.spamhaus.org/favicon.ico',
-  'URLHaus': 'https://urlhaus.abuse.ch/favicon.ico',
-  'ThreatFox': 'https://threatfox.abuse.ch/favicon.ico',
-  'MalwareBazaar': 'https://malwarebazaar.abuse.ch/favicon.ico',
-  'PhishTank': 'https://www.phishtank.com/favicon_32x32.png',
-  'OpenPhish': 'https://openphish.com/favicon.ico',
-  'NVD': 'https://nvd.nist.gov/favicon.ico',
-  'PulseDive': 'https://pulsedive.com/favicon.ico',
-  'FeodoTracker': 'https://feodotracker.abuse.ch/favicon.ico',
-  'DFIR Report': 'https://thedfirreport.com/favicon.ico'
+const SOURCE_LOGOS = {
+  'AbuseIPDB':    gf('abuseipdb.com'),
+  'Spamhaus':     gf('spamhaus.org'),
+  'URLhaus':      gf('urlhaus.abuse.ch'),
+  'URLHaus':      gf('urlhaus.abuse.ch'),
+  'ThreatFox':    gf('threatfox.abuse.ch'),
+  'MalwareBazaar': gf('bazaar.abuse.ch'),
+  'PhishTank':    gf('phishtank.com'),
+  'OpenPhish':    gf('openphish.com'),
+  'NVD':          gf('nvd.nist.gov'),
+  'PulseDive':    gf('pulsedive.com'),
+  'FeodoTracker': gf('feodotracker.abuse.ch'),
+  'DFIR Report':  gf('thedfirreport.com'),
+  'CINS Army':    gf('cinsscore.com'),
 };
 
 const COUNTRY_CODE_TO_NAME = {
@@ -149,7 +152,7 @@ const Results = ({ onBack, initialSourceId }) => {
 
   const openDetails = (record) => {
     setSelectedRecord(record);
-    setActiveTab('overview');
+    setActiveTab('enrichment');
     setModalOpen(true);
   };
 
@@ -265,7 +268,15 @@ const Results = ({ onBack, initialSourceId }) => {
                   className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all border ${currentSource === src.id ? 'bg-brand-500/10 border-brand-500/30 text-white shadow-[0_0_15px_rgba(14,165,233,0.1)]' : 'border-transparent text-slate-400 hover:bg-white/5'}`}
                 >
                   <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden border border-white/5 flex-shrink-0">
-                    {logo ? <img src={logo} alt="" className="w-5 h-5 object-contain" /> : <Shield size={16} />}
+                    {logo ? (
+                      <img
+                        src={logo}
+                        alt=""
+                        className="w-5 h-5 object-contain"
+                        onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
+                      />
+                    ) : null}
+                    <Shield size={16} style={{ display: logo ? 'none' : 'block' }} />
                   </div>
                   <div className="flex flex-col items-start min-w-0">
                     <span className="text-xs font-bold truncate w-full">{src.name}</span>
@@ -399,47 +410,6 @@ const Results = ({ onBack, initialSourceId }) => {
                </div>
             </div>
 
-            {/* Enrichment Quick Actions (Only for selected source) */}
-            {selectedSrcObj && (
-              <div className="glass-panel p-4 rounded-3xl border border-brand-500/20 bg-brand-500/5 relative overflow-hidden">
-                <div className="absolute inset-0 hud-grid opacity-10" />
-                <div className="flex items-center justify-between mb-4 relative z-10">
-                   <div className="flex items-center gap-2">
-                      <Sparkles size={16} className="text-brand-400" />
-                      <span className="text-xs font-black uppercase tracking-widest">Source Intelligence Phases</span>
-                   </div>
-                   <button 
-                     onClick={() => triggerEnrichment('Enrichissement')}
-                     className="flex items-center gap-2 px-4 py-1.5 bg-brand-500 hover:bg-brand-400 text-white text-[10px] font-black rounded-lg transition-all active:scale-95 shadow-lg shadow-brand-500/20"
-                   >
-                     <PlayCircle size={14} />
-                     RUN COMPLETE ENRICHMENT
-                   </button>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 relative z-10">
-                   {[
-                     { name: 'Geolocalisation', icon: <Globe size={14} />, label: 'Geo' },
-                     { name: 'URLScan_Only', icon: <ScanEye size={14} />, label: 'Scan' },
-                     { name: 'Fallback', icon: <Layers size={14} />, label: 'Heuristics' },
-                     { name: 'URLScan', icon: <Zap size={14} />, label: 'Full URL' },
-                     { name: 'Normalisation', icon: <Shield size={14} />, label: 'Norm' },
-                     { name: 'Intégration MISP', icon: <Share2 size={14} />, label: 'MISP' },
-                   ].map(step => (
-                     <button 
-                        key={step.name}
-                        onClick={() => triggerEnrichment(step.name)}
-                        className="flex flex-col items-center gap-2 p-3 bg-white/5 rounded-xl border border-white/5 hover:border-brand-500/40 hover:bg-brand-500/10 transition-all group"
-                      >
-                        <div className="p-2 bg-slate-800 rounded-lg group-hover:text-brand-400 transition-colors">
-                          {step.icon}
-                        </div>
-                        <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-200">{step.label}</span>
-                     </button>
-                   ))}
-                </div>
-              </div>
-            )}
-
             {/* Main Data Table */}
             <div className="glass-panel rounded-3xl overflow-hidden border border-white/5">
               <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/5">
@@ -519,7 +489,15 @@ const Results = ({ onBack, initialSourceId }) => {
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               <div className="w-6 h-6 rounded bg-slate-800 flex items-center justify-center overflow-hidden border border-white/5">
-                                {logo ? <img src={logo} alt="" className="w-3.5 h-3.5 object-contain" /> : <Shield size={10} />}
+                                {logo ? (
+                                  <img
+                                    src={logo}
+                                    alt=""
+                                    className="w-3.5 h-3.5 object-contain"
+                                    onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
+                                  />
+                                ) : null}
+                                <Shield size={10} style={{ display: logo ? 'none' : 'block' }} />
                               </div>
                               <span className="text-xs font-bold text-slate-200 group-hover:text-white transition-colors truncate max-w-[200px]">
                                 {mainVal}
@@ -599,194 +577,260 @@ const Results = ({ onBack, initialSourceId }) => {
               </button>
             </header>
 
-            {/* Modal Tabs */}
-            <div className="flex px-6 border-b border-white/5 bg-white/5">
-              {[
-                { id: 'overview', label: 'Overview', icon: <Layout size={14} /> },
-                { id: 'intelligence', label: 'Intelligence', icon: <Zap size={14} /> },
-                { id: 'context', label: 'Context', icon: <Globe size={14} /> },
-                { id: 'analysis', label: 'URL Analysis', icon: <ScanEye size={14} /> },
-                { id: 'raw', label: 'Raw Data', icon: <Code size={14} /> },
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-6 py-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest transition-all relative ${activeTab === tab.id ? 'text-brand-400' : 'text-slate-500 hover:text-slate-300'}`}
-                >
-                  {tab.icon}
-                  {tab.label}
-                  {activeTab === tab.id && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-brand-500 shadow-[0_0_10px_#0ea5e9]" />}
-                </button>
-              ))}
-            </div>
+            {/* Enrichment Content */}
+            <div className="flex-1 overflow-y-auto p-5 bg-slate-900/40 space-y-4">
 
-            {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-900/40">
-              {activeTab === 'overview' && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                  <div className="lg:col-span-2 space-y-6">
-                    <div className="glass-panel p-6 rounded-2xl border border-white/5">
-                      <h4 className="text-[10px] font-black uppercase tracking-widest text-brand-400 mb-3">Intelligence Summary</h4>
-                      <p className="text-slate-300 text-sm leading-relaxed">
-                        {selectedRecord.summary || 
-                         (selectedRecord.enrichment?.nlp_advanced?.nlp_summary?.split('{')[0]) || 
-                         "Analysis of this intelligence record shows multiple indicators associated with the target activity. Automated extraction has successfully mapped the technical context."}
-                      </p>
+              {/* ── Score Banner ── */}
+              <div className="flex flex-wrap items-center gap-3 p-3 glass-panel rounded-2xl border border-white/5">
+                {selectedRecord.priority_score && (
+                  <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                    selectedRecord.priority_score === 'CRITICAL' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
+                    selectedRecord.priority_score === 'HIGH'     ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' :
+                    selectedRecord.priority_score === 'MEDIUM'   ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
+                                                                   'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  }`}>{selectedRecord.priority_score}</span>
+                )}
+                {selectedRecord.risk_score_additive != null && (
+                  <div className="flex items-center gap-2 flex-1 min-w-[160px]">
+                    <span className="text-[9px] text-slate-500 uppercase font-black whitespace-nowrap">Score CTI</span>
+                    <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${
+                          selectedRecord.risk_score_additive >= 75 ? 'bg-red-500' :
+                          selectedRecord.risk_score_additive >= 50 ? 'bg-orange-400' :
+                          selectedRecord.risk_score_additive >= 25 ? 'bg-yellow-400' : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${selectedRecord.risk_score_additive}%` }}
+                      />
                     </div>
+                    <span className={`text-sm font-black ${
+                      selectedRecord.risk_score_additive >= 75 ? 'text-red-400' :
+                      selectedRecord.risk_score_additive >= 50 ? 'text-orange-400' :
+                      selectedRecord.risk_score_additive >= 25 ? 'text-yellow-400' : 'text-emerald-400'
+                    }`}>{selectedRecord.risk_score_additive}<span className="text-[9px] text-slate-500 font-normal">/100</span></span>
                   </div>
-                  <div className="space-y-4">
-                    <div className="glass-panel p-4 rounded-2xl border border-white/5 space-y-4">
-                      <div>
-                        <label className="text-[9px] font-black uppercase text-slate-500 block mb-1">Source Authority</label>
-                        <span className="text-sm font-bold text-white">{selectedRecord.source}</span>
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-black uppercase text-slate-500 block mb-1">Extraction Date</label>
-                        <span className="text-sm font-bold text-white">{new Date(selectedRecord.collected_at).toLocaleString()}</span>
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-black uppercase text-slate-500 block mb-1">Threat Level</label>
-                        <span className="px-2 py-0.5 bg-red-500/20 text-red-400 border border-red-500/30 rounded text-[10px] font-black uppercase">CRITICAL</span>
-                      </div>
-                    </div>
-                  </div>
+                )}
+                {selectedRecord.soc_action && (
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 border border-white/10 rounded-lg px-2 py-1">
+                    {selectedRecord.soc_action.replace('_', ' ')}
+                  </span>
+                )}
+                <div className="ml-auto flex flex-col items-end gap-0.5">
+                  <span className="text-[9px] font-bold text-slate-300">{selectedRecord.source}</span>
+                  <span className="text-[9px] font-mono text-slate-600">{new Date(selectedRecord.collected_at).toLocaleString('fr-FR')}</span>
                 </div>
-              )}
+              </div>
 
-              {activeTab === 'intelligence' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                  <div className="glass-panel p-4 rounded-2xl border border-white/5">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Target size={14} className="text-purple-400" />
-                      <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Indicators of Compromise</h4>
-                    </div>
-                    <div className="space-y-2">
-                      {(selectedRecord.iocs || []).map(ioc => (
-                        <div key={ioc.value} className="flex flex-col p-2 bg-white/5 rounded-lg border border-white/5">
-                           <span className="text-xs font-bold text-white break-all">{ioc.value}</span>
-                           <span className="text-[9px] font-mono text-slate-500 mt-1 uppercase">{ioc.type} • {ioc.indicator_role?.role || 'indicator'}</span>
+              {/* ── Per-IOC Enrichment ── */}
+              {(selectedRecord.iocs || []).map(ioc => {
+                const e = ioc.ioc_enrichment || {};
+                const hasGeo   = !!(e.country || e.country_name);
+                const hasVT    = (e.vt_total_engines ?? 0) > 0;
+                const hasAbuse = e.abuseConfidenceScore != null;
+                if (!hasGeo && !hasVT && !hasAbuse) return null;
+
+                const flagEmoji = (code) => {
+                  if (!code || code.length !== 2) return '🌐';
+                  return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
+                };
+
+                const typeColors = {
+                  ip:     'bg-blue-500/10 text-blue-400 border-blue-500/20',
+                  domain: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                  url:    'bg-purple-500/10 text-purple-400 border-purple-500/20',
+                  hash:   'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                  sha256: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                  md5:    'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                  cve:    'bg-rose-500/10 text-rose-400 border-rose-500/20',
+                };
+
+                return (
+                  <div key={ioc.value} className="glass-panel rounded-2xl border border-white/5 overflow-hidden">
+                    {/* IOC identifier row */}
+                    <div className="px-4 py-2.5 bg-white/5 border-b border-white/5 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`flex-shrink-0 px-2 py-0.5 rounded text-[9px] font-black uppercase border ${typeColors[ioc.type] || 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
+                          {ioc.type}
+                        </span>
+                        <span className="font-mono text-xs text-white truncate">{ioc.value}</span>
+                      </div>
+                      {ioc.risk_score != null && (
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="text-[9px] text-slate-500 uppercase">Risk</span>
+                          <span className={`text-xs font-black ${
+                            ioc.risk_score >= 70 ? 'text-red-400' :
+                            ioc.risk_score >= 40 ? 'text-orange-400' : 'text-emerald-400'
+                          }`}>{ioc.risk_score}</span>
                         </div>
-                      ))}
+                      )}
                     </div>
-                  </div>
-                  <div className="glass-panel p-4 rounded-2xl border border-white/5">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Bug size={14} className="text-brand-400" />
-                      <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Malware & Categorization</h4>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                       {(selectedRecord.tags || []).map(tag => (
-                         <span key={tag} className="px-3 py-1 bg-brand-500/10 text-brand-400 border border-brand-500/20 rounded-full text-[10px] font-bold">
-                           {tag}
-                         </span>
-                       ))}
-                    </div>
-                  </div>
-                </div>
-              )}
 
-              {activeTab === 'context' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                   <div className="glass-panel p-4 rounded-2xl border border-white/5">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Globe size={14} className="text-emerald-400" />
-                      <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Geographical Data</h4>
-                    </div>
-                    <div className="space-y-3">
-                      {(selectedRecord.iocs || []).map(ioc => {
-                        const geo = ioc.ioc_enrichment?.geography || ioc.ioc_enrichment?.country;
-                        if (!geo) return null;
-                        return (
-                          <div key={ioc.value} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg border border-white/5">
-                            <MapPin size={14} className="text-emerald-500" />
-                            <div className="flex flex-col">
-                              <span className="text-xs font-bold text-white">{Array.isArray(geo) ? geo.join(', ') : geo}</span>
-                              <span className="text-[9px] text-slate-500">{ioc.value}</span>
+                    {/* Enrichment 3-column grid */}
+                    <div className="p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+
+                      {/* Géolocalisation */}
+                      {hasGeo && (
+                        <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-3">
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <Globe size={11} className="text-emerald-400" />
+                            <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Géolocalisation</span>
+                          </div>
+                          <div className="space-y-1.5">
+                            {(e.country || e.country_name) && (
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[9px] text-slate-500 uppercase flex-shrink-0">Pays</span>
+                                <span className="text-xs font-bold text-white text-right">
+                                  {flagEmoji(e.country)} {e.country_name || e.country}
+                                </span>
+                              </div>
+                            )}
+                            {e.country && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-[9px] text-slate-500 uppercase">Code</span>
+                                <span className="text-[10px] font-mono text-slate-300">{e.country}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* VirusTotal */}
+                      {hasVT && (
+                        <div className="bg-blue-500/5 border border-blue-500/15 rounded-xl p-3">
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <img
+                              src="https://www.google.com/s2/favicons?domain=virustotal.com&sz=16"
+                              className="w-3 h-3"
+                              alt=""
+                              onError={ev => { ev.target.style.display = 'none'; }}
+                            />
+                            <span className="text-[9px] font-black uppercase tracking-widest text-blue-400">VirusTotal</span>
+                          </div>
+                          <div className="flex h-1.5 rounded-full overflow-hidden mb-2 bg-white/5">
+                            {(e.vt_malicious_count ?? 0) > 0 && <div className="bg-red-500" style={{ width: `${(e.vt_malicious_count / e.vt_total_engines) * 100}%` }} />}
+                            {(e.vt_suspicious_count ?? 0) > 0 && <div className="bg-orange-400" style={{ width: `${(e.vt_suspicious_count / e.vt_total_engines) * 100}%` }} />}
+                            {(e.vt_harmless_count ?? 0) > 0 && <div className="bg-emerald-500" style={{ width: `${(e.vt_harmless_count / e.vt_total_engines) * 100}%` }} />}
+                          </div>
+                          <div className="space-y-1">
+                            {(e.vt_malicious_count ?? 0) > 0 && (
+                              <div className="flex justify-between">
+                                <span className="text-[9px] text-red-400 font-bold">Malicious</span>
+                                <span className="text-[9px] font-mono text-red-300">{e.vt_malicious_count} / {e.vt_total_engines}</span>
+                              </div>
+                            )}
+                            {(e.vt_suspicious_count ?? 0) > 0 && (
+                              <div className="flex justify-between">
+                                <span className="text-[9px] text-orange-400 font-bold">Suspicious</span>
+                                <span className="text-[9px] font-mono text-orange-300">{e.vt_suspicious_count} / {e.vt_total_engines}</span>
+                              </div>
+                            )}
+                            {(e.vt_harmless_count ?? 0) > 0 && (
+                              <div className="flex justify-between">
+                                <span className="text-[9px] text-emerald-400">Harmless</span>
+                                <span className="text-[9px] font-mono text-emerald-300">{e.vt_harmless_count} / {e.vt_total_engines}</span>
+                              </div>
+                            )}
+                            {e.vt_reputation != null && (
+                              <div className="flex justify-between border-t border-white/5 pt-1 mt-1">
+                                <span className="text-[9px] text-slate-500">Réputation</span>
+                                <span className={`text-[9px] font-black ${e.vt_reputation < 0 ? 'text-red-400' : 'text-emerald-400'}`}>{e.vt_reputation}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* AbuseIPDB */}
+                      {hasAbuse && (
+                        <div className="bg-orange-500/5 border border-orange-500/15 rounded-xl p-3">
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <img
+                              src="https://www.google.com/s2/favicons?domain=abuseipdb.com&sz=16"
+                              className="w-3 h-3"
+                              alt=""
+                              onError={ev => { ev.target.style.display = 'none'; }}
+                            />
+                            <span className="text-[9px] font-black uppercase tracking-widest text-orange-400">AbuseIPDB</span>
+                          </div>
+                          <div className="mb-2">
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-[9px] text-slate-500">Confidence</span>
+                              <span className={`text-sm font-black ${
+                                e.abuseConfidenceScore >= 75 ? 'text-red-400' :
+                                e.abuseConfidenceScore >= 50 ? 'text-orange-400' :
+                                e.abuseConfidenceScore >= 25 ? 'text-yellow-400' : 'text-emerald-400'
+                              }`}>{e.abuseConfidenceScore}%</span>
+                            </div>
+                            <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${
+                                  e.abuseConfidenceScore >= 75 ? 'bg-red-500' :
+                                  e.abuseConfidenceScore >= 50 ? 'bg-orange-400' :
+                                  e.abuseConfidenceScore >= 25 ? 'bg-yellow-400' : 'bg-emerald-500'
+                                }`}
+                                style={{ width: `${e.abuseConfidenceScore}%` }}
+                              />
                             </div>
                           </div>
-                        );
-                      })}
+                          <div className="space-y-1">
+                            {e.totalReports != null && (
+                              <div className="flex justify-between">
+                                <span className="text-[9px] text-slate-500 uppercase">Reports</span>
+                                <span className="text-[9px] font-mono text-slate-300">{e.totalReports}</span>
+                              </div>
+                            )}
+                            {e.isp && (
+                              <div className="flex justify-between gap-2">
+                                <span className="text-[9px] text-slate-500 uppercase flex-shrink-0">ISP</span>
+                                <span className="text-[9px] font-mono text-slate-300 truncate text-right">{e.isp}</span>
+                              </div>
+                            )}
+                            {e.lastReportedAt && (
+                              <div className="flex justify-between">
+                                <span className="text-[9px] text-slate-500 uppercase">Signalé le</span>
+                                <span className="text-[9px] font-mono text-slate-400">{new Date(e.lastReportedAt).toLocaleDateString('fr-FR')}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="glass-panel p-4 rounded-2xl border border-white/5">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Building size={14} className="text-blue-400" />
-                      <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Infrastructure Context</h4>
-                    </div>
-                    <div className="space-y-2">
-                       {Object.entries(selectedRecord.attributes || {}).map(([k, v]) => (
-                         <div key={k} className="flex justify-between p-2 border-b border-white/5 last:border-0">
-                           <span className="text-[10px] font-bold text-slate-500 uppercase">{k}</span>
-                           <span className="text-[10px] font-mono text-slate-300">{String(v)}</span>
-                         </div>
-                       ))}
-                    </div>
+                );
+              })}
+
+              {/* Tags */}
+              {(selectedRecord.tags || []).length > 0 && (
+                <div className="glass-panel p-4 rounded-2xl border border-white/5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Bug size={12} className="text-brand-400" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-brand-400">Tags</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedRecord.tags.map(t => (
+                      <span key={t} className="px-2.5 py-1 bg-brand-500/10 text-brand-400 border border-brand-500/20 rounded-full text-[10px] font-bold">{t}</span>
+                    ))}
                   </div>
                 </div>
               )}
 
-              {activeTab === 'analysis' && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                   {(selectedRecord.iocs || []).filter(i => i.ioc_enrichment?.url_scan?.scanned).map(ioc => (
-                     <div key={ioc.value} className="glass-panel rounded-3xl overflow-hidden border border-white/5">
-                        <div className="p-4 bg-white/5 border-b border-white/5 flex items-center justify-between">
-                          <h4 className="text-xs font-black uppercase tracking-widest text-pink-400">URLScan Analysis: {ioc.value}</h4>
-                        </div>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
-                           <div className="rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
-                              <img src={ioc.ioc_enrichment.url_scan.screenshot} alt="Scan Screenshot" className="w-full h-auto" />
-                           </div>
-                           <div className="space-y-4">
-                              <div className="grid grid-cols-2 gap-4">
-                                 {[
-                                   { label: 'IP', val: ioc.ioc_enrichment.url_scan.ip },
-                                   { label: 'ASN', val: ioc.ioc_enrichment.url_scan.asn },
-                                   { label: 'Country', val: ioc.ioc_enrichment.url_scan.country },
-                                   { label: 'Server', val: ioc.ioc_enrichment.url_scan.server },
-                                 ].map(d => (
-                                   <div key={d.label} className="p-3 bg-white/5 rounded-xl border border-white/5">
-                                      <div className="text-[9px] font-black text-slate-500 uppercase mb-1">{d.label}</div>
-                                      <div className="text-xs font-mono text-white truncate">{d.val || "—"}</div>
-                                   </div>
-                                 ))}
-                              </div>
-                              <div className="p-4 bg-black/40 rounded-xl border border-white/5">
-                                 <div className="text-[9px] font-black text-slate-500 uppercase mb-2">Effective URL</div>
-                                 <div className="text-xs font-mono text-brand-400 break-all">{ioc.ioc_enrichment.url_scan.effective_url}</div>
-                              </div>
-                           </div>
-                        </div>
-                     </div>
-                   ))}
-                   
-                   {(selectedRecord.iocs || []).filter(i => i.ioc_enrichment?.passer_par_fallback === 1).map(ioc => (
-                     <div key={ioc.value} className="glass-panel p-6 rounded-3xl border border-white/5">
-                        <h4 className="text-xs font-black uppercase tracking-widest text-orange-400 mb-4">Heuristic Fallback Analysis: {ioc.value}</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                           {[
-                             { label: 'Risk Flag', val: ioc.ioc_enrichment.risk_flag },
-                             { label: 'Typosquatting', val: ioc.ioc_enrichment.typosquat_flag ? "YES" : "NO" },
-                             { label: 'Domain Age', val: ioc.ioc_enrichment.domain_age_days ? `${ioc.ioc_enrichment.domain_age_days} days` : "—" },
-                             { label: 'Server Header', val: ioc.ioc_enrichment.server || "—" },
-                           ].map(d => (
-                             <div key={d.label} className="p-3 bg-white/5 rounded-xl border border-white/5">
-                                <div className="text-[9px] font-black text-slate-500 uppercase mb-1">{d.label}</div>
-                                <div className="text-xs font-bold text-white">{d.val}</div>
-                             </div>
-                           ))}
-                        </div>
-                     </div>
-                   ))}
-                </div>
-              )}
-
-              {activeTab === 'raw' && (
-                <div className="glass-panel p-6 rounded-2xl border border-white/5 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                  <pre className="text-[11px] font-mono text-slate-400 whitespace-pre-wrap leading-relaxed overflow-x-auto max-h-[50vh]">
-                    {JSON.stringify(selectedRecord, null, 2)}
-                  </pre>
-                </div>
-              )}
+              {/* Raw JSON Toggle */}
+              <div>
+                <button
+                  onClick={() => setActiveTab(activeTab === 'raw' ? 'enrichment' : 'raw')}
+                  className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-white/5 hover:bg-white/10 text-slate-500 hover:text-slate-300 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-white/5"
+                >
+                  <Code size={12} />
+                  {activeTab === 'raw' ? 'MASQUER' : 'VOIR'} RAW JSON
+                </button>
+                {activeTab === 'raw' && (
+                  <div className="mt-3 glass-panel p-5 rounded-2xl border border-white/5">
+                    <pre className="text-[11px] font-mono text-slate-400 whitespace-pre-wrap leading-relaxed overflow-x-auto max-h-[35vh]">
+                      {JSON.stringify(selectedRecord, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
             </div>
             
             {/* Modal Footer */}

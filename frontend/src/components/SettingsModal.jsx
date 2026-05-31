@@ -131,6 +131,7 @@ const TABS = [
   { id: 'llm',           label: 'LLM',             icon: Bot,    subtitle: 'Leak Intelligence Provider' },
   { id: 'enrichment',    label: 'Sources & APIs',  icon: Shield, subtitle: 'Enrichissement & Données' },
   { id: 'integrations',  label: 'Intégrations',    icon: Link2,  subtitle: 'MISP · Telegram' },
+  { id: 'security',      label: 'Sécurité',        icon: Key,    subtitle: 'Mot de passe' },
 ];
 
 const SettingsModal = ({ onClose }) => {
@@ -156,6 +157,14 @@ const SettingsModal = ({ onClose }) => {
   const [integSaving, setIntegSaving] = useState(false);
   const [integSaved, setIntegSaved] = useState(false);
   const [integError, setIntegError] = useState(null);
+
+  // Security state
+  const [secOldPassword, setSecOldPassword] = useState('');
+  const [secNewPassword, setSecNewPassword] = useState('');
+  const [secConfirmPassword, setSecConfirmPassword] = useState('');
+  const [secSaving, setSecSaving] = useState(false);
+  const [secSaved, setSecSaved] = useState(false);
+  const [secError, setSecError] = useState(null);
 
   useEffect(() => { fetchSettings(); fetchEnrichSettings(); fetchIntegSettings(); }, []);
 
@@ -220,6 +229,30 @@ const SettingsModal = ({ onClose }) => {
     } catch (e) {
       setEnrichError('Échec de la sauvegarde: ' + (e.response?.data?.detail || e.message));
     } finally { setEnrichSaving(false); }
+  };
+
+  const handleSaveSecurity = async () => {
+    if (secNewPassword !== secConfirmPassword) {
+      setSecError("Les mots de passe ne correspondent pas");
+      return;
+    }
+    setSecSaving(true); setSecError(null);
+    try {
+      const { getUserInfo } = await import('../auth.js');
+      const userInfo = getUserInfo();
+      await axios.post(`${API_BASE}/api/auth/change-password`, {
+        username: userInfo.preferred_username,
+        old_password: secOldPassword,
+        new_password: secNewPassword
+      });
+      setSecSaved(true);
+      setSecOldPassword('');
+      setSecNewPassword('');
+      setSecConfirmPassword('');
+      setTimeout(() => setSecSaved(false), 3000);
+    } catch (e) {
+      setSecError(e.response?.data?.detail || e.message);
+    } finally { setSecSaving(false); }
   };
 
   const activeProvider = PROVIDERS.find(p => p.id === config?.provider) || PROVIDERS[0];
@@ -692,6 +725,67 @@ const SettingsModal = ({ onClose }) => {
                 </div>
               </div>
             )}
+          </>
+        )}
+
+        {/* ── SECURITY TAB ── */}
+        {activeTab === 'security' && (
+          <>
+            <div className="p-8 overflow-y-auto max-h-[62vh] custom-scrollbar space-y-7">
+              <div>
+                <p className="text-[10px] font-black text-rose-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                  <Key className="w-3.5 h-3.5" /> Changer le mot de passe
+                </p>
+                <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4 space-y-4">
+                  <SecretInput
+                    label="Ancien mot de passe"
+                    value={secOldPassword}
+                    onChange={v => setSecOldPassword(v)}
+                    placeholder="••••••••"
+                  />
+                  <SecretInput
+                    label="Nouveau mot de passe"
+                    value={secNewPassword}
+                    onChange={v => setSecNewPassword(v)}
+                    placeholder="••••••••"
+                  />
+                  <SecretInput
+                    label="Confirmer le mot de passe"
+                    value={secConfirmPassword}
+                    onChange={v => setSecConfirmPassword(v)}
+                    placeholder="••••••••"
+                  />
+                </div>
+              </div>
+              {secError && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+                  <p className="text-red-400 text-xs">{secError}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Security Footer */}
+            <div className="flex items-center justify-between px-8 py-5 border-t border-white/5 bg-slate-900/20">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
+                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+                  Authentification locale
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-slate-400 hover:text-white text-xs font-black uppercase tracking-widest transition-all hover:bg-white/5">
+                  Annuler
+                </button>
+                <button
+                  onClick={handleSaveSecurity}
+                  disabled={secSaving || !secOldPassword || !secNewPassword}
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg ${secSaved ? 'bg-emerald-500 text-white' : 'bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white disabled:opacity-50'}`}
+                >
+                  {secSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : secSaved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Key className="w-3.5 h-3.5" />}
+                  {secSaving ? 'Mise à jour...' : secSaved ? 'Mis à jour !' : 'Mettre à jour'}
+                </button>
+              </div>
+            </div>
           </>
         )}
 

@@ -27,17 +27,21 @@ const SOURCES_LIST = [
   { id: 'dfir_report',   name: 'DFIR Report',      color: 'blue'   },
 ];
 
+const gf = (domain) => `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+
 const SRC_LOGO = {
-  alienvault:    'https://www.alienvault.com/favicon.ico',
-  feodotracker:  'https://feodotracker.abuse.ch/favicon.ico',
-  malwarebazaar: 'https://malwarebazaar.abuse.ch/favicon.ico',
-  nvd:           'https://nvd.nist.gov/favicon.ico',
-  openphish:     'https://openphish.com/favicon.ico',
-  phishtank:     'https://www.phishtank.com/favicon_32x32.png',
-  pulsedive:     'https://pulsedive.com/favicon.ico',
-  spamhaus:      'https://www.spamhaus.org/favicon.ico',
-  threatfox:     'https://threatfox.abuse.ch/favicon.ico',
-  urlhaus:       'https://urlhaus.abuse.ch/favicon.ico',
+  alienvault:    gf('otx.alienvault.com'),
+  cins_army:     gf('cinsscore.com'),
+  feodotracker:  gf('feodotracker.abuse.ch'),
+  malwarebazaar: gf('bazaar.abuse.ch'),
+  nvd:           gf('nvd.nist.gov'),
+  openphish:     gf('openphish.com'),
+  phishtank:     gf('phishtank.com'),
+  pulsedive:     gf('pulsedive.com'),
+  spamhaus:      gf('spamhaus.org'),
+  threatfox:     gf('threatfox.abuse.ch'),
+  urlhaus:       gf('urlhaus.abuse.ch'),
+  dfir_report:   gf('thedfirreport.com'),
 };
 
 // ─── Config étapes ────────────────────────────────────────────────────────────

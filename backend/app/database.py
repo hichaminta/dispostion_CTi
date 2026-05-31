@@ -136,6 +136,15 @@ class JSONDB:
                     all_logs.append(f"[{step['step_name']}] {logs}")
         return all_logs
 
+    def delete_run(self, run_id: int) -> bool:
+        """Delete a single run by its internal integer id. Returns True if found and deleted."""
+        runs = self._read()
+        new_runs = [r for r in runs if r.get('id') != run_id]
+        if len(new_runs) == len(runs):
+            return False
+        self._write(new_runs)
+        return True
+
     def clear_runs(self):
         """Delete all runs and reset the file."""
         self._write([])

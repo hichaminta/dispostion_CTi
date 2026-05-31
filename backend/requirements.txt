@@ -5,3 +5,4 @@ pydantic-settings
 python-multipart
 websockets
 python-dotenv
+python-keycloak
