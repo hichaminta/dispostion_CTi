@@ -391,26 +391,30 @@ def get_enriched_sources():
     return sources
 
 @app.get("/api/enriched/data/{source_id}")
-def get_enriched_data(source_id: str, page: int = 1, limit: int = 50, search: str = None, ioc_type: str = None):
+def get_enriched_data(source_id: str, page: int = 1, limit: int = 50, search: str = None, ioc_type: str = None, priority: str = None):
     info = None
     for src_name, src_info in worker.SOURCE_MAP.items():
         if src_info["id"] == source_id:
             info = src_info
             break
-    
+
     if not info:
         raise HTTPException(status_code=404, detail="Source not found")
-        
+
     enriched_fn = info["output"].replace("_extracted.json", "_enriched.json")
     filepath = os.path.join(ENRICHMENT_DIR, enriched_fn)
-    
+
     if not os.path.exists(filepath):
         return {"data": [], "total": 0, "page": page, "limit": limit}
 
     try:
         with open(filepath, "r", encoding="utf-8") as f:
             all_data = json.load(f)
-            
+
+        # 0. Severity / Priority Filtering
+        if priority:
+            all_data = [d for d in all_data if d.get("priority_score", "").upper() == priority.upper()]
+
         # 1. Type Filtering
         if ioc_type:
             t_low = ioc_type.lower()

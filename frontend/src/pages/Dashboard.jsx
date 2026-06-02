@@ -4,7 +4,7 @@ import {
   Play, Shield, Activity, Clock, FileText,
   Database, AlertTriangle, CheckCircle2, Loader2, Zap, Sparkles, Square,
   Download, Search, Cpu, Globe, Languages, ScanEye, Layers, Share2, ChevronRight,
-  ChevronDown, ChevronUp, Terminal
+  ChevronDown, ChevronUp, Terminal, Trash2
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -321,6 +321,33 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
     } catch (e) {
       console.error("Error clearing history:", e);
     }
+  };
+
+  const deleteRun = async (runId) => {
+    if (!window.confirm("Supprimer ce run de l'historique ?")) return;
+    try {
+      await axios.delete(`${API_BASE}/runs/${runId}`);
+      await fetchAll();
+    } catch (e) {
+      alert("Erreur : " + (e.response?.data?.detail || e.message));
+    }
+  };
+
+  const getRunType = (run) => {
+    const steps = (run.steps || []).map(s => s.step_name);
+    if (steps.includes('Int\u00e9gration MISP'))
+      return { label: 'Pipeline', color: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20' };
+    if (steps.some(s => ['Classification', 'MITRE Mapping', 'Normalisation', 'Enrichissement CVE'].includes(s)))
+      return { label: 'Enrichissement', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
+    if (steps.some(s => ['AbuseIPDB Enrichment', 'VirusTotal Enrichment', 'Geolocalisation', 'URLScan', 'Fallback'].includes(s)))
+      return { label: 'Enrichissement', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
+    if (steps.includes('Extraction CVE / IOC'))
+      return { label: 'Extraction', color: 'text-violet-400 bg-violet-500/10 border-violet-500/20' };
+    if (steps.includes('Collecte'))
+      return { label: 'Collecte', color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' };
+    if (steps.length === 1)
+      return { label: steps[0], color: 'text-slate-400 bg-slate-500/10 border-slate-500/20' };
+    return { label: 'Run', color: 'text-slate-400 bg-slate-500/10 border-slate-500/20' };
   };
 
   const fmtNum = (n) => {
@@ -1084,7 +1111,7 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
             <table className="w-full text-left">
               <thead className="bg-slate-800/30 border-b border-slate-800">
                 <tr>
-                  {['ID', 'Source', 'Démarré', 'IOCs', 'CVEs', 'Statut', ''].map(col => (
+                  {['ID', 'Source', 'Type', 'Démarré', 'IOCs', 'CVEs', 'Statut', ''].map(col => (
                     <th key={col} className="px-5 py-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                       {col}
                     </th>
@@ -1093,17 +1120,19 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
               </thead>
               <tbody className="divide-y divide-slate-800/50">
                 {loading && runs.length === 0 ? (
-                  <tr><td colSpan="7" className="px-6 py-12 text-center">
+                  <tr><td colSpan="8" className="px-6 py-12 text-center">
                     <Loader2 className="w-6 h-6 text-brand-500 animate-spin mx-auto mb-2" />
                     <p className="text-slate-500 text-sm">Chargement...</p>
                   </td></tr>
                 ) : runs.length === 0 ? (
-                  <tr><td colSpan="7" className="px-6 py-12 text-center text-slate-500 text-sm">
+                  <tr><td colSpan="8" className="px-6 py-12 text-center text-slate-500 text-sm">
                     Aucun run. Lancez une source pour commencer.
                   </td></tr>
                 ) : runs.map(run => {
                   const ioc = (run.steps || []).reduce((a, s) => a + (s.ioc_count || 0), 0);
                   const cve = (run.steps || []).reduce((a, s) => a + (s.cve_count || 0), 0);
+                  const runType = getRunType(run);
+                  const isRunning = run.status_global === 'running';
                   return (
                     <tr key={run.id} className="hover:bg-slate-800/20 transition-colors group">
                       <td className="px-5 py-3 font-mono text-xs text-slate-500">
@@ -1112,6 +1141,11 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
                       <td className="px-5 py-3">
                         <span className="text-white font-medium text-sm block">{run.source_name}</span>
                         <span className="text-slate-500 text-[11px]">{run.source_type}</span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${runType.color}`}>
+                          {runType.label}
+                        </span>
                       </td>
                       <td className="px-5 py-3 text-slate-400 text-xs">
                         {format(new Date(run.created_at), 'dd/MM HH:mm')}
@@ -1130,13 +1164,23 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
                         <StatusBadge status={run.status_global} />
                       </td>
                       <td className="px-5 py-3 text-right">
-                        <button
-                          onClick={() => onSelectRun(run.id)}
-                          className="text-slate-400 hover:text-brand-400 text-xs px-3 py-1 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-brand-500/50 rounded-lg transition-all flex items-center gap-1.5 ml-auto active:scale-95"
-                        >
-                          <span>Voir</span>
-                          <ChevronRight className="w-3 h-3" />
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => onSelectRun(run.id)}
+                            className="text-slate-400 hover:text-brand-400 text-xs px-3 py-1 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-brand-500/50 rounded-lg transition-all flex items-center gap-1.5 active:scale-95"
+                          >
+                            <span>Voir</span>
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => deleteRun(run.id)}
+                            disabled={isRunning}
+                            title={isRunning ? 'Run en cours — impossible à supprimer' : 'Supprimer ce run'}
+                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all disabled:cursor-not-allowed disabled:opacity-20"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

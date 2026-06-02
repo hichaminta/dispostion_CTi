@@ -57,6 +57,7 @@ const Results = ({ onBack, initialSourceId }) => {
   const [pageSize] = useState(50);
   const [search, setSearch] = useState("");
   const [iocType, setIocType] = useState("");
+  const [severity, setSeverity] = useState("");
   const [loading, setLoading] = useState(false);
   const [sourcesLoading, setSourcesLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
@@ -96,7 +97,8 @@ const Results = ({ onBack, initialSourceId }) => {
           page: currentPage,
           limit: pageSize,
           search: search,
-          ioc_type: iocType
+          ioc_type: iocType,
+          ...(viewMode === 'enriched' && severity ? { priority: severity } : {})
         }
       });
       setData(res.data.data);
@@ -106,7 +108,7 @@ const Results = ({ onBack, initialSourceId }) => {
     } finally {
       setLoading(false);
     }
-  }, [currentSource, viewMode, currentPage, pageSize, search, iocType]);
+  }, [currentSource, viewMode, currentPage, pageSize, search, iocType, severity]);
 
   // Fetch country stats
   const fetchCountryStats = async () => {
@@ -332,22 +334,24 @@ const Results = ({ onBack, initialSourceId }) => {
                 <p className="text-sm text-slate-500 mt-1">Exploring {viewMode} data stream for {selectedSrcObj?.name}</p>
               </div>
 
-              <div className="flex items-center gap-4 bg-slate-900/60 p-2 rounded-2xl border border-white/5 backdrop-blur-md">
-                 <div className="flex items-center gap-2 px-3">
+              <div className="flex flex-col gap-2">
+                {/* Ligne 1 : search + type */}
+                <div className="flex items-center gap-4 bg-slate-900/60 p-2 rounded-2xl border border-white/5 backdrop-blur-md">
+                  <div className="flex items-center gap-2 px-3">
                     <Search size={16} className="text-slate-500" />
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="Search indicators..."
                       className="bg-transparent border-none outline-none text-xs text-white placeholder:text-slate-600 w-48"
                       value={search}
-                      onChange={(e) => setSearch(e.target.value)}
+                      onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
                     />
-                 </div>
-                 <div className="w-px h-6 bg-slate-800" />
-                 <select 
+                  </div>
+                  <div className="w-px h-6 bg-slate-800" />
+                  <select
                     className="bg-transparent border-none outline-none text-xs text-slate-400 pr-4"
                     value={iocType}
-                    onChange={(e) => setIocType(e.target.value)}
+                    onChange={(e) => { setIocType(e.target.value); setCurrentPage(1); }}
                   >
                     <option value="">All Types</option>
                     <option value="ip">IP</option>
@@ -355,7 +359,40 @@ const Results = ({ onBack, initialSourceId }) => {
                     <option value="url">URL</option>
                     <option value="hash">Hashes</option>
                     <option value="cve">CVE</option>
-                 </select>
+                  </select>
+                </div>
+
+                {/* Ligne 2 : severity (enriched uniquement) */}
+                {viewMode === 'enriched' && (
+                  <div className="flex items-center gap-2 px-1">
+                    <Filter size={12} className="text-slate-600 flex-shrink-0" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-600 mr-1">Severity</span>
+                    {[
+                      { val: 'CRITICAL', label: 'Critical', active: 'text-red-400 border-red-500/50 bg-red-500/15',    idle: 'text-slate-600 border-white/5' },
+                      { val: 'HIGH',     label: 'High',     active: 'text-orange-400 border-orange-500/50 bg-orange-500/15', idle: 'text-slate-600 border-white/5' },
+                      { val: 'MEDIUM',   label: 'Medium',   active: 'text-yellow-400 border-yellow-500/50 bg-yellow-500/15', idle: 'text-slate-600 border-white/5' },
+                      { val: 'LOW',      label: 'Low',      active: 'text-emerald-400 border-emerald-500/50 bg-emerald-500/15', idle: 'text-slate-600 border-white/5' },
+                    ].map(s => (
+                      <button
+                        key={s.val}
+                        onClick={() => { setSeverity(severity === s.val ? '' : s.val); setCurrentPage(1); }}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${
+                          severity === s.val ? s.active : s.idle + ' hover:text-slate-400'
+                        }`}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                    {severity && (
+                      <button
+                        onClick={() => { setSeverity(''); setCurrentPage(1); }}
+                        className="ml-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase text-slate-500 hover:text-red-400 border border-white/5 hover:border-red-500/20 transition-all"
+                      >
+                        ✕ Reset
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

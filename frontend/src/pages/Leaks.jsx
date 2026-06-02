@@ -1026,16 +1026,8 @@ const Leaks = ({ onBack }) => {
 
                   <div className="flex gap-4">
                     <button 
-                      onClick={() => handleReanalyze(selectedLeak)}
-                      disabled={analyzing}
-                      className="flex-1 py-4 bg-brand-600 hover:bg-brand-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all shadow-xl shadow-brand-600/20 active:scale-[0.98] disabled:opacity-50"
-                    >
-                      {analyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <BrainCircuit className="w-4 h-4" />}
-                      <span>{analyzing ? 'Processing...' : 'Re-Analyze'}</span>
-                    </button>
-                    <button 
                       onClick={() => handleViewIndividualBulletin(selectedLeak.intel_id)}
-                      className="px-6 py-4 bg-slate-900/60 border border-white/5 hover:border-brand-500/30 text-white rounded-2xl font-black uppercase tracking-widest text-xs transition-all flex items-center gap-2"
+                      className="w-full py-4 bg-slate-900/60 border border-white/5 hover:border-brand-500/30 text-white rounded-2xl font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-2"
                     >
                       <FileText className="w-4 h-4 text-brand-400" />
                       Bulletin

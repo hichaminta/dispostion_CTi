@@ -460,29 +460,30 @@ def view_csv(path: str):
         from io import StringIO
 
         ENCODINGS = ("utf-8", "utf-8-sig", "latin-1", "cp1252")
-        raw_text = None
+        sample_text = None
         used_enc = "utf-8"
         for enc in ENCODINGS:
             try:
                 with open(abs_path, "r", encoding=enc) as f:
-                    raw_text = f.read()
+                    sample_text = f.read(10000)
                 used_enc = enc
                 break
             except UnicodeDecodeError:
                 continue
 
-        if raw_text is None:
+        if sample_text is None:
             raise HTTPException(status_code=500, detail="Could not decode file")
 
         # ── Auto-detect separator ────────────────────────────────────
         detected_sep = ","
-        sample = "\n".join(raw_text.splitlines()[:20])
+        sample_lines = sample_text.splitlines()
+        sample = "\n".join(sample_lines[:20])
         try:
             sniffer = csv_mod.Sniffer()
             dialect = sniffer.sniff(sample, delimiters=",;\t|:")
             detected_sep = dialect.delimiter
         except csv_mod.Error:
-            first_line = raw_text.splitlines()[0] if raw_text.splitlines() else ""
+            first_line = sample_lines[0] if sample_lines else ""
             candidates = {
                 ",":  first_line.count(","),
                 ";":  first_line.count(";"),
@@ -494,8 +495,11 @@ def view_csv(path: str):
             detected_sep = best if candidates[best] > 0 else ","
 
         # ── Parse ────────────────────────────────────────────────────
-        df = pd.read_csv(StringIO(raw_text), sep=detected_sep,
-                         engine="python", on_bad_lines="skip").head(200)
+        try:
+            df = pd.read_csv(abs_path, sep=detected_sep, encoding=used_enc,
+                             engine="python", on_bad_lines="skip", nrows=200)
+        except pd.errors.EmptyDataError:
+            df = pd.DataFrame()
 
         # ── Infer column types ───────────────────────────────────────
         col_types = {}
