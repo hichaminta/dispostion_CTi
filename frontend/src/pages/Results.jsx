@@ -58,6 +58,7 @@ const Results = ({ onBack, initialSourceId }) => {
   const [search, setSearch] = useState("");
   const [iocType, setIocType] = useState("");
   const [severity, setSeverity] = useState("");
+  const [enrichSource, setEnrichSource] = useState("");
   const [loading, setLoading] = useState(false);
   const [sourcesLoading, setSourcesLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
@@ -98,7 +99,8 @@ const Results = ({ onBack, initialSourceId }) => {
           limit: pageSize,
           search: search,
           ioc_type: iocType,
-          ...(viewMode === 'enriched' && severity ? { priority: severity } : {})
+          ...(viewMode === 'enriched' && severity ? { priority: severity } : {}),
+          ...(viewMode === 'enriched' && enrichSource ? { enrich_source: enrichSource } : {})
         }
       });
       setData(res.data.data);
@@ -108,7 +110,7 @@ const Results = ({ onBack, initialSourceId }) => {
     } finally {
       setLoading(false);
     }
-  }, [currentSource, viewMode, currentPage, pageSize, search, iocType, severity]);
+  }, [currentSource, viewMode, currentPage, pageSize, search, iocType, severity, enrichSource]);
 
   // Fetch country stats
   const fetchCountryStats = async () => {
@@ -393,6 +395,56 @@ const Results = ({ onBack, initialSourceId }) => {
                     )}
                   </div>
                 )}
+
+                {/* Ligne 3 : enrichment source filter (enriched uniquement) */}
+                {viewMode === 'enriched' && (
+                  <div className="flex items-center gap-2 px-1">
+                    <ScanEye size={12} className="text-slate-600 flex-shrink-0" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-600 mr-1">Source</span>
+                    {[
+                      {
+                        val: 'vt',
+                        label: 'VirusTotal',
+                        logo: gf('virustotal.com'),
+                        active: 'text-blue-400 border-blue-500/50 bg-blue-500/15',
+                        idle: 'text-slate-600 border-white/5'
+                      },
+                      {
+                        val: 'abuseipdb',
+                        label: 'AbuseIPDB',
+                        logo: gf('abuseipdb.com'),
+                        active: 'text-orange-400 border-orange-500/50 bg-orange-500/15',
+                        idle: 'text-slate-600 border-white/5'
+                      },
+                      {
+                        val: 'urlscan',
+                        label: 'URLScan',
+                        logo: gf('urlscan.io'),
+                        active: 'text-pink-400 border-pink-500/50 bg-pink-500/15',
+                        idle: 'text-slate-600 border-white/5'
+                      },
+                    ].map(s => (
+                      <button
+                        key={s.val}
+                        onClick={() => { setEnrichSource(enrichSource === s.val ? '' : s.val); setCurrentPage(1); }}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-all ${
+                          enrichSource === s.val ? s.active : s.idle + ' hover:text-slate-400'
+                        }`}
+                      >
+                        <img src={s.logo} alt="" className="w-3 h-3 object-contain" onError={e => { e.target.style.display='none'; }} />
+                        {s.label}
+                      </button>
+                    ))}
+                    {enrichSource && (
+                      <button
+                        onClick={() => { setEnrichSource(''); setCurrentPage(1); }}
+                        className="ml-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase text-slate-500 hover:text-red-400 border border-white/5 hover:border-red-500/20 transition-all"
+                      >
+                        ✕ Reset
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -661,10 +713,16 @@ const Results = ({ onBack, initialSourceId }) => {
               {/* ── Per-IOC Enrichment ── */}
               {(selectedRecord.iocs || []).map(ioc => {
                 const e = ioc.ioc_enrichment || {};
-                const hasGeo   = !!(e.country || e.country_name);
-                const hasVT    = (e.vt_total_engines ?? 0) > 0;
-                const hasAbuse = e.abuseConfidenceScore != null;
-                if (!hasGeo && !hasVT && !hasAbuse) return null;
+                const hasGeo      = !!(e.country || e.country_name);
+                const hasVT       = (e.vt_total_engines ?? 0) > 0;
+                const hasAbuse    = e.abuseConfidenceScore != null;
+                const hasUrlScan  = e.passer_par_urlscan === 1;
+                const urlscanDown = hasUrlScan && e.urlscan_status === 'DOWN' && !e.urlscan_report_url;
+                const hasFallback = e.passer_par_fallback === 1 && (
+                  e.server || e.effective_url || e.hostname || e.malware_family ||
+                  e.asn || e.as_owner || e.typosquat_flag != null || e.risk_flag
+                );
+                if (!hasGeo && !hasVT && !hasAbuse && !hasUrlScan && !hasFallback) return null;
 
                 const flagEmoji = (code) => {
                   if (!code || code.length !== 2) return '🌐';
@@ -826,6 +884,166 @@ const Results = ({ onBack, initialSourceId }) => {
                               <div className="flex justify-between">
                                 <span className="text-[9px] text-slate-500 uppercase">Signalé le</span>
                                 <span className="text-[9px] font-mono text-slate-400">{new Date(e.lastReportedAt).toLocaleDateString('fr-FR')}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* URLScan */}
+                      {hasUrlScan && (() => {
+                        const urlscanScore   = selectedRecord.attributes?.urlscan_score;
+                        const urlscanVerdict = selectedRecord.attributes?.urlscan_verdict;
+                        return (
+                        <div className="bg-pink-500/5 border border-pink-500/15 rounded-xl p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-1.5">
+                              <img
+                                src="https://www.google.com/s2/favicons?domain=urlscan.io&sz=16"
+                                className="w-3 h-3"
+                                alt=""
+                                onError={ev => { ev.target.style.display = 'none'; }}
+                              />
+                              <span className="text-[9px] font-black uppercase tracking-widest text-pink-400">URLScan</span>
+                            </div>
+                            {urlscanScore != null && (
+                              <div className="flex items-center gap-1">
+                                {urlscanVerdict === true && (
+                                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/20">MALICIOUS</span>
+                                )}
+                                <span className={`text-xs font-black ${
+                                  urlscanScore >= 70 ? 'text-red-400' :
+                                  urlscanScore >= 40 ? 'text-orange-400' : 'text-emerald-400'
+                                }`}>{urlscanScore}<span className="text-[9px] text-slate-500 font-normal">/100</span></span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="space-y-1.5">
+                            {e.urlscan_status && (
+                              <div className="flex justify-between items-center">
+                                <span className="text-[9px] text-slate-500 uppercase">Status</span>
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded ${
+                                  e.urlscan_status === 'UP'   ? 'bg-red-500/15 text-red-400' :
+                                  e.urlscan_status === 'DOWN' ? 'bg-emerald-500/15 text-emerald-400' :
+                                                                'bg-slate-500/15 text-slate-400'
+                                }`}>{e.urlscan_status}</span>
+                              </div>
+                            )}
+                            {e.urlscan_ip && (
+                              <div className="flex justify-between items-center gap-2">
+                                <span className="text-[9px] text-slate-500 uppercase flex-shrink-0">IP</span>
+                                <span className="text-[10px] font-mono text-pink-300">{e.urlscan_ip}</span>
+                              </div>
+                            )}
+                            {e.urlscan_country && (
+                              <div className="flex justify-between items-center gap-2">
+                                <span className="text-[9px] text-slate-500 uppercase flex-shrink-0">Pays</span>
+                                <span className="text-xs font-bold text-white">
+                                  {flagEmoji(e.urlscan_country)} {COUNTRY_CODE_TO_NAME[e.urlscan_country.toLowerCase()] || e.urlscan_country}
+                                </span>
+                              </div>
+                            )}
+                            {e.urlscan_server && (
+                              <div className="flex justify-between gap-2">
+                                <span className="text-[9px] text-slate-500 uppercase flex-shrink-0">Serveur</span>
+                                <span className="text-[9px] font-mono text-slate-300 truncate text-right">{e.urlscan_server}</span>
+                              </div>
+                            )}
+                            {e.urlscan_page_title && (
+                              <div className="flex justify-between gap-2">
+                                <span className="text-[9px] text-slate-500 uppercase flex-shrink-0">Page</span>
+                                <span className="text-[9px] font-mono text-slate-300 truncate text-right max-w-[140px]" title={e.urlscan_page_title}>{e.urlscan_page_title}</span>
+                              </div>
+                            )}
+                            {e.urlscan_effective_url && (
+                              <div className="flex justify-between gap-2">
+                                <span className="text-[9px] text-slate-500 uppercase flex-shrink-0">URL</span>
+                                <span className="text-[9px] font-mono text-slate-300 truncate text-right max-w-[140px]" title={e.urlscan_effective_url}>
+                                  {e.urlscan_effective_url}
+                                </span>
+                              </div>
+                            )}
+                            {e.urlscan_report_url && (
+                              <a
+                                href={e.urlscan_report_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-1 mt-1 py-1 px-2 rounded-lg bg-pink-500/10 border border-pink-500/20 text-[9px] font-black uppercase tracking-wider text-pink-400 hover:bg-pink-500/20 transition-all"
+                              >
+                                <LinkIcon size={9} />
+                                Voir rapport
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                        );
+                      })()}
+
+                      {/* Fallback — affiché quand URLScan est DOWN ou absent */}
+                      {hasFallback && urlscanDown && (
+                        <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl p-3">
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <AlertTriangle size={11} className="text-amber-400" />
+                            <span className="text-[9px] font-black uppercase tracking-widest text-amber-400">Fallback Enrichment</span>
+                            {e.risk_flag && (
+                              <span className={`ml-auto text-[9px] font-black px-2 py-0.5 rounded uppercase ${
+                                e.risk_flag === 'high'   ? 'bg-red-500/15 text-red-400 border border-red-500/20' :
+                                e.risk_flag === 'medium' ? 'bg-orange-500/15 text-orange-400 border border-orange-500/20' :
+                                                           'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                              }`}>{e.risk_flag}</span>
+                            )}
+                          </div>
+                          <div className="space-y-1.5">
+                            {e.hostname && (
+                              <div className="flex justify-between gap-2">
+                                <span className="text-[9px] text-slate-500 uppercase flex-shrink-0">Hostname</span>
+                                <span className="text-[9px] font-mono text-slate-300 truncate text-right">{e.hostname}</span>
+                              </div>
+                            )}
+                            {e.effective_url && (
+                              <div className="flex justify-between gap-2">
+                                <span className="text-[9px] text-slate-500 uppercase flex-shrink-0">URL</span>
+                                <span className="text-[9px] font-mono text-slate-300 truncate text-right max-w-[140px]" title={e.effective_url}>{e.effective_url}</span>
+                              </div>
+                            )}
+                            {e.server && (
+                              <div className="flex justify-between gap-2">
+                                <span className="text-[9px] text-slate-500 uppercase flex-shrink-0">Serveur</span>
+                                <span className="text-[9px] font-mono text-slate-300">{e.server}</span>
+                              </div>
+                            )}
+                            {e.malware_family && (
+                              <div className="flex justify-between gap-2">
+                                <span className="text-[9px] text-slate-500 uppercase flex-shrink-0">Malware</span>
+                                <span className="text-[9px] font-mono text-red-300">{e.malware_family}</span>
+                              </div>
+                            )}
+                            {e.asn && (
+                              <div className="flex justify-between gap-2">
+                                <span className="text-[9px] text-slate-500 uppercase flex-shrink-0">ASN</span>
+                                <span className="text-[9px] font-mono text-slate-300">{e.asn} {e.as_owner && `— ${e.as_owner}`}</span>
+                              </div>
+                            )}
+                            {e.port && (
+                              <div className="flex justify-between gap-2">
+                                <span className="text-[9px] text-slate-500 uppercase flex-shrink-0">Port</span>
+                                <span className="text-[9px] font-mono text-slate-300">{e.port}</span>
+                              </div>
+                            )}
+                            {e.typosquat_flag === true && (
+                              <div className="flex items-center gap-1.5 mt-1 px-2 py-1 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                                <AlertTriangle size={9} className="text-orange-400 flex-shrink-0" />
+                                <span className="text-[9px] font-black text-orange-400 uppercase">Typosquatting détecté</span>
+                              </div>
+                            )}
+                            {Array.isArray(e.suspicious_keywords) && e.suspicious_keywords.length > 0 && (
+                              <div className="mt-1">
+                                <span className="text-[9px] text-slate-500 uppercase">Mots suspects</span>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {e.suspicious_keywords.map(kw => (
+                                    <span key={kw} className="text-[9px] px-1.5 py-0.5 bg-red-500/10 border border-red-500/20 rounded text-red-400">{kw}</span>
+                                  ))}
+                                </div>
                               </div>
                             )}
                           </div>

@@ -69,22 +69,17 @@ class PriorityScorer:
             if ioc.get("type") == "url" and threat_type == "phishing":
                 has_phishing_url = True
 
-        # CVSS pour NVD
-        try:
-            cvss = float(attrs.get("cvss_score", 0) or 0)
-        except:
-            cvss = 0
+        # --- Nouveau système : utiliser le score de risque global ---
+        risk_score = PriorityScorer.calculate_additive_risk(record)
 
-        # EPSS si disponible
-        try:
-            epss = float(attrs.get("epss", 0) or 0)
-        except:
-            epss = 0
-
-        # ── Règles de décision (ordre décroissant de sévérité) ──
-
-        # Vulnérabilité critique
+        # Règle spéciale pour les vulnérabilités (CVSS prime)
         if threat_type == "vulnerability":
+            try:
+                cvss = float(attrs.get("cvss_score", 0) or 0)
+                epss = float(attrs.get("epss", 0) or 0)
+            except:
+                cvss = epss = 0
+
             if cvss >= 9.0 or epss >= 0.9:
                 return "CRITICAL", "escalate"
             if cvss >= 7.0:
@@ -93,153 +88,120 @@ class PriorityScorer:
                 return "MEDIUM", "monitor"
             return "LOW", "monitor_quiet"
 
-        # Malware actif en ligne + bien détecté
-        if threat_type == "malware":
-            if has_online and max_vt >= 10:
-                return "CRITICAL", "escalate"
-            if max_vt >= 50 or (has_online and max_abuse >= 50):
-                return "HIGH", "investigate"
-            if max_vt >= 10 or max_abuse >= 80 or has_high_risk:
-                return "MEDIUM", "monitor"
-            if max_vt >= 1 or max_abuse >= 40 or max_reports >= 5:
-                return "LOW", "monitor_quiet"
-            # malwarebazaar : intel_downloads élevé
-            if max_downloads >= 500:
-                return "HIGH", "investigate"
-            if max_downloads >= 100:
-                return "MEDIUM", "monitor"
-            return "LOW", "monitor_quiet"
-
-        # Phishing
-        if threat_type == "phishing":
-            if has_phishing_url and (max_vt >= 5 or has_high_risk):
-                return "HIGH", "block"
-            if has_phishing_url or has_typosquat or has_susp_kw:
-                return "MEDIUM", "block"
-            return "LOW", "monitor_quiet"
-
-        # Threatfox confidence natif
-        if max_tf_conf >= 90:
+        # Mapping direct du score de risque vers la priorité SOC
+        if risk_score >= 80:
+            return "CRITICAL", "escalate"
+        elif risk_score >= 60:
             return "HIGH", "investigate"
-        if max_tf_conf >= 50:
+        elif risk_score >= 40:
             return "MEDIUM", "monitor"
-
-        # Compromised host
-        if has_compromised:
-            return "MEDIUM", "investigate"
-
-        return "LOW", "monitor_quiet"
+        else:
+            return "LOW", "monitor_quiet"
 
     @staticmethod
     def calculate_additive_risk(record: dict) -> float:
         """
-        Score additif 0-100 pour MISP / dashboard.
-
-        Composantes :
-          source_confidence  -> max 25 pts
-          vt_malicious_count -> max 25 pts
-          abuseConfidenceScore -> max 20 pts
-          status online      -> +15 pts
-          risk_flag high     -> +10 pts
-          typosquat_flag     -> +5 pts
-          suspicious_keywords -> +5 pts
-          intel_downloads    -> max 10 pts (malwarebazaar)
-          tf_confidence      -> max 10 pts
+        Calcule le score de risque additif 0-100 pour MISP / dashboard.
+        Utilise le risque maximal calculé parmi tous les IOCs du record.
         """
-        score = 0.0
-
-        # Source confidence (max 25)
-        score += min(25, record.get("source_confidence", 50) * 0.25)
-
-        max_vt      = 0
-        max_abuse   = 0
-        max_tf_conf = 0
-        max_dl      = 0
-        bonus = 0
-
-        for ioc in record.get("iocs", []):
-            e = ioc.get("ioc_enrichment", {})
-            max_vt    = max(max_vt, float(e.get("vt_malicious_count", 0) or 0))
-            max_abuse = max(max_abuse, float(e.get("abuseConfidenceScore", 0) or 0))
-            max_tf_conf = max(max_tf_conf, float(e.get("confidence", 0) or 0))
-            try:
-                max_dl = max(max_dl, int(e.get("intel_downloads", 0) or 0))
-            except:
-                pass
-            if e.get("status") == "online":
-                bonus += 15
-            if e.get("risk_flag") == "high":
-                bonus += 10
-            if e.get("typosquat_flag") is True:
-                bonus += 5
-            if e.get("suspicious_keywords"):
-                bonus += 5
-
-        # VT detections (max 25)
-        if max_vt >= 50:
-            score += 25
-        elif max_vt >= 10:
-            score += 18
-        elif max_vt >= 1:
-            score += 8
-
-        # AbuseIPDB (max 20)
-        score += min(20, max_abuse * 0.2)
-
-        # ThreatFox confidence (max 10)
-        score += min(10, max_tf_conf * 0.1)
-
-        # MalwareBazaar downloads (max 10)
-        if max_dl >= 500:
-            score += 10
-        elif max_dl >= 100:
-            score += 5
-
-        # Bonus comportementaux
-        score += min(35, bonus)
-
-        return round(min(100.0, score), 1)
+        source_conf = record.get("source_confidence", 50)
+        iocs = record.get("iocs", [])
+        if not iocs:
+            return round(min(100.0, source_conf * 0.5), 1)
+            
+        scores = [PriorityScorer.calculate_ioc_risk(ioc, source_conf) for ioc in iocs]
+        return max(scores)
 
     @staticmethod
     def calculate_ioc_risk(ioc: dict, source_confidence: int = 50) -> float:
         """
-        Calcule le score de risque pour UN SEUL IOC.
-        Utilise les mêmes pondérations que calculate_additive_risk.
+        Calcule le score de risque pour UN SEUL IOC selon son type.
+        Formules spécifiques pour Hash, IP, URL/Domaine pour atteindre 100%.
         """
-        score = min(25, source_confidence * 0.25)
         e = ioc.get("ioc_enrichment", {})
+        ioc_type = ioc.get("type", "").lower()
+        score = 0.0
 
-        # VT (max 25)
-        vt = float(e.get("vt_malicious_count", 0) or 0)
-        if vt >= 50: score += 25
-        elif vt >= 10: score += 18
-        elif vt >= 1: score += 8
-
-        # Abuse (max 20)
-        abuse = float(e.get("abuseConfidenceScore", 0) or 0)
-        score += min(20, abuse * 0.2)
-
-        # ThreatFox (max 10)
+        # Récupération de la confiance native (ex: ThreatFox)
         tf_conf = float(e.get("confidence", 0) or 0)
-        score += min(10, tf_conf * 0.1)
+        # La confiance de base est le max entre la source_confidence globale et la confiance native
+        base_conf = max(source_confidence, tf_conf)
 
-        # MalwareBazaar (max 10)
+        # Extraction des signaux
+        vt = float(e.get("vt_malicious_count", e.get("malicious_count", 0)) or 0)
+        abuse = float(e.get("abuseConfidenceScore", 0) or 0)
+        
         try:
             dl = int(e.get("intel_downloads", 0) or 0)
-            if dl >= 500: score += 10
-            elif dl >= 100: score += 5
-        except: pass
+        except:
+            dl = 0
 
-        # Bonus (max 30)
-        bonus = 0
-        if e.get("status") == "online": bonus += 15
-        if e.get("risk_flag") == "high": bonus += 10
-        if e.get("typosquat_flag") is True: bonus += 5
-        if e.get("suspicious_keywords"): bonus += 5
-        score += min(30, bonus)
+        # Type Hash (MD5, SHA1, SHA256)
+        if ioc_type in ("sha256", "sha1", "md5", "hash", "hashe"):
+            # Confiance source : 40%
+            score += (base_conf / 100.0) * 40.0
+            
+            # VirusTotal : 40%
+            if vt >= 50: score += 40
+            elif vt >= 10: score += 30
+            elif vt >= 5: score += 20
+            elif vt >= 1: score += 10
+            
+            # MalwareBazaar : 20%
+            if dl >= 500: score += 20
+            elif dl >= 100: score += 15
+            elif dl >= 10: score += 10
+            elif dl > 0: score += 5
+            
+        # Type IP
+        elif ioc_type in ("ip", "ipv4", "ipv6"):
+            # Confiance source : 30%
+            score += (base_conf / 100.0) * 30.0
+            
+            # VirusTotal : 30%
+            if vt >= 50: score += 30
+            elif vt >= 10: score += 20
+            elif vt >= 1: score += 10
+            
+            # AbuseIPDB : 30%
+            score += (abuse / 100.0) * 30.0
+            
+            # Bonus : 10%
+            if e.get("status") == "online": score += 5
+            if e.get("is_compromised") is True: score += 5
+            
+        # Type URL / Domaine
+        elif ioc_type in ("url", "domaine", "domain"):
+            # Confiance source : 30%
+            score += (base_conf / 100.0) * 30.0
+            
+            # VirusTotal : 30%
+            if vt >= 50: score += 30
+            elif vt >= 10: score += 20
+            elif vt >= 1: score += 10
+            
+            # URLScan : 30%
+            urlscan_score = 0
+            if e.get("risk_flag") == "high": urlscan_score += 15
+            elif e.get("risk_flag") == "medium": urlscan_score += 5
+            
+            if e.get("typosquat_flag") is True: urlscan_score += 10
+            if e.get("suspicious_keywords"): urlscan_score += 5
+            
+            score += min(30.0, urlscan_score)
+            
+            # Bonus : 10%
+            if e.get("status") == "online": score += 10
+            
+        # Fallback pour autres types
+        else:
+            score += (base_conf / 100.0) * 50.0
+            if vt >= 10: score += 50
+            elif vt >= 1: score += 25
 
-        ioc_type = ioc.get("type", "")
-        if ioc_type in ("sha256", "sha1", "md5") and source_confidence >= 85 and score < 30:
-            score = 30.0
+        # Pénalité stricte pour faux positifs (ex: URLs Malpedia)
+        vt_harmless = float(e.get("vt_harmless_count", e.get("harmless_count", 0)) or 0)
+        if vt == 0 and vt_harmless > 20:
+            score = score * 0.25  # Divise le score par 4 (ex: passe de 30 à 7.5)
 
         return round(min(100.0, score), 1)

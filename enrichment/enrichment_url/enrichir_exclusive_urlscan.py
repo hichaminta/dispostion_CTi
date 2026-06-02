@@ -210,7 +210,7 @@ def enrich_urlscan(source_filter=None):
         if "verdict" in res: record["attributes"]["urlscan_verdict"] = res["verdict"]
         
         # Extra technical metadata to pass to ioc_enrichment
-        for key in ["country", "server", "page_title", "effective_url", "screenshot_url", "report_url"]:
+        for key in ["country", "server", "ip", "page_title", "effective_url", "screenshot_url", "report_url"]:
             if key in res and res[key]:
                 ioc["ioc_enrichment"][f"urlscan_{key}"] = res[key]
         
@@ -325,6 +325,7 @@ def enrich_urlscan(source_filter=None):
                                         "domain": page.get("domain"),
                                         "country": page.get("country"),
                                         "server": page.get("server"),
+                                        "ip": page.get("ip"),
                                         "screenshot_url": f"https://urlscan.io/screenshots/{uuid}.png",
                                         "report_url": f"https://urlscan.io/result/{uuid}/",
                                         "last_scanned": datetime.now().isoformat()

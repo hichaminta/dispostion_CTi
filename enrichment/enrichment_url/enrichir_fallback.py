@@ -220,6 +220,7 @@ class FallbackEnricher:
         # 1. DNS & Geo
         resolved_ip = self.dns_lookup(value, clean_type)
         if resolved_ip:
+            enr["resolved_ip"] = resolved_ip
             if "country" not in enr or not enr["country"]:
                 country = self.geo_lookup(resolved_ip)
                 if country:

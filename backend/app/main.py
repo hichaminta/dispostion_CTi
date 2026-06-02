@@ -391,7 +391,7 @@ def get_enriched_sources():
     return sources
 
 @app.get("/api/enriched/data/{source_id}")
-def get_enriched_data(source_id: str, page: int = 1, limit: int = 50, search: str = None, ioc_type: str = None, priority: str = None):
+def get_enriched_data(source_id: str, page: int = 1, limit: int = 50, search: str = None, ioc_type: str = None, priority: str = None, enrich_source: str = None):
     info = None
     for src_name, src_info in worker.SOURCE_MAP.items():
         if src_info["id"] == source_id:
@@ -414,6 +414,25 @@ def get_enriched_data(source_id: str, page: int = 1, limit: int = 50, search: st
         # 0. Severity / Priority Filtering
         if priority:
             all_data = [d for d in all_data if d.get("priority_score", "").upper() == priority.upper()]
+
+        # 0b. Enrichment Source Filtering
+        if enrich_source:
+            src = enrich_source.lower()
+            if src == "vt":
+                all_data = [d for d in all_data if any(
+                    (i.get("ioc_enrichment") or {}).get("vt_total_engines", 0) > 0
+                    for i in d.get("iocs", [])
+                )]
+            elif src == "abuseipdb":
+                all_data = [d for d in all_data if any(
+                    (i.get("ioc_enrichment") or {}).get("abuseConfidenceScore") is not None
+                    for i in d.get("iocs", [])
+                )]
+            elif src == "urlscan":
+                all_data = [d for d in all_data if any(
+                    (i.get("ioc_enrichment") or {}).get("passer_par_urlscan") == 1
+                    for i in d.get("iocs", [])
+                )]
 
         # 1. Type Filtering
         if ioc_type:

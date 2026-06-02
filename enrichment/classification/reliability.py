@@ -3,6 +3,8 @@ class SourceReliability:
 
     SOURCE_RELIABILITY = {
         # Sources officielles / vérifiées
+        "dfir_report":  100,   # Rapports DFIR profonds, très haute fiabilité
+        "dfir":         100,
         "nvd":          100,   # NIST National Vulnerability Database
         "spamhaus":      95,   # Réputation très haute, peu de faux positifs
         "malwarebazaar": 95,   # Samples confirmés par analyse binaire
