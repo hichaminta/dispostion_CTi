@@ -85,30 +85,56 @@ const Cell = ({ value, type }) => {
 };
 
 // ── Main component ───────────────────────────────────────────────────────────
+const PAGE_SIZE = 50;
+
 const CSVReader = ({ filePath, onBack }) => {
   const [result,      setResult]      = useState(null);
   const [loading,     setLoading]     = useState(true);
+  const [loadingPage, setLoadingPage] = useState(false);
   const [error,       setError]       = useState(null);
   const [search,      setSearch]      = useState('');
   const [manualSep,   setManualSep]   = useState('auto');
   const [showSepMenu, setShowSepMenu] = useState(false);
   const [page,        setPage]        = useState(0);
-
-  const PAGE_SIZE = 50;
+  const [fileTotalRows, setFileTotalRows] = useState(null);
 
   const fileName = filePath?.split(/[\\/]/).pop() || filePath;
   const isText   = fileName?.toLowerCase().endsWith('.txt');
   const isExcel  = fileName?.toLowerCase().endsWith('.xlsx') || fileName?.toLowerCase().endsWith('.xls');
 
+  const buildUrl = (sep, limit, offset = 0) => {
+    let url = `${API_BASE}/api/leaks/csv/view?path=${encodeURIComponent(filePath)}&limit=${limit}&offset=${offset}`;
+    if (sep !== 'auto') url += `&separator=${encodeURIComponent(sep)}`;
+    return url;
+  };
+
+  // Fetch total count silently after first load
+  const pollTotal = async (sep) => {
+    for (let i = 0; i < 6; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      try {
+        const r = await axios.get(buildUrl(sep, 1, 0));
+        if (r.data?.file_total_rows != null) {
+          setFileTotalRows(r.data.file_total_rows);
+          return;
+        }
+      } catch (_) {}
+    }
+  };
+
   const fetchFile = async (sep = manualSep) => {
     setLoading(true);
     setError(null);
     setPage(0);
+    setFileTotalRows(null);
     try {
-      let url = `${API_BASE}/api/leaks/csv/view?path=${encodeURIComponent(filePath)}`;
-      if (sep !== 'auto') url += `&separator=${encodeURIComponent(sep)}`;
-      const res = await axios.get(url);
+      const res = await axios.get(buildUrl(sep, PAGE_SIZE, 0));
       setResult(res.data);
+      if (res.data?.file_total_rows != null) {
+        setFileTotalRows(res.data.file_total_rows);
+      } else {
+        pollTotal(sep);
+      }
     } catch (e) {
       setError(e.response?.data?.detail || e.message);
     } finally {
@@ -116,22 +142,35 @@ const CSVReader = ({ filePath, onBack }) => {
     }
   };
 
+  const goToPage = async (newPage, sep = manualSep) => {
+    if (loadingPage) return;
+    setLoadingPage(true);
+    setPage(newPage);
+    try {
+      const res = await axios.get(buildUrl(sep, PAGE_SIZE, newPage * PAGE_SIZE));
+      setResult(prev => ({ ...prev, data: res.data.data }));
+      if (res.data?.file_total_rows != null) setFileTotalRows(res.data.file_total_rows);
+    } catch (_) {}
+    setLoadingPage(false);
+  };
+
   useEffect(() => { fetchFile(); }, [filePath]);
 
-  // ── Filtered rows ─────────────────────────────────────────────────────────
+  const rows      = result?.data || [];
+  const columns   = result?.columns || [];
+  const colTypes  = result?.col_types || {};
+  const totalPages = fileTotalRows != null
+    ? Math.ceil(fileTotalRows / PAGE_SIZE)
+    : null;
+
+  // Client-side search on loaded page only
   const filteredRows = useMemo(() => {
-    if (!result?.data) return [];
-    if (!search.trim()) return result.data;
+    if (!search.trim()) return rows;
     const q = search.toLowerCase();
-    return result.data.filter(row =>
+    return rows.filter(row =>
       Object.values(row).some(v => v !== null && String(v).toLowerCase().includes(q))
     );
-  }, [result, search]);
-
-  const pageRows    = filteredRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const totalPages  = Math.ceil(filteredRows.length / PAGE_SIZE);
-  const columns     = result?.columns || [];
-  const colTypes    = result?.col_types || {};
+  }, [rows, search]);
 
   const handleSepChange = (sep) => {
     setManualSep(sep);
@@ -271,8 +310,10 @@ const CSVReader = ({ filePath, onBack }) => {
             </div>
             <div className="w-px h-4 bg-white/10" />
             <div className="text-[10px] font-mono text-slate-500">
-              Lignes affichées : <span className="text-brand-400 font-black">{filteredRows.length}</span>
-              {' '}/{' '}{result.total_rows}
+              Page <span className="text-brand-400 font-black">{page + 1}</span>
+              {totalPages != null
+                ? <> / <span className="text-slate-400">{totalPages.toLocaleString()}</span> — <span className="text-slate-400">{fileTotalRows.toLocaleString()}</span> lignes</>
+                : <span className="text-slate-600 animate-pulse"> — calcul en cours...</span>}
             </div>
             {manualSep !== 'auto' && (
               <>
@@ -347,13 +388,13 @@ const CSVReader = ({ filePath, onBack }) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/[0.03]">
-                    {pageRows.length === 0 ? (
+                    {filteredRows.length === 0 ? (
                       <tr>
                         <td colSpan={columns.length + 1} className="py-20 text-center text-slate-600 italic text-sm">
                           Aucune donnée correspondant à la recherche
                         </td>
                       </tr>
-                    ) : pageRows.map((row, idx) => (
+                    ) : filteredRows.map((row, idx) => (
                       <tr
                         key={idx}
                         className="hover:bg-white/[0.02] transition-colors group"
@@ -372,29 +413,32 @@ const CSVReader = ({ filePath, onBack }) => {
                 </table>
               </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
+              {/* Pagination serveur */}
+              {(totalPages == null || totalPages > 1) && (
                 <div className="flex items-center justify-between px-6 py-4 border-t border-white/5 bg-slate-900/30">
-                  <p className="text-[10px] font-mono text-slate-500">
-                    Page <span className="text-white font-black">{page + 1}</span> / {totalPages}
-                    {' — '}
-                    <span className="text-brand-400">{filteredRows.length}</span> lignes
+                  <p className="text-[10px] font-mono text-slate-500 flex items-center gap-2">
+                    {loadingPage && <Loader2 className="w-3 h-3 animate-spin text-brand-400" />}
+                    Page <span className="text-white font-black">{page + 1}</span>
+                    {totalPages != null && <> / {totalPages.toLocaleString()} — <span className="text-slate-400">{fileTotalRows.toLocaleString()} lignes</span></>}
+                    {totalPages == null && <span className="text-slate-600 animate-pulse"> — calcul...</span>}
                   </p>
                   <div className="flex items-center gap-2">
                     <button
-                      disabled={page === 0}
-                      onClick={() => setPage(p => p - 1)}
+                      disabled={page === 0 || loadingPage}
+                      onClick={() => goToPage(page - 1)}
                       className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       ← Précédent
                     </button>
                     <div className="flex gap-1">
-                      {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                        const p = totalPages <= 7 ? i : Math.max(0, Math.min(page - 3, totalPages - 7)) + i;
+                      {Array.from({ length: Math.min(totalPages || 999, 7) }, (_, i) => {
+                        const tp = totalPages || 999;
+                        const p = tp <= 7 ? i : Math.max(0, Math.min(page - 3, tp - 7)) + i;
                         return (
                           <button
                             key={p}
-                            onClick={() => setPage(p)}
+                            onClick={() => goToPage(p)}
+                            disabled={loadingPage}
                             className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${
                               p === page
                                 ? 'bg-brand-500 text-white shadow-[0_0_12px_rgba(14,165,233,0.4)]'
@@ -407,8 +451,8 @@ const CSVReader = ({ filePath, onBack }) => {
                       })}
                     </div>
                     <button
-                      disabled={page >= totalPages - 1}
-                      onClick={() => setPage(p => p + 1)}
+                      disabled={(totalPages != null && page >= totalPages - 1) || loadingPage}
+                      onClick={() => goToPage(page + 1)}
                       className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       Suivant →

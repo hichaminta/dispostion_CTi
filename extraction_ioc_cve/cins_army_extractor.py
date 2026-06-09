@@ -73,6 +73,10 @@ def run_extraction():
     current_recent = recent_extracted_at
 
     for item in new_data:
+        # Remove meaningless hash to avoid false positive hash extraction
+        if "hash" in item:
+            del item["hash"]
+            
         res = extractor.process_item(SOURCE_NAME, item)
         new_results.append(res)
         

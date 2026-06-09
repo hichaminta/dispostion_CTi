@@ -8,7 +8,12 @@ const REFRESH_KEY = 'cti_refresh_token';
 const EXPIRY_KEY  = 'cti_token_expiry';
 const USER_KEY    = 'cti_user';
 
-export async function login(username, password) {
+function getStorage() {
+  if (localStorage.getItem(TOKEN_KEY)) return localStorage;
+  return sessionStorage;
+}
+
+export async function login(username, password, rememberMe = false) {
   const resp = await fetch(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -22,35 +27,37 @@ export async function login(username, password) {
     throw new Error(err.error_description || 'Identifiants incorrects');
   }
   const data = await resp.json();
-  _storeTokens(data);
+  const storage = rememberMe ? localStorage : sessionStorage;
+  _storeTokens(data, storage);
   const userInfo = JSON.parse(atob(data.access_token.split('.')[1]));
-  sessionStorage.setItem(USER_KEY, JSON.stringify(userInfo));
+  storage.setItem(USER_KEY, JSON.stringify(userInfo));
   return userInfo;
 }
 
-function _storeTokens(data) {
+function _storeTokens(data, storage) {
   const expiresAt = Date.now() + (data.expires_in - 30) * 1000; // 30s buffer
-  sessionStorage.setItem(TOKEN_KEY,   data.access_token);
-  sessionStorage.setItem(EXPIRY_KEY,  String(expiresAt));
+  storage.setItem(TOKEN_KEY,   data.access_token);
+  storage.setItem(EXPIRY_KEY,  String(expiresAt));
   if (data.refresh_token) {
-    sessionStorage.setItem(REFRESH_KEY, data.refresh_token);
+    storage.setItem(REFRESH_KEY, data.refresh_token);
   }
 }
 
 /** Returns the raw access token (may be expired — prefer getValidToken()) */
 export function getToken() {
-  return sessionStorage.getItem(TOKEN_KEY);
+  return getStorage().getItem(TOKEN_KEY);
 }
 
 /** Returns a fresh access token, silently refreshing via refresh_token if needed.
  *  Throws if unable to refresh (forces re-login). */
 export async function getValidToken() {
-  const expiry = Number(sessionStorage.getItem(EXPIRY_KEY) || '0');
+  const storage = getStorage();
+  const expiry = Number(storage.getItem(EXPIRY_KEY) || '0');
   if (Date.now() < expiry) {
-    return sessionStorage.getItem(TOKEN_KEY); // still valid
+    return storage.getItem(TOKEN_KEY); // still valid
   }
 
-  const refreshToken = sessionStorage.getItem(REFRESH_KEY);
+  const refreshToken = storage.getItem(REFRESH_KEY);
   if (!refreshToken) {
     throw new Error('Session expirée. Veuillez vous reconnecter.');
   }
@@ -72,15 +79,15 @@ export async function getValidToken() {
   }
 
   const data = await resp.json();
-  _storeTokens(data);
+  _storeTokens(data, storage);
   // Update user info from new token payload
   const userInfo = JSON.parse(atob(data.access_token.split('.')[1]));
-  sessionStorage.setItem(USER_KEY, JSON.stringify(userInfo));
+  storage.setItem(USER_KEY, JSON.stringify(userInfo));
   return data.access_token;
 }
 
 export function getUserInfo() {
-  const raw = sessionStorage.getItem(USER_KEY);
+  const raw = getStorage().getItem(USER_KEY);
   return raw ? JSON.parse(raw) : null;
 }
 
@@ -89,6 +96,11 @@ export function hasRole(role) {
 }
 
 export function logout() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_KEY);
+  localStorage.removeItem(EXPIRY_KEY);
+  localStorage.removeItem(USER_KEY);
+
   sessionStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(REFRESH_KEY);
   sessionStorage.removeItem(EXPIRY_KEY);
@@ -98,7 +110,7 @@ export function logout() {
 /** Call on app start to check if stored session is still valid.
  *  Returns userInfo if OK, null if session is gone/unrefreshable. */
 export async function checkSession() {
-  if (!sessionStorage.getItem(TOKEN_KEY)) return null;
+  if (!getStorage().getItem(TOKEN_KEY)) return null;
   try {
     await getValidToken();
     return getUserInfo();

@@ -11,8 +11,8 @@ Logique (identique à AbuseIPDB) :
   4. Pose le flag  passer_par_virustotal = 1  sur l'IOC traité.
   5. Skip les IOCs qui ont déjà  passer_par_virustotal = 1.
 
-Types ciblés : url, domain, domaine, hash, md5, sha1, sha256, sha512.
-Les IPs sont gérées par AbuseIPDB — elles sont ignorées ici.
+# Types ciblés : url, domain, domaine, hash, md5, sha1, sha256, sha512, ip, ipv4.
+# Les IPs sont désormais également gérées par VirusTotal.
 """
 
 import os
@@ -39,7 +39,7 @@ VT_API_BASE    = "https://www.virustotal.com/api/v3"
 API_DELAY_SEC  = 15   # Free tier: 4 req/min → wait 15 s between calls
 
 # IOC types that VirusTotal can analyse
-VT_TARGET_TYPES = {"url", "domain", "domaine", "hash", "hashe", "md5", "sha1", "sha256", "sha512"}
+VT_TARGET_TYPES = {"url", "domain", "domaine", "hash", "hashe", "md5", "sha1", "sha256", "sha512", "ip", "ipv4"}
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -137,6 +137,18 @@ class VirusTotalEnricher:
             logger.error(f"  [API-DOMAIN] Error: {e}")
         return None
 
+    def _query_ip(self, ip: str) -> dict | None:
+        """Query VirusTotal for an IP address."""
+        try:
+            r = requests.get(f"{VT_API_BASE}/ip_addresses/{ip}", headers=self._headers(), timeout=15)
+            if r.status_code == 200:
+                return self._extract_stats(r.json().get("data", {}).get("attributes", {}))
+            else:
+                logger.warning(f"  [API-IP] HTTP {r.status_code} for {ip}")
+        except Exception as e:
+            logger.error(f"  [API-IP] Error: {e}")
+        return None
+
     def _query_hash(self, file_hash: str) -> dict | None:
         """Query VirusTotal for a file hash (md5/sha1/sha256/sha512)."""
         try:
@@ -161,8 +173,10 @@ class VirusTotalEnricher:
             result = self._query_url(ioc_value)
         elif ioc_type in ("domain", "domaine"):
             result = self._query_domain(ioc_value)
-        elif ioc_type in ("hash", "md5", "sha1", "sha256", "sha512"):
+        elif ioc_type in ("hash", "hashe", "md5", "sha1", "sha256", "sha512"):
             result = self._query_hash(ioc_value)
+        elif ioc_type in ("ip", "ipv4"):
+            result = self._query_ip(ioc_value)
         else:
             return None
 

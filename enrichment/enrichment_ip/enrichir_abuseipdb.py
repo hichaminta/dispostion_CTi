@@ -132,11 +132,20 @@ class AbuseIPDBEnricher:
                         logger.debug(f"  [SKIP] {ioc.get('value')} already enriched (passer_par_abuseipdb=1).")
                         continue
 
-                    ip = ioc.get("value")
-                    if not ip:
+                    raw_ip = ioc.get("value")
+                    if not raw_ip:
                         continue
 
-                    info = self.get_ip_info(ip)
+                    # ── Nettoyage de l'IP ─────────────────────────────────────
+                    # Retirer le port s'il est présent (ex: 42.225.207.134:34110)
+                    clean_ip = raw_ip.split(":")[0]
+
+                    # Ignorer les blocs CIDR (ex: 1.10.16.0/20) non supportés par l'endpoint /check
+                    if "/" in clean_ip:
+                        logger.debug(f"  [SKIP] {raw_ip} est un bloc CIDR, ignoré pour AbuseIPDB.")
+                        continue
+
+                    info = self.get_ip_info(clean_ip)
                     if info:
                         enrichment.update({
                             "abuseConfidenceScore": info.get("abuseConfidenceScore"),
@@ -149,8 +158,8 @@ class AbuseIPDBEnricher:
                             "passer_par_abuseipdb": 1,
                         })
                         modified = True
-                        source = "LOCAL DB" if ip in self.local_db else "API"
-                        logger.info(f"  [OK] {ip} enriched via {source} (score={info.get('abuseConfidenceScore')})")
+                        source = "LOCAL DB" if clean_ip in self.local_db else "API"
+                        logger.info(f"  [OK] {clean_ip} enriched via {source} (score={info.get('abuseConfidenceScore')})")
 
             if modified:
                 with open(filepath, "w", encoding="utf-8") as f:

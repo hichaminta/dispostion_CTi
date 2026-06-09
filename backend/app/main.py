@@ -34,7 +34,6 @@ OUTPUT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..",
 ENRICHMENT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_enrichment"))
 MITRE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_correlation")) # Use correlation output for some stats too
 CORRELATION_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_correlation"))
-DASHBOARD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "dashboard"))
 
 app = FastAPI(title="CTI Pipeline Tracker API")
 app.include_router(leaks_router.router)
@@ -76,7 +75,6 @@ def change_password(req: ChangePasswordRequest):
         
     return {"status": "success"}
 
-app.mount("/results", StaticFiles(directory=DASHBOARD_DIR, html=True), name="results")
 app.mount("/data", StaticFiles(directory=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))), name="data")
 app.mount("/bulletins", StaticFiles(directory=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "bultein_de_security"))), name="bulletins")
 GEO_STATS_CACHE = {"data": [], "last_updated": 0}
@@ -317,7 +315,7 @@ def get_extracted_sources():
     return sources
 
 @app.get("/api/extracted/data/{source_id}")
-def get_extracted_data(source_id: str, page: int = 1, limit: int = 50, search: str = None, ioc_type: str = None):
+def get_extracted_data(source_id: str, page: int = 1, limit: int = 50, search: str = None, ioc_type: str = None, date_collected: str = None):
     info = None
     for src_name, src_info in worker.SOURCE_MAP.items():
         if src_info["id"] == source_id:
@@ -355,6 +353,10 @@ def get_extracted_data(source_id: str, page: int = 1, limit: int = 50, search: s
                    any(search_low in str(t).lower() for t in d.get("tags", [])) or
                    search_low in str(d.get("raw_text", "")).lower()
             ]
+
+        # 3. Date Filtering
+        if date_collected:
+            all_data = [d for d in all_data if d.get("collected_at") and str(d.get("collected_at")).startswith(date_collected)]
             
         total = len(all_data)
         start = (page - 1) * limit
@@ -391,7 +393,7 @@ def get_enriched_sources():
     return sources
 
 @app.get("/api/enriched/data/{source_id}")
-def get_enriched_data(source_id: str, page: int = 1, limit: int = 50, search: str = None, ioc_type: str = None, priority: str = None, enrich_source: str = None):
+def get_enriched_data(source_id: str, page: int = 1, limit: int = 50, search: str = None, ioc_type: str = None, priority: str = None, enrich_source: str = None, date_collected: str = None):
     info = None
     for src_name, src_info in worker.SOURCE_MAP.items():
         if src_info["id"] == source_id:
@@ -454,6 +456,10 @@ def get_enriched_data(source_id: str, page: int = 1, limit: int = 50, search: st
                    any(search_low in str(t).lower() for t in d.get("tags", [])) or
                    search_low in str(d.get("raw_text", "")).lower()
             ]
+
+        # 3. Date Filtering
+        if date_collected:
+            all_data = [d for d in all_data if d.get("collected_at") and str(d.get("collected_at")).startswith(date_collected)]
             
         total = len(all_data)
         start = (page - 1) * limit

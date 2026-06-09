@@ -49,7 +49,7 @@ def is_valid_urlscan_target(value, ioc_type="url"):
     
     # If it's an IP, validate it
     if ioc_type == "ip":
-        return False
+        return value
 
     val_low = value.lower()
     
@@ -254,7 +254,7 @@ def enrich_urlscan(source_filter=None):
                 for ioc in record.get("iocs", []):
                     ioc_type = ioc.get("type")
                     ioc_value = ioc.get("value")
-                    if ioc_type not in ["url", "domain", "domaine"]: continue
+                    if ioc_type not in ["url", "domain", "domaine", "ip"]: continue
 
                     # --- SKIP IF ALREADY MARKED (NEW LOGIC) ---
                     if ioc.get("ioc_enrichment", {}).get("passer_par_urlscan") == 1:

@@ -19,6 +19,7 @@ export default function Login({ onLogin }) {
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
   const [error, setError] = useState(null);
+  const [rememberMe, setRememberMe] = useState(false);
 
   const [requirePasswordChange, setRequirePasswordChange] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -31,7 +32,7 @@ export default function Login({ onLogin }) {
     setError(null);
     try {
       const { login } = await import('../auth.js');
-      const userInfo = await login(email, password);
+      const userInfo = await login(email, password, rememberMe);
       onLogin(userInfo);
     } catch (err) {
       if (err.requirePasswordChange) {
@@ -272,7 +273,7 @@ export default function Login({ onLogin }) {
             <div className="flex items-center justify-between pt-1">
               <label className="flex items-center gap-2 cursor-pointer group">
                 <div className="relative flex items-center justify-center">
-                  <input type="checkbox" className="peer sr-only" />
+                  <input type="checkbox" className="peer sr-only" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
                   <div className="w-3.5 h-3.5 rounded border border-slate-700 bg-slate-950/60 peer-checked:bg-sky-500 peer-checked:border-sky-500 transition-all duration-300" />
                   <div className="absolute opacity-0 peer-checked:opacity-100 transition-opacity duration-300 scale-50 peer-checked:scale-100">
                     <svg className="w-2.5 h-2.5 text-slate-950 drop-shadow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={5}>

@@ -1129,8 +1129,8 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
                     Aucun run. Lancez une source pour commencer.
                   </td></tr>
                 ) : runs.map(run => {
-                  const ioc = (run.steps || []).reduce((a, s) => a + (s.ioc_count || 0), 0);
-                  const cve = (run.steps || []).reduce((a, s) => a + (s.cve_count || 0), 0);
+                  const ioc = Math.max(0, ...(run.steps || []).map(s => s.ioc_count || 0));
+                  const cve = Math.max(0, ...(run.steps || []).map(s => s.cve_count || 0));
                   const runType = getRunType(run);
                   const isRunning = run.status_global === 'running';
                   return (

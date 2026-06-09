@@ -18,6 +18,16 @@ cluster_attr = {
     "bgcolor": "transparent",
 }
 
+# Style global Keycloak
+global_cluster_attr = {
+    "bgcolor": "#f0f8ff",
+    "pencolor": "#005a9e",
+    "penwidth": "2",
+    "fontsize": "18",
+    "fontcolor": "#005a9e",
+    "style": "dashed"
+}
+
 with Diagram(
     "CTI Pipeline Architecture - BlueSec SOC",
     show=False,
@@ -26,111 +36,122 @@ with Diagram(
     graph_attr=graph_attr,
 ):
 
-    # 1. SOURCES
-    with Cluster("Sources CTI", graph_attr=cluster_attr):
+    with Cluster("Plateforme CTI Securisee par Keycloak (IAM)", graph_attr=global_cluster_attr):
 
-        with Cluster("OTX AlienVault", graph_attr=cluster_attr):
-            otx   = Custom("", "./logos/ALienVT.png")
-        with Cluster("NVD / NIST", graph_attr=cluster_attr):
-            nist  = Custom("", "./logos/NVD.png")
-        with Cluster("Abuse.ch", graph_attr=cluster_attr):
-            abuse = Custom("", "./logos/Abuse.png")
-        with Cluster("PhishTank", graph_attr=cluster_attr):
-            phish = Custom("", "./logos/phisingtank.png")
+        # 8. AUTHENTIFICATION
+        with Cluster("Securite globale", graph_attr=cluster_attr):
+            auth = Custom("Keycloak (IAM)", "./logos/keycloak.png")
 
-    sources = [otx, nist, abuse, phish]
+        # 1. SOURCES
+        with Cluster("Sources CTI", graph_attr=cluster_attr):
 
-    # 2. COLLECTE
-    with Cluster("Collecte\nAPI / Scraping", graph_attr=cluster_attr):
-        collecte = Python("", width="2.0", height="2.0")
+            with Cluster("OTX AlienVault", graph_attr=cluster_attr):
+                otx   = Custom("", "./logos/ALienVT.png")
+            with Cluster("NVD / NIST", graph_attr=cluster_attr):
+                nist  = Custom("", "./logos/NVD.png")
+            with Cluster("Abuse.ch", graph_attr=cluster_attr):
+                abuse = Custom("", "./logos/Abuse.png")
+            with Cluster("PhishTank", graph_attr=cluster_attr):
+                phish = Custom("", "./logos/phisingtank.png")
 
-    # 3. EXTRACTION
-    with Cluster("Extraction IOC & CVE", graph_attr=cluster_attr):
-        extraction = Python("", width="2.0", height="2.0")
+        sources = [otx, nist, abuse, phish]
 
-    # 4. ENRICHISSEMENT
-    with Cluster("Enrichissement Multi-couches", graph_attr=cluster_attr):
-        with Cluster("Geolocalisation", graph_attr=cluster_attr):
-            geo = Custom("", "./logos/geolocalisatiion_ip.png")
+        # 2. COLLECTE
+        with Cluster("Collecte\nAPI / Scraping", graph_attr=cluster_attr):
+            collecte = Python("", width="2.0", height="2.0")
 
-        with Cluster("URLScan.io", graph_attr=cluster_attr):
-            urlscan = Custom("", "./logos/urlscan.png")
+        # 3. EXTRACTION
+        with Cluster("Extraction IOC & CVE", graph_attr=cluster_attr):
+            extraction = Python("", width="2.0", height="2.0")
 
-        with Cluster("VirusTotal", graph_attr=cluster_attr):
-            vt_enr = Custom("", "./logos/VT.png")
+        # 4. ENRICHISSEMENT
+        with Cluster("Enrichissement Multi-couches", graph_attr=cluster_attr):
+            with Cluster("Geolocalisation", graph_attr=cluster_attr):
+                geo = Custom("", "./logos/geolocalisatiion_ip.png")
 
-        with Cluster("AbuseIPDB", graph_attr=cluster_attr):
-            abuse_enr = Custom("", "./logos/Abuse.png")
+            with Cluster("URLScan.io", graph_attr=cluster_attr):
+                urlscan = Custom("", "./logos/urlscan.png")
 
-    # 5. NORMALISATION
-    with Cluster("Normalisation & Deduplication\nStandardize", graph_attr=cluster_attr):
-        normalise = Python("", width="2.0", height="2.0")
+            with Cluster("VirusTotal", graph_attr=cluster_attr):
+                vt_enr = Custom("", "./logos/VT.png")
 
-    # 6. MISP
-    with Cluster("MISP\n- Partage\n- Correlation", graph_attr=cluster_attr):
-        misp = Custom("", "./logos/MISP.png")
+            with Cluster("AbuseIPDB", graph_attr=cluster_attr):
+                abuse_enr = Custom("", "./logos/Abuse.png")
 
-    # 7. BULLETIN
-    with Cluster("Communication\n- Rapports SOC", graph_attr=cluster_attr):
-        bulletin = Custom("", "./logos/Bulteinsecuitre.png")
+        # 5. NORMALISATION
+        with Cluster("Normalisation & Deduplication\nStandardize", graph_attr=cluster_attr):
+            normalise = Python("", width="2.0", height="2.0")
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # BRANCHE TELEGRAM  (module leak_data_integration)
-    # ─────────────────────────────────────────────────────────────────────────
+        # 6. MISP
+        with Cluster("MISP\n- Partage\n- Correlation", graph_attr=cluster_attr):
+            misp = Custom("", "./logos/MISP.png")
 
-    # T1. Sources Telegram
-    with Cluster("Sources Telegram\n(Canaux Hacktivistes)", graph_attr=cluster_attr):
-        tg_ch1 = Custom("Jabaroot DZ", "./logos/Telegram.png")
-        tg_ch2 = Custom("Canal Privé",  "./logos/Telegram.png")
+        # 7. BULLETIN
+        with Cluster("Communication\n- Rapports SOC", graph_attr=cluster_attr):
+            bulletin = Custom("", "./logos/Bulteinsecuitre.png")
 
-    # T2. Collecte Telethon
-    with Cluster("Collecte Telegram\n(TelegramCollector)", graph_attr=cluster_attr):
-        tg_collect = Python("", width="2.0", height="2.0")
+        # ─────────────────────────────────────────────────────────────────────────
+        # BRANCHE TELEGRAM  (module leak_data_integration)
+        # ─────────────────────────────────────────────────────────────────────────
 
-    # T3. Analyse LLM  ─ is_leak / severity / leak_type
-    with Cluster("Analyse & Détection\n(LeakAnalyzer + LLM)", graph_attr=cluster_attr):
-        tg_analyze = Python("", width="2.0", height="2.0")
+        # T1. Sources Telegram
+        with Cluster("Sources Telegram\n(Canaux Hacktivistes)", graph_attr=cluster_attr):
+            tg_ch1 = Custom("Jabaroot DZ", "./logos/Telegram.png")
+            tg_ch2 = Custom("Canal Privé",  "./logos/Telegram.png")
 
-    # T4. Corrélation IA
-    with Cluster("Corrélation IA\n(DailyCorrelator)", graph_attr=cluster_attr):
-        tg_correlate = Python("", width="2.0", height="2.0")
+        # T2. Collecte Telethon
+        with Cluster("Collecte Telegram\n(TelegramCollector)", graph_attr=cluster_attr):
+            tg_collect = Python("", width="2.0", height="2.0")
 
-    # T5. Intel Store  (leaks_intel.json)
-    with Cluster("Intelligence Store\n(leaks_intel.json)", graph_attr=cluster_attr):
-        tg_intel = Python("", width="2.0", height="2.0")
+        # T3. Analyse LLM  ─ is_leak / severity / leak_type
+        with Cluster("Analyse & Détection\n(LeakAnalyzer + LLM)", graph_attr=cluster_attr):
+            tg_analyze = Python("", width="2.0", height="2.0")
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # FLUX  —  Pipeline CTI classique
-    # ─────────────────────────────────────────────────────────────────────────
-    for src in sources:
-        src >> Edge(color="steelblue") >> collecte
+        # T4. Corrélation IA
+        with Cluster("Corrélation IA\n(DailyCorrelator)", graph_attr=cluster_attr):
+            tg_correlate = Python("", width="2.0", height="2.0")
 
-    collecte   >> Edge(color="steelblue")                        >> extraction
-    extraction >> Edge(color="blue")                             >> geo
-    extraction >> Edge(color="purple", style="dashed", label="URLs / Domains")  >> urlscan
-    extraction >> Edge(color="blue",   style="dashed", label="Hashes / URLs / Domains")  >> vt_enr
-    extraction >> Edge(color="blue",   style="dashed", label="IPs")   >> abuse_enr
+        # T5. Intel Store  (leaks_intel.json)
+        with Cluster("Intelligence Store\n(leaks_intel.json)", graph_attr=cluster_attr):
+            tg_intel = Python("", width="2.0", height="2.0")
 
-    geo     >> Edge(color="blue")   >> normalise
-    urlscan >> Edge(color="purple") >> normalise
-    vt_enr  >> Edge(color="blue")   >> normalise
-    abuse_enr >> Edge(color="blue")  >> normalise
+        # ─────────────────────────────────────────────────────────────────────────
+        # FLUX  —  Pipeline CTI classique
+        # ─────────────────────────────────────────────────────────────────────────
+        for src in sources:
+            src >> Edge(color="steelblue") >> collecte
 
-    normalise >> Edge(color="green") >> misp
-    misp      >> Edge(color="green") >> bulletin
+        collecte   >> Edge(color="steelblue")                        >> extraction
+        extraction >> Edge(color="blue")                             >> geo
+        extraction >> Edge(color="purple", style="dashed", label="URLs / Domains")  >> urlscan
+        extraction >> Edge(color="blue",   style="dashed", label="Hashes / URLs / Domains / IPs")  >> vt_enr
+        extraction >> Edge(color="blue",   style="dashed", label="IPs")   >> abuse_enr
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # FLUX  —  Pipeline Telegram Leak
-    # ─────────────────────────────────────────────────────────────────────────
-    tg_ch1 >> Edge(color="#0088cc", style="bold")                        >> tg_collect
-    tg_ch2 >> Edge(color="#0088cc", style="bold")                        >> tg_collect
+        geo     >> Edge(color="blue")   >> normalise
+        urlscan >> Edge(color="purple") >> normalise
+        vt_enr  >> Edge(color="blue")   >> normalise
+        abuse_enr >> Edge(color="blue")  >> normalise
 
-    tg_collect   >> Edge(color="#0088cc", label="Messages + Fichiers")   >> tg_analyze
-    tg_analyze   >> Edge(color="darkorange", label="Leaks confirmés")     >> tg_correlate
-    tg_correlate >> Edge(color="darkorange", label="Incidents consolidés") >> tg_intel
+        normalise >> Edge(color="green") >> misp
+        misp      >> Edge(color="green") >> bulletin
 
-    # Les données Telegram NE passent PAS par MISP (leaks_intel.json ≠ output_correlation/)
-    # Elles alimentent uniquement les rapports / bulletins SOC
-    tg_intel >> Edge(color="gray", style="dashed", label="Rapports SOC") >> bulletin
+        # ─────────────────────────────────────────────────────────────────────────
+        # FLUX  —  Pipeline Telegram Leak
+        # ─────────────────────────────────────────────────────────────────────────
+        tg_ch1 >> Edge(color="#0088cc", style="bold")                        >> tg_collect
+        tg_ch2 >> Edge(color="#0088cc", style="bold")                        >> tg_collect
+
+        tg_collect   >> Edge(color="#0088cc", label="Messages + Fichiers")   >> tg_analyze
+        tg_analyze   >> Edge(color="darkorange", label="Leaks confirmés")     >> tg_correlate
+        tg_correlate >> Edge(color="darkorange", label="Incidents consolidés") >> tg_intel
+
+        # Les données Telegram NE passent PAS par MISP (leaks_intel.json ≠ output_correlation/)
+        # Elles alimentent uniquement les rapports / bulletins SOC
+        tg_intel >> Edge(color="gray", style="dashed", label="Rapports SOC") >> bulletin
+
+        # ─────────────────────────────────────────────────────────────────────────
+        # FLUX  —  Authentification & Acces
+        # ─────────────────────────────────────────────────────────────────────────
+        auth >> Edge(color="red", style="bold", label="Controle d'acces") >> bulletin
 
 print("Schema genere avec succes")

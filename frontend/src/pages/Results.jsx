@@ -57,6 +57,7 @@ const Results = ({ onBack, initialSourceId }) => {
   const [pageSize] = useState(50);
   const [search, setSearch] = useState("");
   const [iocType, setIocType] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
   const [severity, setSeverity] = useState("");
   const [enrichSource, setEnrichSource] = useState("");
   const [loading, setLoading] = useState(false);
@@ -100,7 +101,8 @@ const Results = ({ onBack, initialSourceId }) => {
           search: search,
           ioc_type: iocType,
           ...(viewMode === 'enriched' && severity ? { priority: severity } : {}),
-          ...(viewMode === 'enriched' && enrichSource ? { enrich_source: enrichSource } : {})
+          ...(viewMode === 'enriched' && enrichSource ? { enrich_source: enrichSource } : {}),
+          ...(dateFilter ? { date_collected: dateFilter } : {})
         }
       });
       setData(res.data.data);
@@ -110,7 +112,7 @@ const Results = ({ onBack, initialSourceId }) => {
     } finally {
       setLoading(false);
     }
-  }, [currentSource, viewMode, currentPage, pageSize, search, iocType, severity, enrichSource]);
+  }, [currentSource, viewMode, currentPage, pageSize, search, iocType, severity, enrichSource, dateFilter]);
 
   // Fetch country stats
   const fetchCountryStats = async () => {
@@ -362,6 +364,24 @@ const Results = ({ onBack, initialSourceId }) => {
                     <option value="hash">Hashes</option>
                     <option value="cve">CVE</option>
                   </select>
+                  <div className="w-px h-6 bg-slate-800" />
+                  <div className="flex items-center gap-2 pr-2">
+                    <input
+                      type="date"
+                      className="bg-transparent border-none outline-none text-xs text-slate-400 cursor-pointer"
+                      value={dateFilter}
+                      onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1); }}
+                      title="Filter by Date Collected"
+                    />
+                    {dateFilter && (
+                      <button
+                        onClick={() => { setDateFilter(''); setCurrentPage(1); }}
+                        className="px-1 py-0.5 rounded text-[9px] font-black uppercase text-slate-500 hover:text-red-400 border border-transparent hover:border-red-500/20 transition-all"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Ligne 2 : severity (enriched uniquement) */}

@@ -20,9 +20,9 @@ MONTHS = [
     ("AVRIL", 5,  9),
     ("MAI",   4, 14),
     ("JUIN",  4, 18),
-    ("JUIL",  5, 22),
+    ("JUIL",  1, 22),
 ]
-TOTAL_WEEKS = 27
+TOTAL_WEEKS = 23
 RED_LINE    = 19   # Fin Mai (S20)
 EXCEPT_W    = {6, 13}
 
@@ -59,7 +59,7 @@ PHASES = [
         "color": "#0F6E56",
         "tasks": [
             {"name": "Rapport PFE",                          "s": 15, "e": 21},
-            {"name": "Génération bulletin SOC auto",         "s": 22, "e": 26},
+            {"name": "Génération bulletin SOC auto",         "s": 22, "e": 23},
         ]
     },
 ]
@@ -71,14 +71,14 @@ TASK_H     = 0.6
 FOLLOW_H   = 1.0
 LEGEND_H   = 1.5
 GAP_H      = 0.1
-LABEL_W    = 4.5
+LABEL_W    = 7.0
 
 total_h = HEADER_H + n_tasks * TASK_H + (len(PHASES) * GAP_H) + FOLLOW_H + LEGEND_H
 fig_w   = 20
 fig_h   = total_h
 
 fig, ax = plt.subplots(figsize=(fig_w, fig_h))
-ax.set_xlim(-LABEL_W, TOTAL_WEEKS + 5) # Ajout de marge à droite pour le texte long
+ax.set_xlim(-LABEL_W, TOTAL_WEEKS + 16) # Ajout de marge à droite pour le texte long (augmentée)
 ax.set_ylim(0, total_h)
 ax.axis('off')
 fig.patch.set_facecolor('white')
@@ -96,11 +96,11 @@ y_top = total_h - 0.5
 y_month = y_top + 0.4
 y_week  = y_top
 
-ax.text(-LABEL_W + 0.1, y_week + 0.3, "Phase / Tâche", ha='left', va='bottom', fontsize=10, color='#666666')
+ax.text(-LABEL_W + 0.1, y_week + 0.3, "Phase / Tâche", ha='left', va='bottom', fontsize=12, color='#666666')
 
 for label, nw, start in MONTHS:
     cx = start + nw / 2
-    ax.text(cx, y_month, label, ha='center', va='center', fontsize=9, color='#666666')
+    ax.text(cx, y_month, label, ha='center', va='center', fontsize=11, color='#666666')
     ax.axvline(start, color='#dddddd', linewidth=0.8, ymin=0.15, ymax=0.9, zorder=1)
 
 ax.axhline(y_week + 0.2, color='#dddddd', linewidth=1, xmin=0, xmax=1)
@@ -109,7 +109,7 @@ wn = 1
 for _, nw, start in MONTHS:
     for i in range(nw):
         cx = start + i + 0.5
-        ax.text(cx, y_week, f"S{wn}", ha='center', va='center', fontsize=7, color='#999999')
+        ax.text(cx, y_week, f"S{wn}", ha='center', va='center', fontsize=9, color='#999999')
         wn += 1
 
 # ── TÂCHES ───────────────────────────────────────────────────────────────────
@@ -121,12 +121,12 @@ for pi, phase in enumerate(PHASES):
         ax.axhline(y_cursor, color='#eeeeee', linewidth=0.8, xmin=0, xmax=1, zorder=0)
 
         if ti == 0:
-            ax.text(-LABEL_W + 0.1, yc + 0.15, phase["title"], ha='left', va='center', fontsize=10, fontweight='bold')
-            ax.text(-LABEL_W + 0.1, yc - 0.10, phase["sub"], ha='left', va='center', fontsize=8, color='#7f8c8d')
+            ax.text(-LABEL_W + 0.1, yc + 0.15, phase["title"], ha='left', va='center', fontsize=12, fontweight='bold')
+            ax.text(-LABEL_W + 0.1, yc - 0.10, phase["sub"], ha='left', va='center', fontsize=10, color='#7f8c8d')
 
         bar(ax, task["s"], task["e"], yc, phase["color"])
-        # Texte un peu plus petit (fontsize=7) pour accommoder les phrases longues
-        ax.text(task["e"] + 0.2, yc, task["name"], ha='left', va='center', fontsize=7.5, color='#333333')
+        # Augmentation de la taille de texte pour être lisible
+        ax.text(task["e"] + 0.2, yc, task["name"], ha='left', va='center', fontsize=13, color='#333333')
         
         y_cursor -= TASK_H
 
@@ -137,38 +137,38 @@ ax.axvline(RED_LINE + 0.5, color='#e74c3c', linewidth=1.5, zorder=5)
 y_cursor -= 0.5
 ax.axhline(y_cursor + 0.4, color='#dddddd', linewidth=1, xmin=0, xmax=1)
 y_follow = y_cursor - 0.2
-ax.text(-LABEL_W + 0.1, y_follow + 0.1, "Suivi entreprise", ha='left', va='center', fontsize=10, fontweight='bold')
-ax.text(-LABEL_W + 0.1, y_follow - 0.15, "Chaque vendredi", ha='left', va='center', fontsize=8, color='#7f8c8d')
+ax.text(-LABEL_W + 0.1, y_follow + 0.1, "Suivi entreprise", ha='left', va='center', fontsize=12, fontweight='bold')
+ax.text(-LABEL_W + 0.1, y_follow - 0.15, "Chaque vendredi", ha='left', va='center', fontsize=10, color='#7f8c8d')
 
 for wi in range(TOTAL_WEEKS):
     cx = wi + 0.5
     if wi in EXCEPT_W:
-        ax.text(cx, y_follow, "✕", ha='center', va='center', fontsize=10, color='#e74c3c', fontweight='bold')
+        ax.text(cx, y_follow, "✕", ha='center', va='center', fontsize=12, color='#e74c3c', fontweight='bold')
     elif wi <= RED_LINE:
-        ax.text(cx, y_follow, "★", ha='center', va='center', fontsize=10, color='#e74c3c')
+        ax.text(cx, y_follow, "★", ha='center', va='center', fontsize=12, color='#e74c3c')
     else:
-        ax.text(cx, y_follow, "☆", ha='center', va='center', fontsize=10, color='#dddddd')
+        ax.text(cx, y_follow, "☆", ha='center', va='center', fontsize=12, color='#dddddd')
 
 # ── LÉGENDE ──────────────────────────────────────────────────────────────────
 y_leg = y_cursor - 1.2
 leg_x = -LABEL_W + 0.1
 
-ax.text(leg_x, y_leg, "★", color='#e74c3c', fontsize=12)
-ax.text(leg_x + 0.4, y_leg, "Suivi effectué (fév → mi-mai)", fontsize=9, color='#666666')
-ax.text(leg_x + 5.5, y_leg, "☆", color='#dddddd', fontsize=12)
-ax.text(leg_x + 5.9, y_leg, "Suivi prévu", fontsize=9, color='#666666')
-ax.text(leg_x + 8.5, y_leg, "✕", color='#e74c3c', fontsize=10, fontweight='bold')
-ax.text(leg_x + 8.9, y_leg, "Pas de suivi", fontsize=9, color='#666666')
-ax.text(leg_x + 13.5, y_leg, "─", color='#e74c3c', fontsize=12, fontweight='bold')
-ax.text(leg_x + 14.1, y_leg, "Mi-mai", fontsize=9, color='#666666')
+ax.text(leg_x, y_leg, "★", color='#e74c3c', fontsize=14)
+ax.text(leg_x + 0.4, y_leg, "Suivi effectué (fév → mi-mai)", fontsize=11, color='#666666')
+ax.text(leg_x + 5.5, y_leg, "☆", color='#dddddd', fontsize=14)
+ax.text(leg_x + 5.9, y_leg, "Suivi prévu", fontsize=11, color='#666666')
+ax.text(leg_x + 8.5, y_leg, "✕", color='#e74c3c', fontsize=12, fontweight='bold')
+ax.text(leg_x + 8.9, y_leg, "Pas de suivi", fontsize=11, color='#666666')
+ax.text(leg_x + 13.5, y_leg, "─", color='#e74c3c', fontsize=14, fontweight='bold')
+ax.text(leg_x + 14.1, y_leg, "Mi-mai", fontsize=11, color='#666666')
 
 y_leg -= 0.5
 for i, ph in enumerate(PHASES):
     px = leg_x + (i * 4.8)
     ax.add_patch(plt.Rectangle((px, y_leg - 0.1), 0.5, 0.3, color=ph["color"]))
-    ax.text(px + 0.7, y_leg, f"{ph['title']}", fontsize=8, color='#666666', fontweight='bold')
+    ax.text(px + 0.7, y_leg, f"{ph['title']}", fontsize=10, color='#666666', fontweight='bold')
 
 # ── EXPORT ───────────────────────────────────────────────────────────────────
 plt.savefig(OUTPUT, dpi=DPI, bbox_inches='tight')
 plt.close()
-print(f"✅ Design et contenu utilisateur restaurés : {OUTPUT}")
+print(f"[OK] Design et contenu utilisateur restaurés : {OUTPUT}")

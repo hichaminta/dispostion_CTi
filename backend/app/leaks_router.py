@@ -12,6 +12,34 @@ import yaml
 router = APIRouter(prefix="/api/leaks", tags=["leaks"])
 db = database.db
 
+_line_count_cache: dict = {}
+
+def _count_lines_bg(path: str) -> None:
+    """Count lines in background thread and store in cache."""
+    import threading
+    def _run():
+        try:
+            mtime = os.path.getmtime(path)
+            key = (path, mtime)
+            if key in _line_count_cache:
+                return
+            count = 0
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(1 << 20), b""):
+                    count += chunk.count(b"\n")
+            _line_count_cache[key] = max(0, count - 1)
+        except Exception:
+            pass
+    threading.Thread(target=_run, daemon=True).start()
+
+def _get_cached_line_count(path: str):
+    """Return cached line count or None if not ready yet."""
+    try:
+        mtime = os.path.getmtime(path)
+        return _line_count_cache.get((path, mtime))
+    except Exception:
+        return None
+
 SETTINGS_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "leak_data_integration", "config", "settings.yaml"))
 
 # Purified Intelligence path
@@ -367,7 +395,7 @@ async def get_leak_bulletin_pdf(intel_id: str):
     return FileResponse(pdf_path, media_type="application/pdf", filename=f"bulletin_{intel_id}.pdf")
 
 @router.get("/csv/view")
-def view_csv(path: str):
+def view_csv(path: str, limit: int = 50, offset: int = 0):
     # Security: Ensure path is within the data directory
     base_data = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))
     
@@ -410,20 +438,16 @@ def view_csv(path: str):
             import pandas as pd
             df = pd.read_excel(abs_path).head(200)
             
-            # Infer column types
+            # Infer column types (use pandas dtypes — no exceptions)
             col_types = {}
             for col in df.columns:
-                series = df[col].dropna()
-                if series.empty:
-                    col_types[str(col)] = "empty"; continue
-                try:
-                    pd.to_numeric(series); col_types[str(col)] = "number"; continue
-                except: pass
-                try:
-                    pd.to_datetime(series, errors="raise")
-                    col_types[str(col)] = "date"; continue
-                except: pass
-                col_types[str(col)] = "text"
+                dtype = df[col].dtype
+                if pd.api.types.is_numeric_dtype(dtype):
+                    col_types[str(col)] = "number"
+                elif pd.api.types.is_datetime64_any_dtype(dtype):
+                    col_types[str(col)] = "date"
+                else:
+                    col_types[str(col)] = "text"
 
             # Sanitize for JSON
             import math
@@ -453,98 +477,85 @@ def view_csv(path: str):
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error reading Excel file: {str(e)}")
 
-    # ── CSV files: auto-detect separator + parse ──────────────────────
+    # ── CSV files: pure Python csv module — reads exactly 200 rows, no pandas ──
     try:
-        import pandas as pd
         import csv as csv_mod
-        from io import StringIO
+        from fastapi.responses import JSONResponse
 
+        # ── Detect encoding from first 8KB ───────────────────────────
         ENCODINGS = ("utf-8", "utf-8-sig", "latin-1", "cp1252")
-        sample_text = None
-        used_enc = "utf-8"
-        for enc in ENCODINGS:
+        used_enc = "latin-1"  # latin-1 never fails, safe fallback
+        for enc in ("utf-8", "utf-8-sig"):
             try:
                 with open(abs_path, "r", encoding=enc) as f:
-                    sample_text = f.read(10000)
+                    f.read(8192)
                 used_enc = enc
                 break
             except UnicodeDecodeError:
                 continue
 
-        if sample_text is None:
-            raise HTTPException(status_code=500, detail="Could not decode file")
+        # Lance le comptage en arrière-plan (résultat mis en cache)
+        _count_lines_bg(abs_path)
 
-        # ── Auto-detect separator ────────────────────────────────────
-        detected_sep = ","
-        sample_lines = sample_text.splitlines()
-        sample = "\n".join(sample_lines[:20])
-        try:
-            sniffer = csv_mod.Sniffer()
-            dialect = sniffer.sniff(sample, delimiters=",;\t|:")
-            detected_sep = dialect.delimiter
-        except csv_mod.Error:
-            first_line = sample_lines[0] if sample_lines else ""
-            candidates = {
-                ",":  first_line.count(","),
-                ";":  first_line.count(";"),
-                "\t": first_line.count("\t"),
-                "|":  first_line.count("|"),
-                ":":  first_line.count(":"),
-            }
-            best = max(candidates, key=candidates.get)
-            detected_sep = best if candidates[best] > 0 else ","
+        # ── Read first 4KB to detect separator ───────────────────────
+        with open(abs_path, "r", encoding=used_enc, errors="replace") as f:
+            head = f.read(4096)
 
-        # ── Parse ────────────────────────────────────────────────────
-        try:
-            df = pd.read_csv(abs_path, sep=detected_sep, encoding=used_enc,
-                             engine="python", on_bad_lines="skip", nrows=200)
-        except pd.errors.EmptyDataError:
-            df = pd.DataFrame()
+        first_line = head.splitlines()[0] if head else ""
+        sep_counts = {",": first_line.count(","), ";": first_line.count(";"),
+                      "\t": first_line.count("\t"), "|": first_line.count("|")}
+        detected_sep = max(sep_counts, key=sep_counts.get) if any(sep_counts.values()) else ","
 
-        # ── Infer column types ───────────────────────────────────────
+        # ── Read `limit` rows starting at `offset` ───────────────────
+        MAX_ROWS = max(1, limit)
+        SKIP = max(0, offset)
+        columns = []
+        records = []
+
+        with open(abs_path, "r", encoding=used_enc, errors="replace", newline="") as f:
+            reader = csv_mod.reader(f, delimiter=detected_sep)
+            raw_header = next(reader, [])
+            columns = [str(c).strip().strip('"') for c in raw_header]
+            n_cols = len(columns)
+            skipped = 0
+            for row in reader:
+                if not any(row):
+                    continue
+                if skipped < SKIP:
+                    skipped += 1
+                    continue
+                if len(records) >= MAX_ROWS:
+                    break
+                padded = row + [""] * max(0, n_cols - len(row))
+                records.append({columns[i]: padded[i].strip('"') for i in range(n_cols)})
+
+        # ── Infer col types from first non-empty value ────────────────
         col_types = {}
-        for col in df.columns:
-            series = df[col].dropna()
-            if series.empty:
-                col_types[str(col)] = "empty"; continue
-            try:
-                pd.to_numeric(series); col_types[str(col)] = "number"; continue
-            except Exception:
-                pass
-            try:
-                pd.to_datetime(series, infer_datetime_format=True, errors="raise")
-                col_types[str(col)] = "date"; continue
-            except Exception:
-                pass
-            sample_val = str(series.iloc[0])
-            if "@" in sample_val and "." in sample_val.split("@")[-1]:
-                col_types[str(col)] = "email"; continue
-            if sample_val.startswith(("http://", "https://")):
-                col_types[str(col)] = "url"; continue
-            col_types[str(col)] = "text"
-
-        # ── Sanitize NaN / Inf (JSON-incompatible float values) ─────
-        import math
-        from fastapi.responses import JSONResponse
-
-        def sanitize(val):
-            if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
-                return None
-            return val
-
-        records = [
-            {str(k): sanitize(v) for k, v in row.items()}
-            for row in df.to_dict(orient="records")
-        ]
+        for col in columns:
+            val = next((r[col] for r in records if r.get(col, "").strip()), "")
+            if not val:
+                col_types[col] = "empty"
+            elif "@" in val and "." in val.split("@")[-1]:
+                col_types[col] = "email"
+            elif val.startswith(("http://", "https://")):
+                col_types[col] = "url"
+            else:
+                try:
+                    float(val.replace(",", ".").replace(" ", ""))
+                    col_types[col] = "number"
+                except ValueError:
+                    col_types[col] = "text"
 
         payload = {
             "type": "csv",
             "data": records,
-            "columns": [str(c) for c in df.columns],
+            "columns": columns,
             "col_types": col_types,
             "detected_sep": detected_sep if detected_sep != "\t" else "\\t",
             "encoding": used_enc,
-            "total_rows": len(df),
+            "total_rows": len(records),
+            "offset": SKIP,
+            "file_total_rows": _get_cached_line_count(abs_path),
         }
         return JSONResponse(content=payload)
     except HTTPException:

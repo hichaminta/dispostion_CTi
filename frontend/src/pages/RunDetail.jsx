@@ -283,8 +283,8 @@ const RunDetail = ({ runId, onBack, onExploreSource }) => {
   const stepMap = {};
   (run.steps || []).forEach(s => { stepMap[s.step_name] = s; });
 
-  const totalIOC = (run.steps || []).reduce((a, s) => a + (s.ioc_count || 0), 0);
-  const totalCVE = (run.steps || []).reduce((a, s) => a + (s.cve_count || 0), 0);
+  const totalIOC = Math.max(0, ...(run.steps || []).map(s => s.ioc_count || 0));
+  const totalCVE = Math.max(0, ...(run.steps || []).map(s => s.cve_count || 0));
 
   // Logs filtrés selon l'étape active
   const displayedLogs = activeStep

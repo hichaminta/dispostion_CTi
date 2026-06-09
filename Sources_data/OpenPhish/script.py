@@ -75,9 +75,22 @@ def save_json_atomic(data, filepath=None):
         logging.error(f"Erreur lors de la sauvegarde JSON ({target_file}) : {e}")
 
 def fetch_openphish_feed():
-    response = requests.get(FEED_URL, timeout=30)
-    response.raise_for_status()
-    return [line.strip() for line in response.text.splitlines() if line.strip()]
+    try:
+        response = requests.get(FEED_URL, timeout=30)
+        response.raise_for_status()
+        return [line.strip() for line in response.text.splitlines() if line.strip()]
+    except requests.exceptions.RequestException as e:
+        if "raw.githubusercontent.com" in str(e) or "getaddrinfo" in str(e):
+            logging.warning("Erreur DNS sur Github detectée. Utilisation de l'IP de secours...")
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            fallback_url = "https://185.199.108.133/openphish/public_feed/refs/heads/main/feed.txt"
+            headers = {"Host": "raw.githubusercontent.com"}
+            resp = requests.get(fallback_url, headers=headers, verify=False, timeout=30)
+            resp.raise_for_status()
+            return [line.strip() for line in resp.text.splitlines() if line.strip()]
+        else:
+            raise
 
 # =========================
 # Logique de synchronisation
