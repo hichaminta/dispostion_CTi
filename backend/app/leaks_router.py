@@ -375,7 +375,6 @@ def get_leak_bulletin(intel_id: str):
     return {"content": content}
 
 @router.get("/intel/{intel_id}/bulletin/pdf")
-async def get_leak_bulletin_pdf(intel_id: str):
 def get_pdf_bulletin(intel_id: str):
     from fastapi.responses import FileResponse
     # Use the PDF generation module we just created
