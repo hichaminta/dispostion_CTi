@@ -3,7 +3,8 @@ import axios from 'axios';
 import { 
   Shield, Search, Filter, Calendar, Tag, ChevronDown, ChevronUp, 
   AlertTriangle, CheckCircle, Info, ExternalLink, Globe, Hash, Server, 
-  MapPin, Activity, Zap, Share2, Box, Code, Layers, Database, FileText
+  MapPin, Activity, Zap, Share2, Box, Code, Layers, Database, FileText,
+  Eye, Download, Trash2, X
 } from 'lucide-react';
 
 const API_BASE = `http://${window.location.hostname}:8000`;
@@ -31,10 +32,13 @@ function CorrelatedEvents() {
   const [search, setSearch] = useState('');
   const [priority, setPriority] = useState('');
   const [expandedEvent, setExpandedEvent] = useState(null);
-  const [viewMode, setViewMode] = useState('events'); // 'events' or 'stix'
+  const [viewMode, setViewMode] = useState('events'); // 'events', 'stix', 'bulletins'
   const [stixData, setStixData] = useState({ objects: [] });
   const [stixLoading, setStixLoading] = useState(false);
   const [bulletinLoading, setBulletinLoading] = useState(false);
+  const [bulletins, setBulletins] = useState([]);
+  const [bulletinsLoading, setBulletinsLoading] = useState(false);
+  const [previewPdf, setPreviewPdf] = useState(null);
 
   useEffect(() => {
     fetchEvents();
@@ -43,6 +47,8 @@ function CorrelatedEvents() {
   useEffect(() => {
     if (viewMode === 'stix') {
       fetchStix();
+    } else if (viewMode === 'bulletins') {
+      fetchBulletins();
     }
   }, [viewMode]);
 
@@ -59,12 +65,45 @@ function CorrelatedEvents() {
     }
   };
 
+  const fetchBulletins = async () => {
+    setBulletinsLoading(true);
+    try {
+      const res = await axios.get(`${API_BASE}/api/bulletins`);
+      setBulletins(res.data);
+    } catch (err) {
+      console.error("Failed to fetch bulletins", err);
+    } finally {
+      setTimeout(() => setBulletinsLoading(false), 500);
+    }
+  };
+
+  const deleteBulletin = async (filename) => {
+    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer le bulletin ${filename} ?`)) return;
+    try {
+      await axios.delete(`${API_BASE}/api/bulletins/${filename}`);
+      fetchBulletins();
+    } catch (err) {
+      console.error("Failed to delete bulletin", err);
+      alert("Erreur lors de la suppression");
+    }
+  };
+
+  const handlePreview = (filename) => {
+    setPreviewPdf(`${API_BASE}/api/bulletins/${encodeURIComponent(filename)}/view`);
+  };
+
+  const closePreview = () => {
+    setPreviewPdf(null);
+  };
+
   const generateBulletin = async () => {
     setBulletinLoading(true);
     try {
       const res = await axios.post(`${API_BASE}/api/generate-stix-bulletin`);
       if (res.data.status === "success") {
         window.open(`${API_BASE}${res.data.url}`, '_blank');
+        setViewMode('bulletins');
+        fetchBulletins();
       } else {
         alert("Erreur: " + res.data.message);
       }
@@ -127,6 +166,13 @@ function CorrelatedEvents() {
              >
                <Share2 className="w-3.5 h-3.5" />
                STIX Bundle
+             </button>
+             <button 
+               onClick={() => setViewMode('bulletins')}
+               className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${viewMode === 'bulletins' ? 'bg-red-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+             >
+               <FileText className="w-3.5 h-3.5" />
+               Bulletins
              </button>
           </div>
 
@@ -378,7 +424,7 @@ function CorrelatedEvents() {
             ))
           )}
         </div>
-      ) : (
+      ) : viewMode === 'stix' ? (
         <div className="space-y-10 animate-in slide-in-from-right duration-500 pb-20">
           {/* STIX Bundle Header Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -526,6 +572,99 @@ function CorrelatedEvents() {
                 );
               })
             )}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6 animate-in slide-in-from-right duration-500 pb-20">
+          {bulletinsLoading ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+              <div className="w-12 h-12 border-4 border-red-500/30 border-t-red-500 rounded-full animate-spin" />
+              <span className="text-slate-400 font-medium animate-pulse">Chargement des Bulletins...</span>
+            </div>
+          ) : bulletins.length === 0 ? (
+            <div className="text-center py-20 bg-slate-900/30 border border-slate-800 rounded-3xl">
+              <FileText className="w-12 h-12 text-slate-700 mx-auto mb-4" />
+              <p className="text-slate-500">Aucun bulletin de sécurité généré. Utilisez le bouton "Bulletin" pour en créer un.</p>
+            </div>
+          ) : (
+            <div className="bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+              <div className="p-6 bg-slate-900/60 border-b border-slate-800 flex items-center gap-4">
+                 <div className="p-3 bg-red-500/20 rounded-xl border border-red-500/30">
+                    <FileText className="w-6 h-6 text-red-400" />
+                 </div>
+                 <div>
+                    <h3 className="text-xl font-bold text-white">Bulletins de Sécurité Générés</h3>
+                    <p className="text-sm text-slate-400">Historique des rapports CTI PDF</p>
+                 </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-900/30 text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-800">
+                    <tr>
+                      <th className="px-6 py-4">Nom du Bulletin</th>
+                      <th className="px-6 py-4">Date de Création</th>
+                      <th className="px-6 py-4">Taille</th>
+                      <th className="px-6 py-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/50">
+                    {bulletins.map((b, i) => (
+                      <tr key={i} className="hover:bg-slate-900/30 transition-colors group">
+                        <td className="px-6 py-4">
+                           <div className="flex items-center gap-3">
+                              <FileText className="w-4 h-4 text-red-400" />
+                              <span className="text-sm font-bold text-slate-200">{b.name}</span>
+                           </div>
+                        </td>
+                        <td className="px-6 py-4 text-xs font-mono text-slate-400">
+                           {new Date(b.created_at).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 text-xs text-slate-400">
+                           {(b.size / 1024).toFixed(2)} KB
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                           <div className="flex items-center justify-end gap-2">
+                             <button onClick={() => handlePreview(b.name)} title="Prévisualiser" className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors">
+                                <Eye className="w-4 h-4" />
+                             </button>
+                             <a href={`${API_BASE}${b.url}`} download={b.name} title="Télécharger" className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors">
+                                <Download className="w-4 h-4" />
+                             </a>
+                             <button onClick={() => deleteBulletin(b.name)} title="Supprimer" className="p-2 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg transition-colors">
+                                <Trash2 className="w-4 h-4" />
+                             </button>
+                           </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PDF Preview Modal */}
+      {previewPdf && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 w-full max-w-6xl h-[90vh] rounded-2xl border border-slate-800 flex flex-col overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950">
+              <h3 className="text-white font-bold flex items-center gap-2"><FileText className="w-5 h-5 text-red-400" /> Prévisualisation du Bulletin</h3>
+              <button onClick={closePreview} className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 bg-slate-800/50 overflow-hidden relative">
+              {previewPdf === 'loading' ? (
+                <div className="flex items-center justify-center h-full text-slate-400 flex-col gap-4">
+                  <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+                  <span>Chargement du document...</span>
+                </div>
+              ) : (
+                <iframe src={`${previewPdf}#view=FitH`} className="w-full h-full border-none absolute inset-0" title="PDF Preview" allowFullScreen />
+              )}
+            </div>
           </div>
         </div>
       )}

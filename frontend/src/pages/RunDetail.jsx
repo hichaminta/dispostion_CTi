@@ -314,7 +314,7 @@ const RunDetail = ({ runId, onBack, onExploreSource }) => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {run.source_name !== "Unified Extraction" && getSourceIdByName(run.source_name) && (
+            {run.source_name !== "Pipeline Complet" && getSourceIdByName(run.source_name) && (
               <button
                 onClick={() => onExploreSource(getSourceIdByName(run.source_name))}
                 className="flex items-center gap-2 bg-brand-500/15 hover:bg-brand-500 text-brand-400 hover:text-white border border-brand-500/30 px-4 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 shadow-lg shadow-brand-500/5"

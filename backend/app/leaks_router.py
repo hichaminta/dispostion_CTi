@@ -376,23 +376,70 @@ def get_leak_bulletin(intel_id: str):
 
 @router.get("/intel/{intel_id}/bulletin/pdf")
 async def get_leak_bulletin_pdf(intel_id: str):
+def get_pdf_bulletin(intel_id: str):
+    from fastapi.responses import FileResponse
+    # Use the PDF generation module we just created
     import sys
     INTEGRATION_DIR = os.path.join(PROJECT_ROOT, "leak_data_integration")
     if INTEGRATION_DIR not in sys.path:
-        sys.path.insert(0, INTEGRATION_DIR)
+        sys.path.append(INTEGRATION_DIR)
         
-    from core.reporter import LeakReporter
+    try:
+        from core.reporter import LeakReporter
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Leak reporting module not found")
+        
     reporter = LeakReporter(INTEL_FILE)
     
-    # Generate unique filename
+    # Try generating it
     pdf_path = os.path.join(INTEGRATION_DIR, "reports", f"bulletin_{intel_id}.pdf")
     success = reporter.generate_pdf_bulletin(intel_id, pdf_path)
     
-    if not success:
+    if not success or not os.path.exists(pdf_path):
         raise HTTPException(status_code=500, detail="Failed to generate PDF bulletin")
         
-    from fastapi.responses import FileResponse
     return FileResponse(pdf_path, media_type="application/pdf", filename=f"bulletin_{intel_id}.pdf")
+
+@router.delete("/intel/{intel_id}")
+def delete_leak(intel_id: str):
+    """Deletes a leak and all its associated physical files and PDFs."""
+    if not os.path.exists(INTEL_FILE):
+        raise HTTPException(status_code=404, detail="Intel file not found")
+        
+    with open(INTEL_FILE, "r", encoding="utf-8") as f:
+        leaks = json.load(f)
+        
+    leak_index = next((i for i, leak in enumerate(leaks) if leak.get("intel_id") == intel_id), None)
+    if leak_index is None:
+        raise HTTPException(status_code=404, detail="Leak not found")
+        
+    leak = leaks[leak_index]
+    
+    # Delete extracted files physically
+    base_data = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "leaks"))
+    for file_path in leak.get("extracted_files", []):
+        abs_path = os.path.join(base_data, file_path)
+        try:
+            if os.path.exists(abs_path):
+                os.remove(abs_path)
+        except Exception as e:
+            print(f"Failed to delete file {abs_path}: {e}")
+            
+    # Delete the PDF bulletin if it exists
+    safe_id = "".join([c if c.isalnum() or c in "-_" else "_" for c in intel_id])
+    pdf_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "reports", "fuite", f"Bulletin_Fuite_{safe_id}.pdf"))
+    try:
+        if os.path.exists(pdf_path):
+            os.remove(pdf_path)
+    except Exception as e:
+        print(f"Failed to delete PDF {pdf_path}: {e}")
+        
+    # Remove from JSON
+    leaks.pop(leak_index)
+    with open(INTEL_FILE, "w", encoding="utf-8") as f:
+        json.dump(leaks, f, indent=4, ensure_ascii=False)
+        
+    return {"status": "success", "message": f"Leak {intel_id} and associated files deleted."}
 
 @router.get("/csv/view")
 def view_csv(path: str, limit: int = 50, offset: int = 0):

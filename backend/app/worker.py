@@ -44,7 +44,8 @@ def terminate_run(run_id: str):
         finally:
             if run_id in ACTIVE_PROCS:
                 del ACTIVE_PROCS[run_id]
-            return True
+        
+        return True
     return True # Return true even if no proc found, as long as we marked it failed.
 
 def _is_run_cancelled(run_id: str) -> bool:
@@ -284,10 +285,10 @@ def _count_ioc_cve(source_name: str):
 
 async def execute_pipeline_task(run_id: str, source_name: str):
     """
-    Exécute le pipeline complet pour une source (ou toutes si 'Unified Extraction').
+    Exécute le pipeline complet pour une source (ou toutes si 'Pipeline Complet').
     Étapes : Collecte → Extraction CVE/IOC → Normalisation → Intégration MISP
     """
-    is_unified = (source_name == "Unified Extraction")
+    is_unified = (source_name == "Pipeline Complet")
     ts = lambda: datetime.utcnow().strftime("%H:%M:%S")
 
     # Debug loop type
@@ -465,10 +466,14 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         await _update_step(run_id, "Export STIX", "success" if ok_stix else "failed")
 
         # ══════════════════════════════════════════════════════════════
-        # ÉTAPE 8 : Intégration MISP (IGNORÉ POUR LE MOMENT)
+        # ÉTAPE 8 : Intégration MISP
         # ══════════════════════════════════════════════════════════════
-        await _ws_log(run_id, "Intégration MISP", f"[{ts()}] ℹ Intégration MISP ignorée selon la configuration.")
-        await _update_step(run_id, "Intégration MISP", "success")
+        if _is_run_cancelled(run_id): return
+        await _update_step(run_id, "Intégration MISP", "running")
+        await _ws_log(run_id, "Intégration MISP", f"[{ts()}] ➔ STAGE 11 : Intégration MISP (API Push)")
+        misp_api_script = os.path.join(PROJECT_ROOT, "misp_integration", "misp_api_integration.py")
+        ok_misp = await _run_proc(run_id, "Intégration MISP", [sys.executable, misp_api_script], PROJECT_ROOT)
+        await _update_step(run_id, "Intégration MISP", "success" if ok_misp else "failed")
 
 
         # Terminer
@@ -489,7 +494,7 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
     """
     Exécute UNIQUEMENT une étape spécifique du pipeline.
     """
-    is_unified = (source_name == "Unified Extraction")
+    is_unified = (source_name == "Pipeline Complet")
     ts = lambda: datetime.utcnow().strftime("%H:%M:%S")
 
     try:
@@ -501,7 +506,7 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
         step_ok = True
         ioc_count = 0
         cve_count = 0
-        source_flag = ["-s", source_name] if source_name and source_name != "Unified Extraction" else []
+        source_flag = ["-s", source_name] if source_name and source_name != "Pipeline Complet" else []
 
         # Auto-initialize enrichment files if executing an enrichment step
         enrichment_steps = {
@@ -736,18 +741,11 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
             step_ok = await _run_proc(run_id, step_name, [sys.executable, norm_script] + source_flag, PROJECT_ROOT)
 
         elif step_name == "Intégration MISP":
-            await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 5 : Intégration MISP (Normalisation + API Push)")
-            misp_norm_script = os.path.join(PROJECT_ROOT, "normalisation", "misp_normalizer.py")
+            await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 5 : Intégration MISP (API Push)")
             misp_api_script = os.path.join(PROJECT_ROOT, "misp_integration", "misp_api_integration.py")
             
-            await _ws_log(run_id, step_name, f"[{ts()}] ── Phase 1 : Génération des fichiers MISP ──")
-            ok_norm = await _run_proc(run_id, step_name, [sys.executable, misp_norm_script] + source_flag, PROJECT_ROOT)
-            
-            if ok_norm:
-                await _ws_log(run_id, step_name, f"[{ts()}] ── Phase 2 : Exportation via API vers MISP ──")
-                step_ok = await _run_proc(run_id, step_name, [sys.executable, misp_api_script] + source_flag, PROJECT_ROOT)
-            else:
-                step_ok = False
+            await _ws_log(run_id, step_name, f"[{ts()}] ── Phase 1 : Exportation via API vers MISP ──")
+            step_ok = await _run_proc(run_id, step_name, [sys.executable, misp_api_script] + source_flag, PROJECT_ROOT)
 
 
         await _ws_log(run_id, step_name, f"[{ts()}] ═══ ÉTAPE {step_name.upper()} {'OK' if step_ok else 'TERMINÉE'} ═══")

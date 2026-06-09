@@ -562,15 +562,31 @@ class ThreatCorrelator:
             elif source.lower() in ['openphish', 'phishtank']:
                 brand  = self.extract_brand(attributes)
                 domain = ""
+                country = "Unknown"
                 if record.get('iocs'):
                     domain = self.get_domain_from_url(record['iocs'][0].get('value')) or ""
+                    # Extraction du country depuis l'enrichissement IOC (urlscan)
+                    ioc_enrich = record['iocs'][0].get('ioc_enrichment', {})
+                    country = ioc_enrich.get('urlscan_country') or ioc_enrich.get('country') or "Unknown"
+                
                 label    = brand if brand else (domain if domain else "Unknown")
-                group_id = f"PHISH-{label}-{date_str}"
-                event_meta = {"name": f"Phishing Campaign - {label} - {date_str}", "type": "phishing", "threat_type": "social_engineering"}
+                country  = str(country).upper()
+                
+                group_id = f"PHISH-{country}-{label}-{date_str}"
+                event_meta = {"name": f"Phishing Campaign - {country} - {label} - {date_str}", "type": "phishing", "threat_type": "social_engineering"}
 
             # 5. Infrastructure (spamhaus, cins)
             elif source.lower() in ['abuseipdb', 'spamhaus', 'cins army']:
-                country  = attributes.get('country', 'Unknown')
+                country = attributes.get('country')
+                if not country:
+                    for ioc in record.get('iocs', []):
+                        ioc_e = ioc.get('ioc_enrichment', {})
+                        country = ioc_e.get('countryCode') or ioc_e.get('country') or ioc_e.get('urlscan_country')
+                        if country:
+                            break
+                if not country:
+                    country = "Unknown"
+                country = str(country).upper()
                 group_id = f"INFRA-{source.upper().replace(' ','_')}-{country}"
                 event_meta = {"name": f"Suspicious Infrastructure - {source.title()} - {country}", "type": "suspicious", "threat_type": "infrastructure"}
 

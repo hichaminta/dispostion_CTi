@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 const API_BASE = `http://${window.location.hostname}:8000`;
 
 const SOURCES = [
-  { id: 'unified',      name: 'Unified Extraction', label: 'Toutes les sources (Unified)' },
+  { id: 'unified',      name: 'Pipeline Complet', label: 'Toutes les sources (Unified)' },
   { id: 'alienvault',   name: 'AlienVault OTX',     label: 'AlienVault OTX' },
   { id: 'cins_army',    name: 'CINS Army',          label: 'CINS Army' },
   { id: 'feodotracker', name: 'FeodoTracker',       label: 'FeodoTracker' },
@@ -34,7 +34,7 @@ export default function Planifications() {
   const [showModal, setShowModal] = useState(false);
   
   // New Schedule form state
-  const [newSource, setNewSource] = useState('Unified Extraction');
+  const [newSource, setNewSource] = useState('Pipeline Complet');
   const [newStep, setNewStep] = useState('Pipeline Complet');
   const [newInterval, setNewInterval] = useState(60);
 

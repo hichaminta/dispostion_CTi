@@ -243,32 +243,13 @@ class STIXExporter:
         return self._now_str
 
     def _stix_pattern(self, ioc_type, value):
-        import re
         t = ioc_type.lower()
-        raw = str(value)
-
-        # ── Nettoyage ip:port → garder seulement l'IP ──────────────────
-        # ex: "42.225.207.134:34110" → "42.225.207.134"
-        if t in ("ip", "ipv4"):
-            # Retirer le port si présent (format host:port)
-            ip_port_match = re.match(r'^(\d{1,3}(?:\.\d{1,3}){3}):\d+$', raw)
-            if ip_port_match:
-                raw = ip_port_match.group(1)
-
-        # ── Détection automatique si le type est ambigu ─────────────────
-        # Un "domaine" qui ressemble à une IP → forcer ipv4
-        if t in ("domain", "domaine", "hostname"):
-            if re.match(r'^\d{1,3}(?:\.\d{1,3}){3}$', raw):
-                t = "ipv4"
-
-        v = raw.replace("'", "\\'")
-
+        v = str(value).replace("'", "\\'")
         m = {
             "ip":       f"[network-traffic:dst_ref.type = 'ipv4-addr' AND network-traffic:dst_ref.value = '{v}']" if "/" in v else f"[ipv4-addr:value = '{v}']",
             "ipv4":     f"[network-traffic:dst_ref.type = 'ipv4-addr' AND network-traffic:dst_ref.value = '{v}']" if "/" in v else f"[ipv4-addr:value = '{v}']",
             "ipv6":     f"[ipv6-addr:value = '{v}']",
             "domain":   f"[domain-name:value = '{v}']",
-            "domaine":  f"[domain-name:value = '{v}']",   # alias FR
             "hostname": f"[domain-name:value = '{v}']",
             "url":      f"[url:value = '{v}']",
             "md5":      f"[file:hashes.'MD5' = '{v}']",
@@ -554,19 +535,8 @@ class STIXExporter:
         return mid, base
 
     def _make_indicator(self, ioc, event, now):
-        import re
         ioc_type = ioc.get("type","")
         value    = ioc.get("value","")
-
-        # ── Normalisation du type ────────────────────────────────────────
-        # "domaine" → "domain" (alias FR)
-        if ioc_type.lower() == "domaine":
-            ioc_type = "domain"
-        # ip:port → extraire l'IP propre pour le nom de l'indicator
-        if ioc_type.lower() in ("ip", "ipv4"):
-            ip_port_match = re.match(r'^(\d{1,3}(?:\.\d{1,3}){3}):\d+$', str(value))
-            if ip_port_match:
-                value = ip_port_match.group(1)
         priority = ioc.get("priority_score") or event.get("priority_score","LOW")
         ind_type = INDICATOR_TYPE_MAP.get(priority, "anomalous-activity")
         ts_valid = self._ts(ioc.get("first_seen") or event.get("first_seen"))

@@ -7,10 +7,88 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 
 def get_stix_id(type_name):
     return f"{type_name}--{uuid.uuid4()}"
+
+def extract_events_from_stix(stix_file_path):
+    with open(stix_file_path, "r", encoding="utf-8") as f:
+        bundle = json.load(f)
+        
+    objects_by_id = {obj["id"]: obj for obj in bundle.get("objects", [])}
+    reports = [obj for obj in bundle.get("objects", []) if obj.get("type") == "report"]
+    
+    events = []
+    for rep in reports:
+        event = {}
+        main_obj = None
+        mitre_techs = []
+        iocs = []
+        
+        for ref in rep.get("object_refs", []):
+            obj = objects_by_id.get(ref)
+            if not obj: continue
+            
+            t = obj.get("type")
+            if t in ["malware", "campaign", "vulnerability", "infrastructure"]:
+                main_obj = obj
+            elif t == "attack-pattern":
+                mitre_techs.append(obj.get("name"))
+            elif t == "indicator":
+                name_parts = obj.get("name", "").split(" - ", 1)
+                i_type = name_parts[0] if len(name_parts) > 1 else "indicator"
+                val = name_parts[1] if len(name_parts) > 1 else obj.get("name", "")
+                
+                desc = obj.get("description", "")
+                geo = "N/A"
+                vt_str = "-"
+                abuse_str = "-"
+                urlscan_str = "-"
+                for line in desc.split("\n"):
+                    if line.startswith("Country"): geo = line.split(":", 1)[1].strip()
+                    if line.startswith("VirusTotal"): vt_str = line.split(":", 1)[1].strip()
+                    if line.startswith("AbuseIPDB"): abuse_str = line.split(":", 1)[1].strip()
+                    if line.startswith("URLScan"): urlscan_str = line.split(":", 1)[1].strip()
+                
+                iocs.append({
+                    "type": i_type,
+                    "value": val,
+                    "sources": obj.get("x_ioc_sources", []),
+                    "risk_level": obj.get("x_ioc_risk_level", "low"),
+                    "enrichment": {
+                        "country": geo,
+                        "vt_str": vt_str,
+                        "abuse_str": abuse_str,
+                        "urlscan_str": urlscan_str
+                    },
+                    "stix_id": obj.get("id")
+                })
+                
+        if main_obj:
+            event["group_id"] = main_obj.get("x_soc_group_id", "EVENT")
+            event["event_name"] = main_obj.get("name", "Unknown")
+            event["priority_score"] = main_obj.get("x_soc_priority", "LOW")
+            event["threat_type"] = main_obj.get("type", "Unknown")
+            event["confidence_score"] = main_obj.get("confidence", 0)
+            event["attack_type"] = "Unknown"
+            event["first_seen"] = main_obj.get("first_seen", "")
+            event["last_seen"] = main_obj.get("last_seen", "")
+            event["soc_action"] = main_obj.get("x_soc_action", "monitor")
+        else:
+            event["group_id"] = rep.get("id")
+            event["event_name"] = rep.get("name", "Unknown")
+            event["priority_score"] = "LOW"
+            
+        event["mitre_techniques"] = mitre_techs
+        event["iocs"] = iocs
+        events.append(event)
+        
+    # Trier les événements par priorité (CRITICAL -> HIGH -> MEDIUM -> LOW)
+    priority_map = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
+    events.sort(key=lambda x: priority_map.get(x.get("priority_score", "LOW"), 0), reverse=True)
+    return events
+
 
 class CTIBulletinGenerator:
     def __init__(self, output_dir="reports/cti_bulletins"):
@@ -24,15 +102,24 @@ class CTIBulletinGenerator:
         self.styles.add(ParagraphStyle(name='HeaderRight', fontSize=10, alignment=2, textColor=colors.HexColor("#666666")))
         self.styles.add(ParagraphStyle(name='SectionTitle', fontSize=14, leading=18, spaceBefore=15, spaceAfter=10, textColor=colors.HexColor("#17365d"), fontName="Helvetica-Bold", backColor=colors.HexColor("#f2f2f2"), borderPadding=(5, 5, 5, 5)))
         self.styles.add(ParagraphStyle(name='NormalText', fontSize=10, leading=14, spaceAfter=5, textColor=colors.black))
-        self.styles.add(ParagraphStyle(name='CodeBlock', fontSize=8, leading=10, fontName="Courier", spaceAfter=10, textColor=colors.HexColor("#111111"), backColor=colors.HexColor("#f5f5f5"), borderPadding=(10, 10, 10, 10)))
 
     def header_footer(self, canvas, doc):
         canvas.saveState()
         
+        # Logo BlueSec
+        import os
+        logo_path = r"c:\Users\Hicham\Desktop\PFE\dispostion_CTi\bluesec-logo.png"
+        if os.path.exists(logo_path):
+            # preserveAspectRatio=True assure que l'image ne soit pas déformée
+            canvas.drawImage(logo_path, doc.leftMargin, A4[1] - 70, width=3*cm, height=1.5*cm, preserveAspectRatio=True, mask='auto')
+            text_x = doc.leftMargin + 3.5*cm
+        else:
+            text_x = doc.leftMargin
+
         # Header Left: BlueSec
         canvas.setFont('Helvetica-Bold', 12)
         canvas.setFillColor(colors.HexColor("#17365d"))
-        canvas.drawString(doc.leftMargin, A4[1] - 40, "BLUESEC SOC · CYBER THREAT INTELLIGENCE")
+        canvas.drawString(text_x, A4[1] - 40, "BLUESEC SOC · CYBER THREAT INTELLIGENCE")
         
         # Header Right: Confidentiel
         canvas.setFont('Helvetica-Oblique', 9)
@@ -42,264 +129,171 @@ class CTIBulletinGenerator:
         # Footer
         canvas.setFont('Helvetica', 9)
         canvas.setFillColor(colors.HexColor("#888888"))
-        canvas.drawString(doc.leftMargin, 30, f"Généré automatiquement par le CTI Pipeline BlueSec · {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}")
+        canvas.drawString(doc.leftMargin, 30, f"Généré par le CTI Pipeline BlueSec · {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}")
         canvas.drawRightString(A4[0] - doc.rightMargin, 30, f"Page {doc.page}")
         
         # Lines
         canvas.setStrokeColor(colors.HexColor("#17365d"))
         canvas.setLineWidth(1)
-        canvas.line(doc.leftMargin, A4[1] - 45, A4[0] - doc.rightMargin, A4[1] - 45)
+        canvas.line(doc.leftMargin, A4[1] - 60, A4[0] - doc.rightMargin, A4[1] - 60)
         canvas.line(doc.leftMargin, 45, A4[0] - doc.rightMargin, 45)
         
         canvas.restoreState()
 
-    def generate_pdf(self, event):
-        ref_id = f"CTI-BULL-{datetime.now().strftime('%Y')}-{str(uuid.uuid4())[:4].upper()}"
-        filename = os.path.join(self.output_dir, f"{ref_id}_{event.get('group_id', 'EVENT')}.pdf")
+    def generate_consolidated_pdf(self, stix_file_path, events):
+        date_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = os.path.join(self.output_dir, f"Bulletin_CTI_STIX_{date_str}.pdf")
         
         doc = SimpleDocTemplate(filename, pagesize=A4, rightMargin=2*cm, leftMargin=2*cm, topMargin=2.5*cm, bottomMargin=2.5*cm)
         story = []
 
         # ----------------------------------------------------
-        # HEADER INFO
+        # PAGE DE GARDE / SOMMAIRE
         # ----------------------------------------------------
-        story.append(Paragraph("Security Bulletin", self.styles['TitleStyle']))
-        story.append(Paragraph("Rapport d'analyse CTI — Export STIX 2.1", self.styles['SubtitleStyle']))
-        story.append(Paragraph(f"Date: {datetime.now().strftime('%d %B %Y — %H:%MZ')}<br/>Réf : {ref_id}<br/>STIX 2.1 Compatible", self.styles['HeaderRight']))
-        story.append(Spacer(1, 0.5*cm))
-
-        # ----------------------------------------------------
-        # 1. Résumé Exécutif
-        # ----------------------------------------------------
-        story.append(Paragraph("1. Résumé Exécutif", self.styles['SectionTitle']))
+        story.append(Paragraph("Bulletin de Sécurité CTI", self.styles['TitleStyle']))
+        story.append(Paragraph(f"Généré depuis l'export STIX : {os.path.basename(stix_file_path)}", self.styles['SubtitleStyle']))
+        story.append(Paragraph(f"Date: {datetime.now().strftime('%d %B %Y — %H:%MZ')}<br/>TLP:RED - Confidentiel", self.styles['HeaderRight']))
+        story.append(Spacer(1, 1*cm))
         
-        severity_color = colors.HexColor("#d32f2f") if event.get("priority_score") == "CRITICAL" else colors.HexColor("#f57c00")
-        
-        summary_data = [
-            ["Campagne / Événement", Paragraph(event.get("event_name", "Unknown"), self.styles['NormalText'])],
-            ["Sévérité", Paragraph(f"<font color='{severity_color.hexval()}'><b>{event.get('priority_score', 'UNKNOWN')}</b></font>", self.styles['NormalText'])],
-            ["Type de menace", event.get("threat_type", "Unknown").replace('_', ' ').title()],
-            ["Confidence", f"{event.get('confidence_score', 0)} %"],
-            ["Acteur suspecté", ", ".join(event.get("threat_actors", [])) or "Inconnu"],
-            ["Vecteur", event.get("attack_type", "Inconnu")],
-            ["Période observée", f"{event.get('first_seen', '')[:10]} → {event.get('last_seen', '')[:10]}"],
-            ["Impact SOC", event.get("soc_action", "monitor").replace('_', ' ').title()]
-        ]
-        
-        t_summary = Table(summary_data, colWidths=[5*cm, 11*cm])
-        t_summary.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (0,-1), colors.HexColor("#f2f2f2")),
-            ('TEXTCOLOR', (0,0), (0,-1), colors.HexColor("#17365d")),
-            ('FONTNAME', (0,0), (0,-1), 'Helvetica-Bold'),
+        story.append(Paragraph("Sommaire des Menaces Détectées", self.styles['SectionTitle']))
+        summary_data = [["Nom de l'Événement", "Priorité", "Action Recommandée", "IOCs"]]
+        for ev in events:
+            priority = ev.get('priority_score', 'LOW')
+            color = "#d32f2f" if priority == "CRITICAL" else ("#f57c00" if priority == "HIGH" else "#17365d")
+            summary_data.append([
+                Paragraph(ev.get('event_name', 'Unknown')[:60], self.styles['NormalText']),
+                Paragraph(f"<font color='{color}'><b>{priority}</b></font>", self.styles['NormalText']),
+                ev.get('soc_action', 'monitor').upper(),
+                str(len(ev.get('iocs', [])))
+            ])
+            
+        t_sum = Table(summary_data, colWidths=[7.5*cm, 3*cm, 4*cm, 1.5*cm])
+        t_sum.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#17365d")),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
             ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#dddddd")),
-            ('PADDING', (0,0), (-1,-1), 6),
-        ]))
-        story.append(t_summary)
-        story.append(Spacer(1, 0.5*cm))
-
-        # ----------------------------------------------------
-        # 2. Indicateurs de Compromission (IOCs)
-        # ----------------------------------------------------
-        story.append(Paragraph("2. Indicateurs de Compromission (IOCs)", self.styles['SectionTitle']))
-        
-        ioc_table_data = [["Type", "Valeur", "Source", "Sévérité", "STIX ID"]]
-        
-        # Max 15 IOCs in summary to avoid huge tables
-        stix_mapping = {}
-        for ioc in event.get("iocs", [])[:15]:
-            i_type = ioc.get("type", "unknown").upper()
-            val = ioc.get("value", "")
-            if len(val) > 30: val = val[:27] + "..."
-            
-            stix_id = get_stix_id(ioc.get("type", "indicator"))
-            stix_mapping[ioc.get("value")] = stix_id
-            
-            src = ", ".join(ioc.get("sources", []))
-            if len(src) > 15: src = src[:12] + "..."
-            
-            lvl = ioc.get("risk_level", "low").upper()
-            
-            ioc_table_data.append([i_type, val, src, lvl, stix_id.split('--')[1][:8] + "..."])
-            
-        if not event.get("iocs"):
-            ioc_table_data.append(["-", "Aucun IOC", "-", "-", "-"])
-
-        t_iocs = Table(ioc_table_data, colWidths=[2.5*cm, 5.5*cm, 3*cm, 2.5*cm, 2.5*cm])
-        t_iocs.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#17365d")),
-            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-            ('ALIGN', (1,1), (1,-1), 'LEFT'), # values aligned left
             ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#dddddd")),
             ('PADDING', (0,0), (-1,-1), 5),
         ]))
-        story.append(t_iocs)
-        story.append(Spacer(1, 0.5*cm))
+        story.append(t_sum)
+        story.append(PageBreak())
 
         # ----------------------------------------------------
-        # 3. Enrichissement & Corrélation
+        # DETAILS PAR ENREGISTREMENT
         # ----------------------------------------------------
-        story.append(Paragraph("3. Enrichissement & Corrélation", self.styles['SectionTitle']))
-        
-        enrich_data = [["IOC", "Géolocalisation / Contexte", "Score Externe", "Détections"]]
-        
-        for ioc in event.get("iocs", [])[:10]:
-            val = ioc.get("value", "")
-            if len(val) > 25: val = val[:22] + "..."
+        for i, event in enumerate(events):
+            story.append(Paragraph(f"Dossier {i+1} : {event.get('event_name', 'Unknown')}", self.styles['TitleStyle']))
             
-            e = ioc.get("enrichment", {})
-            geo = e.get("country", e.get("countryCode", "N/A"))
+            # Sévérité & Contexte
+            severity_color = colors.HexColor("#d32f2f") if event.get("priority_score") == "CRITICAL" else colors.HexColor("#f57c00")
             
-            score = "-"
-            if "abuseConfidenceScore" in e: score = f"AbuseIPDB: {e['abuseConfidenceScore']}"
-            elif "urlscan_score" in e: score = f"URLScan: {e['urlscan_score']}"
-            
-            det = f"VT: {e.get('vt_malicious_count', 0)}/{e.get('vt_total_engines', 0)}" if 'vt_malicious_count' in e else "-"
-            
-            enrich_data.append([val, geo, score, det])
-
-        if len(enrich_data) == 1:
-            enrich_data.append(["-", "Pas d'enrichissement", "-", "-"])
-
-        t_enrich = Table(enrich_data, colWidths=[5*cm, 5*cm, 3.5*cm, 2.5*cm])
-        t_enrich.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#17365d")),
-            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-            ('ALIGN', (0,1), (1,-1), 'LEFT'),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#dddddd")),
-            ('PADDING', (0,0), (-1,-1), 5),
-        ]))
-        story.append(t_enrich)
-        
-        # ----------------------------------------------------
-        # Page Break before STIX if needed, or just let it flow
-        # ----------------------------------------------------
-        story.append(Spacer(1, 0.5*cm))
-
-        # ----------------------------------------------------
-        # 4. Tactiques & Techniques MITRE ATT&CK
-        # ----------------------------------------------------
-        story.append(Paragraph("4. Tactiques & Techniques MITRE ATT&CK", self.styles['SectionTitle']))
-        
-        mitre_data = [["ID Technique", "Description / Tactic", "Observé"]]
-        for t in event.get("mitre_techniques", []):
-            mitre_data.append([t, "Lié au profil comportemental", "✓"])
-            
-        if len(mitre_data) == 1:
-            mitre_data.append(["N/A", "Aucune technique spécifiée", "✗"])
-            
-        t_mitre = Table(mitre_data, colWidths=[4*cm, 10*cm, 2*cm])
-        t_mitre.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#17365d")),
-            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-            ('ALIGN', (1,1), (1,-1), 'LEFT'),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#dddddd")),
-            ('PADDING', (0,0), (-1,-1), 5),
-        ]))
-        story.append(t_mitre)
-        story.append(Spacer(1, 0.5*cm))
-
-        # ----------------------------------------------------
-        # 5. Export STIX 2.1 — Structure du Bundle
-        # ----------------------------------------------------
-        story.append(Paragraph("5. Export STIX 2.1 — Structure du Bundle", self.styles['SectionTitle']))
-        
-        stix_bundle = {
-            "type": "bundle",
-            "id": get_stix_id("bundle"),
-            "objects": [
-                {
-                    "type": "report",
-                    "id": get_stix_id("report"),
-                    "name": event.get("event_name"),
-                    "published": datetime.now().isoformat() + "Z",
-                    "object_refs": list(stix_mapping.values())[:3] # show first 3
-                }
+            info_data = [
+                ["Sévérité", Paragraph(f"<font color='{severity_color.hexval()}'><b>{event.get('priority_score', 'UNKNOWN')}</b></font>", self.styles['NormalText'])],
+                ["Type de menace", event.get("threat_type", "Unknown").replace('_', ' ').title()],
+                ["Période observée", f"{event.get('first_seen', '')[:10]} → {event.get('last_seen', '')[:10]}"],
+                ["Techniques MITRE", Paragraph(", ".join(event.get("mitre_techniques", []))[:80], self.styles['NormalText'])]
             ]
-        }
-        stix_json = json.dumps(stix_bundle, indent=2)
-        story.append(Paragraph(stix_json.replace(" ", "&nbsp;").replace("\n", "<br/>"), self.styles['CodeBlock']))
-        
-        story.append(Paragraph("Le bundle STIX est prêt à être injecté dans MISP via l'API REST. Chaque indicateur est corrélé aux événements existants et taggé selon la politique SOC.", self.styles['NormalText']))
-        story.append(Spacer(1, 0.5*cm))
-
-        # ----------------------------------------------------
-        # 6. Recommandations SOC
-        # ----------------------------------------------------
-        story.append(Paragraph("6. Recommandations SOC", self.styles['SectionTitle']))
-        
-        reco_data = [["#", "Action", "Priorité", "Responsable"]]
-        
-        if event.get("priority_score") == "CRITICAL":
-            reco_data.append(["R1", "Bloquer les IPs/Domaines sur le pare-feu", "IMMÉDIATE", "SOC L1"])
-            reco_data.append(["R2", "Lancer un hunting rétrospectif EDR", "HAUTE", "SOC L2"])
-            reco_data.append(["R3", "Notifier l'équipe réponse à incident (CSIRT)", "HAUTE", "CISO"])
-        elif event.get("priority_score") == "HIGH":
-            reco_data.append(["R1", "Bloquer les IOCs sur les équipements de sécurité", "HAUTE", "SOC L1"])
-            reco_data.append(["R2", "Surveiller les logs pour détecter l'activité", "MOYENNE", "SOC L2"])
-        else:
-            reco_data.append(["R1", "Ajouter les IOCs aux listes de surveillance", "BASSE", "SOC L1"])
-            reco_data.append(["R2", "Enrichissement passif", "BASSE", "CTI Analyst"])
             
-        t_reco = Table(reco_data, colWidths=[1*cm, 9.5*cm, 2.5*cm, 3*cm])
-        t_reco.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#17365d")),
-            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-            ('ALIGN', (1,1), (1,-1), 'LEFT'),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#dddddd")),
-            ('PADDING', (0,0), (-1,-1), 5),
-        ]))
-        story.append(t_reco)
+            t_info = Table(info_data, colWidths=[4*cm, 12*cm])
+            t_info.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (0,-1), colors.HexColor("#f2f2f2")),
+                ('TEXTCOLOR', (0,0), (0,-1), colors.HexColor("#17365d")),
+                ('FONTNAME', (0,0), (0,-1), 'Helvetica-Bold'),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#dddddd")),
+                ('PADDING', (0,0), (-1,-1), 6),
+            ]))
+            story.append(t_info)
+            story.append(Spacer(1, 0.5*cm))
+
+            # Indicateurs de compromission
+            story.append(Paragraph("Indicateurs de Compromission (IOCs) associés", self.styles['SubtitleStyle']))
+            ioc_table_data = [["Type", "Valeur de l'IOC", "Géolocalisation", "Détections (VT/Abuse)"]]
+            
+            for ioc in event.get("iocs", [])[:25]: # Limite à 25 IOCs pour la lisibilité
+                val = ioc.get("value", "")
+                if len(val) > 40: val = val[:37] + "..."
+                
+                e = ioc.get("enrichment", {})
+                geo = e.get("country", "N/A")
+                if len(geo) > 15: geo = geo[:12] + "..."
+                
+                vt = e.get("vt_str", "-")
+                abuse = e.get("abuse_str", "-")
+                if vt != "-" and vt != "": det = f"VT: {vt}"
+                elif abuse != "-" and abuse != "": det = f"Abuse: {abuse}"
+                else: det = "-"
+                
+                if len(det) > 25: det = det[:22] + "..."
+                
+                ioc_table_data.append([ioc.get("type", "").upper(), val, geo, det])
+                
+            if not event.get("iocs"):
+                ioc_table_data.append(["-", "Aucun IOC répertorié", "-", "-"])
+                
+            t_iocs = Table(ioc_table_data, colWidths=[2.5*cm, 7*cm, 3.5*cm, 3*cm])
+            t_iocs.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#17365d")),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#dddddd")),
+                ('PADDING', (0,0), (-1,-1), 5),
+            ]))
+            story.append(t_iocs)
+            
+            # Recommandations
+            story.append(Spacer(1, 0.5*cm))
+            story.append(Paragraph("Action SOC Recommandée", self.styles['SubtitleStyle']))
+            action = event.get('soc_action', 'monitor')
+            if action == 'escalate': txt = "<b>ESCALADE IMMÉDIATE</b> : Bloquer les IOCs actifs sur les pare-feux et EDR. Lancer une réponse à incident."
+            elif action == 'investigate': txt = "<b>INVESTIGATION REQUISE</b> : Analyser les logs pour vérifier s'il y a eu des requêtes vers ces IOCs."
+            else: txt = "<b>MONITORING</b> : Ajouter ces IOCs aux listes de surveillance passives."
+            story.append(Paragraph(txt, self.styles['NormalText']))
+            
+            story.append(Spacer(1, 1.5*cm))
 
         doc.build(story, onFirstPage=self.header_footer, onLaterPages=self.header_footer)
         return filename
 
-def main():
+def main(input_file=None):
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     out_corr_dir = os.path.join(base_dir, "output_correlation")
-    
-    files = [f for f in os.listdir(out_corr_dir) if f.startswith("correlation_file_") and f.endswith(".json")]
-    if not files:
-        input_file = os.path.join(out_corr_dir, "correlated_events_soc_enriched.json")
-    else:
-        input_file = max([os.path.join(out_corr_dir, f) for f in files], key=os.path.getmtime)
-        
     output_dir = os.path.join(base_dir, "reports", "cti_bulletins")
     
-    if not os.path.exists(input_file):
-        print(f"File not found: {input_file}")
+    if not input_file:
+        files = [f for f in os.listdir(out_corr_dir) if f.startswith("stix_export_") and f.endswith(".json")]
+        if not files:
+            print("Aucun export STIX trouvé dans output_correlation.")
+            return
+        input_file = max([os.path.join(out_corr_dir, f) for f in files], key=os.path.getmtime)
+        
+    print(f"Lecture du fichier STIX : {input_file}")
+    
+    try:
+        events = extract_events_from_stix(input_file)
+        print(f"{len(events)} enregistrements extraits du bundle STIX.")
+    except Exception as e:
+        print(f"Erreur lors de l'extraction STIX: {e}")
         return
         
-    try:
-        with open(input_file, 'r', encoding='utf-8') as f:
-            events = json.load(f)
-    except Exception as e:
-        print(f"Error loading events: {e}")
+    if not events:
+        print("Aucun événement à générer.")
         return
         
     generator = CTIBulletinGenerator(output_dir=output_dir)
-    count = 0
+    print("Génération du Bulletin de Sécurité consolidé...")
     
-    for event in events:
-        if event.get("priority_score") in ["CRITICAL", "HIGH"]:
-            print(f"Generating PDF for {event.get('group_id')} ({event.get('priority_score')})...")
-            try:
-                pdf_path = generator.generate_pdf(event)
-                print(f" -> Saved to {pdf_path}")
-                count += 1
-            except Exception as e:
-                print(f" -> Error generating PDF: {e}")
-                
-    print(f"\nDone. Generated {count} PDF bulletins in {output_dir}")
+    try:
+        pdf_path = generator.generate_consolidated_pdf(input_file, events)
+        print(f"\n[SUCCÈS] Bulletin généré : {pdf_path}")
+    except Exception as e:
+        print(f"Erreur lors de la génération PDF : {e}")
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description="Générer un Bulletin CTI depuis un export STIX JSON")
+    parser.add_argument("-i", "--input", help="Fichier STIX JSON (ex: stix_export_xxx.json)")
+    args = parser.parse_args()
+    
+    main(input_file=args.input)

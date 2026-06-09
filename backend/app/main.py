@@ -77,6 +77,7 @@ def change_password(req: ChangePasswordRequest):
 
 app.mount("/data", StaticFiles(directory=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))), name="data")
 app.mount("/bulletins", StaticFiles(directory=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "bultein_de_security"))), name="bulletins")
+app.mount("/bulletins_files", StaticFiles(directory=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "reports", "cti_bulletins"))), name="bulletins_files")
 GEO_STATS_CACHE = {"data": [], "last_updated": 0}
 
 app.add_middleware(
@@ -190,7 +191,7 @@ async def create_targeted_run(run_in: schemas.RunCreate, step_name: str, backgro
         "AbuseIPDB Enrichment", "VirusTotal Enrichment", "Geolocalisation",
         "URLScan", "Enrichissement CVE", "Classification", "MITRE Mapping",
     ]
-    is_unified_enrich = (step_name == "Enrichissement" and run_in.source_name == "Unified Extraction")
+    is_unified_enrich = (step_name == "Enrichissement" and run_in.source_name == "Pipeline Complet")
     steps_to_init = ENRICHMENT_SUB_STEPS if is_unified_enrich else [step_name]
 
     run_obj = None
@@ -209,7 +210,7 @@ async def create_targeted_run(run_in: schemas.RunCreate, step_name: str, backgro
 @app.get("/stats")
 def get_stats():
     runs = db.get_runs()
-    total_ioc, total_cve = worker._count_ioc_cve("Unified Extraction")
+    total_ioc, total_cve = worker._count_ioc_cve("Pipeline Complet")
     
     durations = []
     for r in runs:
@@ -870,7 +871,7 @@ async def scheduler_job_loop(schedule_id: str):
         if job.get("next_run") and now >= job["next_run"]:
             # Trigger run
             external_id = str(uuid.uuid4())
-            source_name = job.get("source_name", "Unified Extraction")
+            source_name = job.get("source_name", "Pipeline Complet")
             step_name = job.get("step_name", "Pipeline Complet")
 
             new_run = {
@@ -1008,7 +1009,7 @@ async def manage_schedule_legacy(req: ScheduleUpdateRequest):
         sid = "legacy_global"
         if sid not in schedules_db:
             schedules_db[sid] = {
-                "id": sid, "source_name": "Unified Extraction", "step_name": "Pipeline Complet",
+                "id": sid, "source_name": "Pipeline Complet", "step_name": "Pipeline Complet",
                 "interval_minutes": req.interval_minutes or 60, "active": True, "next_run": datetime.now(), "task": None
             }
         else:
@@ -1089,16 +1090,70 @@ async def get_stix_data():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/bulletins")
+def get_bulletins():
+    bulletins_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "reports", "cti_bulletins"))
+    if not os.path.exists(bulletins_dir):
+        return []
+    
+    files = []
+    for f in os.listdir(bulletins_dir):
+        if f.endswith(".pdf"):
+            path = os.path.join(bulletins_dir, f)
+            stat = os.stat(path)
+            files.append({
+                "name": f,
+                "size": stat.st_size,
+                "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                "url": f"/bulletins_files/{f}"
+            })
+    files.sort(key=lambda x: x["created_at"], reverse=True)
+    return files
+
 @app.post("/api/generate-stix-bulletin")
 def generate_stix_bulletin():
     try:
-        from misp_integration.stix_reporter import STIXReporter
-        reporter = STIXReporter()
-        pdf_path = reporter.generate_pdf()
-        if pdf_path:
-            return {"status": "success", "file": os.path.basename(pdf_path), "url": f"/bulletins/{os.path.basename(pdf_path)}"}
-        else:
-            return {"status": "error", "message": "Échec de la génération du PDF"}
+        import subprocess
+        script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "misp_integration", "generate_cti_bulletin.py"))
+        subprocess.run([sys.executable, script_path], check=True)
+        
+        bulletins_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "reports", "cti_bulletins"))
+        pdfs = [os.path.join(bulletins_dir, f) for f in os.listdir(bulletins_dir) if f.endswith(".pdf")]
+        if not pdfs:
+            return {"status": "error", "message": "Aucun PDF généré"}
+        latest_pdf = max(pdfs, key=os.path.getmtime)
+        return {"status": "success", "file": os.path.basename(latest_pdf), "url": f"/bulletins_files/{os.path.basename(latest_pdf)}"}
     except Exception as e:
         print(f"[ERROR] Bulletin generation failed: {e}")
         return {"status": "error", "message": str(e)}
+
+@app.delete("/api/bulletins/{filename}")
+def delete_bulletin(filename: str):
+    bulletins_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "reports", "cti_bulletins"))
+    filepath = os.path.abspath(os.path.join(bulletins_dir, filename))
+    if os.path.exists(filepath) and filepath.lower().startswith(bulletins_dir.lower()):
+        os.remove(filepath)
+        return {"status": "success", "message": "Bulletin supprimé"}
+    raise HTTPException(status_code=404, detail="Bulletin introuvable")
+
+@app.get("/api/bulletins/{filename}/view")
+def view_bulletin(filename: str):
+    from fastapi.responses import FileResponse
+    bulletins_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "reports", "cti_bulletins"))
+    filepath = os.path.abspath(os.path.join(bulletins_dir, filename))
+    if os.path.exists(filepath) and filepath.lower().startswith(bulletins_dir.lower()):
+        # Force application/pdf to prevent browsers from downloading it if the OS mimetype is incorrect
+        return FileResponse(filepath, media_type="application/pdf", headers={"Content-Disposition": "inline"})
+    raise HTTPException(status_code=404, detail="Bulletin introuvable")
+
+@app.get("/api/bulletins/{filename}/base64")
+def view_bulletin_base64(filename: str):
+    import base64
+    bulletins_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "reports", "cti_bulletins"))
+    filepath = os.path.abspath(os.path.join(bulletins_dir, filename))
+    if os.path.exists(filepath) and filepath.lower().startswith(bulletins_dir.lower()):
+        with open(filepath, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("utf-8")
+        return {"filename": filename, "data": encoded}
+    raise HTTPException(status_code=404, detail="Bulletin introuvable")
+

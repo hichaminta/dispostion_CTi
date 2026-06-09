@@ -84,10 +84,10 @@ def enrich_all(source_filter=None):
     all_files = sorted([f for f in os.listdir(OUTPUT_DIR) if f.endswith("_enriched.json")])
     
     if source_filter:
-        # Special Fix: 'Unified Extraction' means process all files
+        # Special Fix: 'Pipeline Complet' means process all files
         if source_filter.lower() == "unified extraction":
             files = all_files
-            logger.info(f"### GLOBAL RUN: Unified Extraction Mode ###")
+            logger.info(f"### GLOBAL RUN: Pipeline Complet Mode ###")
         else:
             files = [f for f in all_files if source_filter in f]
             if not files:

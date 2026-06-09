@@ -150,7 +150,7 @@ def process_files(source_filter=None, skip_mapped=False):
     if source_filter:
         if source_filter.lower() == "unified extraction":
             files = all_files
-            logger.info(f"### GLOBAL RUN: Unified Extraction Mode ###")
+            logger.info(f"### GLOBAL RUN: Pipeline Complet Mode ###")
         else:
             files = [f for f in all_files if source_filter.lower() in f.lower()]
             if not files:

@@ -424,7 +424,6 @@ const Leaks = ({ onBack }) => {
       const t = l.leak_metadata?.leak_type || 'Unknown';
       counts[t] = (counts[t] || 0) + 1;
     });
-    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6);
   }, [leaks]);
 
   const handleGenerateBulletin = async () => {
@@ -435,13 +434,28 @@ const Leaks = ({ onBack }) => {
       alert("Failed to generate bulletin: " + e.message);
     }
   };
-
   const handleViewIndividualBulletin = async (intelId) => {
     try {
+      setViewingBulletin(`Chargement du bulletin pour ${intelId}...`);
       const res = await axios.get(`${API_BASE}/api/leaks/intel/${intelId}/bulletin`);
-      setViewingBulletin(res.data.content);
-    } catch (e) {
-      alert("Failed to fetch bulletin: " + e.message);
+      setViewingBulletin(res.data.bulletin);
+    } catch (err) {
+      console.error(err);
+      setViewingBulletin("Erreur lors de la génération du bulletin individuel.");
+    }
+  };
+
+  const handleDeleteLeak = async (intelId) => {
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette fuite ? Cela supprimera également tous les fichiers et données associés.")) return;
+    try {
+      const response = await fetch(`${API_BASE}/api/leaks/intel/${intelId}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Erreur lors de la suppression');
+      setLeaks(prev => prev.filter(l => l.intel_id !== intelId));
+      if (selectedLeak?.intel_id === intelId) setSelectedLeak(null);
+      alert('Fuite et fichiers associés supprimés avec succès.');
+    } catch (error) {
+      console.error(error);
+      alert('Erreur lors de la suppression de la fuite.');
     }
   };
 
@@ -1027,10 +1041,17 @@ const Leaks = ({ onBack }) => {
                   <div className="flex gap-4">
                     <button 
                       onClick={() => handleViewIndividualBulletin(selectedLeak.intel_id)}
-                      className="w-full py-4 bg-slate-900/60 border border-white/5 hover:border-brand-500/30 text-white rounded-2xl font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-2"
+                      className="flex-1 py-4 bg-slate-900/60 border border-white/5 hover:border-brand-500/30 text-white rounded-2xl font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-2"
                     >
                       <FileText className="w-4 h-4 text-brand-400" />
                       Bulletin
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteLeak(selectedLeak.intel_id)}
+                      className="flex-1 py-4 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 hover:border-red-500/40 text-red-400 rounded-2xl font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Supprimer
                     </button>
                   </div>
                 </div>

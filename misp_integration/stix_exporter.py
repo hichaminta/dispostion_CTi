@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import uuid
+import re
 from datetime import datetime, timezone
 
 # Force UTF-8 stdout on Windows to avoid cp1252 UnicodeEncodeError
@@ -244,12 +245,30 @@ class STIXExporter:
 
     def _stix_pattern(self, ioc_type, value):
         t = ioc_type.lower()
-        v = str(value).replace("'", "\\'")
+        raw = str(value)
+
+        # ── Nettoyage ip:port → garder seulement l'IP ──────────────────
+        # ex: "42.225.207.134:34110" → "42.225.207.134"
+        if t in ("ip", "ipv4"):
+            # Retirer le port si présent (format host:port)
+            ip_port_match = re.match(r'^(\d{1,3}(?:\.\d{1,3}){3}):\d+$', raw)
+            if ip_port_match:
+                raw = ip_port_match.group(1)
+
+        # ── Détection automatique si le type est ambigu ─────────────────
+        # Un "domaine" qui ressemble à une IP → forcer ipv4
+        if t in ("domain", "domaine", "hostname"):
+            if re.match(r'^\d{1,3}(?:\.\d{1,3}){3}$', raw):
+                t = "ipv4"
+
+        v = raw.replace("'", "\\'")
+
         m = {
             "ip":       f"[network-traffic:dst_ref.type = 'ipv4-addr' AND network-traffic:dst_ref.value = '{v}']" if "/" in v else f"[ipv4-addr:value = '{v}']",
             "ipv4":     f"[network-traffic:dst_ref.type = 'ipv4-addr' AND network-traffic:dst_ref.value = '{v}']" if "/" in v else f"[ipv4-addr:value = '{v}']",
             "ipv6":     f"[ipv6-addr:value = '{v}']",
             "domain":   f"[domain-name:value = '{v}']",
+            "domaine":  f"[domain-name:value = '{v}']",   # alias FR
             "hostname": f"[domain-name:value = '{v}']",
             "url":      f"[url:value = '{v}']",
             "md5":      f"[file:hashes.'MD5' = '{v}']",
@@ -274,11 +293,8 @@ class STIXExporter:
 
     def _cve_refs(self, group_id):
         """Construit les refs CVE + NVD depuis le group_id."""
-        cve_id = group_id.replace("CVE-", "", 1) if group_id.startswith("CVE-CVE-") else group_id.replace("CVE-", "", 1)
-        # Normaliser : CVE-CVE-2002-0367 -> CVE-2002-0367
-        if cve_id.startswith("CVE-"):
-            pass
-        else:
+        cve_id = group_id.replace("CVE-CVE-", "CVE-")
+        if not cve_id.startswith("CVE-"):
             cve_id = "CVE-" + cve_id
         return [
             {"source_name": "cve",  "external_id": cve_id},
@@ -472,7 +488,7 @@ class STIXExporter:
                 if galaxy_label not in base["labels"]:
                     base["labels"].append(galaxy_label)
                 # Ajouter aussi le nom exact de la famille comme label
-                base["labels"].append(f"malware-family:{cluster.lower().replace(' ', "-")}")
+                base["labels"].append(f"malware-family:{cluster.lower().replace(' ', '-')}")
             else:
                 # Fallback depuis attack_type
                 mtypes = ATTACK_TYPE_TO_MALWARE_TYPES.get(at, ["trojan"])
@@ -537,6 +553,16 @@ class STIXExporter:
     def _make_indicator(self, ioc, event, now):
         ioc_type = ioc.get("type","")
         value    = ioc.get("value","")
+
+        # ── Normalisation du type ────────────────────────────────────────
+        # "domaine" → "domain" (alias FR)
+        if ioc_type.lower() == "domaine":
+            ioc_type = "domain"
+        # ip:port → extraire l'IP propre pour le nom de l'indicator
+        if ioc_type.lower() in ("ip", "ipv4"):
+            ip_port_match = re.match(r'^(\d{1,3}(?:\.\d{1,3}){3}):\d+$', str(value))
+            if ip_port_match:
+                value = ip_port_match.group(1)
         priority = ioc.get("priority_score") or event.get("priority_score","LOW")
         ind_type = INDICATOR_TYPE_MAP.get(priority, "anomalous-activity")
         ts_valid = self._ts(ioc.get("first_seen") or event.get("first_seen"))
@@ -685,10 +711,11 @@ class STIXExporter:
             return False
 
         filename = os.path.basename(src)
+        mtime = str(os.path.getmtime(src))
         tracking_data = self._load_tracking()
 
-        if filename in tracking_data:
-            print(f"Le fichier {filename} a déjà été traité le {tracking_data[filename]}. Ignore.")
+        if tracking_data.get(filename) == mtime:
+            print(f"Le fichier {filename} n'a pas été modifié depuis son dernier export. Ignore.")
             return True
 
         with open(src, "r", encoding="utf-8") as f:
@@ -725,7 +752,7 @@ class STIXExporter:
         for t, n in sorted(types.items()):
             print(f"  {t:<22} : {n}")
             
-        tracking_data[filename] = datetime.now().isoformat()
+        tracking_data[filename] = mtime
         self._save_tracking(tracking_data)
 
         return True

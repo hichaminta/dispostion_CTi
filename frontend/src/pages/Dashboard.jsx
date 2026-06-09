@@ -187,7 +187,7 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
   };
 
   const startRun = async (source = null) => {
-    const sourceName = source ? source.name : "Unified Extraction";
+    const sourceName = source ? source.name : "Pipeline Complet";
     const sourceType = source ? source.type : "All Sources";
 
     console.log(`[FRONTEND] Starting full run for ${sourceName}...`);
@@ -238,7 +238,7 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
     try {
       const res = await axios.post(
         `${API_BASE}/runs/targeted`,
-        { source_name: 'Unified Extraction', source_type: 'All Sources' },
+        { source_name: 'Pipeline Complet', source_type: 'All Sources' },
         { params: { step_name: stepName } }
       );
       console.log(`[FRONTEND] Targeted run response for ${stepName}:`, res.data);
@@ -335,8 +335,15 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
 
   const getRunType = (run) => {
     const steps = (run.steps || []).map(s => s.step_name);
-    if (steps.includes('Int\u00e9gration MISP'))
-      return { label: 'Pipeline', color: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20' };
+    
+    // Si la liste d'étapes contient 'Collecte' et de multiples autres, ou si aucune étape n'est encore définie
+    const isFullPipeline = (steps.includes('Collecte') && steps.length > 3) || 
+                           (steps.includes('Intégration MISP') && steps.length > 5);
+
+    if (isFullPipeline || ((run.source_name === 'Pipeline Complet' || run.source_name === 'Pipeline Complete') && steps.length === 0)) {
+      return { label: 'Pipeline Complète', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' };
+    }
+
     if (steps.some(s => ['Classification', 'MITRE Mapping', 'Normalisation', 'Enrichissement CVE'].includes(s)))
       return { label: 'Enrichissement', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
     if (steps.some(s => ['AbuseIPDB Enrichment', 'VirusTotal Enrichment', 'Geolocalisation', 'URLScan', 'Fallback'].includes(s)))
@@ -347,6 +354,7 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
       return { label: 'Collecte', color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' };
     if (steps.length === 1)
       return { label: steps[0], color: 'text-slate-400 bg-slate-500/10 border-slate-500/20' };
+      
     return { label: 'Run', color: 'text-slate-400 bg-slate-500/10 border-slate-500/20' };
   };
 
@@ -824,7 +832,7 @@ const Dashboard = ({ onSelectRun, onExploreSource }) => {
                 Planification du Pipeline
               </h2>
               <p className="text-sm text-slate-400 mb-6">
-                Configurez l'exécution automatique du pipeline complet ("Unified Extraction").
+                Configurez l'exécution automatique du pipeline complet ("Pipeline Complet").
               </p>
               
               <div className="space-y-4 mb-8">
@@ -1287,12 +1295,12 @@ const SourceStatusRow = ({ source, runs, onRun, onRunPhase, isStarting, onExplor
   );
 
   // Construire un map des statuts de phase en parcourant TOUS les runs pertinents
-  // (spécifiques à la source ET runs globaux "Unified Extraction")
+  // (spécifiques à la source ET runs globaux "Pipeline Complet")
   const phaseStatusMap = {};
   const relevantRuns = runs.filter(r =>
     r.source_name.toLowerCase().includes(source.name.toLowerCase()) ||
     (source.id === 'nvd' && r.source_name === 'NVD') ||
-    r.source_name === 'Unified Extraction'
+    r.source_name === 'Pipeline Complet'
   );
 
   // Parcourir du plus ancien au plus récent pour que le plus récent écrase
@@ -1315,7 +1323,7 @@ const SourceStatusRow = ({ source, runs, onRun, onRunPhase, isStarting, onExplor
 
   // Le run actif : préférer le run spécifique, sinon le run global en cours
   const activeGlobalRun = runs.find(r =>
-    r.status_global === 'running' && r.source_name === 'Unified Extraction'
+    r.status_global === 'running' && r.source_name === 'Pipeline Complet'
   );
   const latestRun = latestSourceRun || activeGlobalRun || null;
   const isGlobalRunning = latestRun?.status_global === 'running' || !!activeGlobalRun;

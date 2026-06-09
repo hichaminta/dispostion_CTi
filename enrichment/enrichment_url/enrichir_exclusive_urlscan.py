@@ -121,7 +121,7 @@ def enrich_urlscan(source_filter=None):
 
     all_files = sorted([f for f in os.listdir(OUTPUT_DIR) if f.endswith("_enriched.json")])
     
-    # Special Fix: 'Unified Extraction' means process all files
+    # Special Fix: 'Pipeline Complet' means process all files
     if source_filter and source_filter.lower() == "unified extraction":
         files = all_files
     else:
