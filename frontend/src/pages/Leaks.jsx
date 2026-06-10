@@ -477,9 +477,6 @@ const Leaks = ({ onBack }) => {
           <div>
             <div className="flex items-center gap-3 mb-2">
               <img src={logo} alt="BlueSec" className="h-8 w-auto drop-shadow-lg" />
-              <h1 className="text-3xl font-black text-white tracking-tight uppercase">
-                Leak <span className="text-brand-500 italic">Intelligence</span>
-              </h1>
               {/* Telegram Status Badge */}
               {tgStatus.loading ? (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/60 rounded-full border border-white/5">
@@ -501,10 +498,7 @@ const Leaks = ({ onBack }) => {
                 </button>
               )}
             </div>
-            <p className="text-slate-400 text-sm font-medium flex items-center gap-2">
-              <BrainCircuit className="w-4 h-4 text-purple-400" />
-              Monitoring et Analyse IA des fuites de données Telegram
-            </p>
+
           </div>
 
           <div className="flex items-center gap-4">
@@ -932,9 +926,6 @@ const Leaks = ({ onBack }) => {
                   </div>
                   
                   <div className="flex items-center gap-3 mb-6">
-                    <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white shadow-[0_0_15px_rgba(14,165,233,0.5)]">
-                      <Zap className="w-5 h-5" />
-                    </div>
                     <h2 className="text-lg font-black text-white uppercase tracking-wider">AI Analysis</h2>
                   </div>
                   
@@ -1303,9 +1294,6 @@ const Leaks = ({ onBack }) => {
               {/* Header */}
               <div className="p-6 border-b border-white/5 flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-500/20 rounded-lg">
-                    <Globe className="w-5 h-5 text-purple-400" />
-                  </div>
                   <h3 className="text-lg font-black text-white uppercase tracking-tight">Gestion des Groupes Telegram</h3>
                 </div>
                 <button onClick={() => { setShowChannelMgr(false); setEditingChannel(null); }} className="text-slate-500 hover:text-white transition-colors">
@@ -1478,9 +1466,6 @@ const Leaks = ({ onBack }) => {
             <div className="relative w-full max-w-lg bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
               <div className="p-6 border-b border-white/5 flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-brand-500/20 rounded-lg">
-                    <Zap className="w-5 h-5 text-brand-400" />
-                  </div>
                   <h3 className="text-lg font-black text-white uppercase tracking-tight">Configuration du Scan</h3>
                 </div>
                 <button onClick={() => setShowStartConfig(false)} className="text-slate-500 hover:text-white transition-colors">

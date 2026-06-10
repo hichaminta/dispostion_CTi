@@ -274,9 +274,6 @@ const SettingsModal = ({ onClose }) => {
         {/* Header */}
         <div className="flex items-center justify-between px-8 py-5 border-b border-white/5 bg-slate-900/40">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-brand-500/20 border border-brand-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(14,165,233,0.2)]">
-              {React.createElement(currentTab.icon, { className: 'w-5 h-5 text-brand-400' })}
-            </div>
             <div>
               <h2 className="text-base font-black text-white uppercase tracking-wider">Configuration</h2>
               <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">{currentTab.subtitle}</p>
@@ -311,7 +308,6 @@ const SettingsModal = ({ onClose }) => {
                     : 'text-slate-500 border-transparent hover:text-slate-300 hover:bg-white/5'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
                 {tab.label}
               </button>
             );

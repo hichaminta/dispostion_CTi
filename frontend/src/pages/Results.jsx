@@ -670,9 +670,6 @@ const Results = ({ onBack, initialSourceId }) => {
             {/* Modal Header */}
             <header className="p-6 border-b border-white/5 flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-brand-500/10 flex items-center justify-center border border-brand-500/20 text-brand-400">
-                  <Shield size={24} />
-                </div>
                 <div>
                   <h3 className="text-xl font-black text-white uppercase tracking-tight">Intelligence Report</h3>
                   <p className="text-xs text-slate-500 font-mono">Record ID: {selectedRecord.record_id}</p>

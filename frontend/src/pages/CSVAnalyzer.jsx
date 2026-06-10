@@ -183,8 +183,7 @@ const CSVAnalyzer = ({ onBack }) => {
           <div className="mt-8 bg-slate-900/80 border border-purple-500/30 rounded-3xl p-8 backdrop-blur-xl shadow-[0_0_30px_rgba(168,85,247,0.15)] animate-in slide-in-from-bottom-4">
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 mb-8 border-b border-white/10 pb-6">
               <div>
-                <h3 className="text-2xl font-black text-white flex items-center gap-3 mb-2">
-                  <ShieldAlert className="w-6 h-6 text-purple-400" />
+                <h3 className="text-2xl font-black text-white mb-2">
                   Rapport d'Intelligence
                 </h3>
                 <p className="text-slate-400 font-mono text-sm">{file?.name}</p>

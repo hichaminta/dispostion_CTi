@@ -117,7 +117,7 @@ export default function Admin() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            <Shield className="text-sky-400" /> Administration
+            Administration
           </h1>
           <p className="text-slate-400 mt-1 text-sm">Gérez les utilisateurs et leurs rôles.</p>
         </div>
@@ -129,7 +129,7 @@ export default function Admin() {
             onClick={() => setShowForm(!showForm)}
             className="flex items-center gap-2 bg-sky-500 hover:bg-sky-400 text-white px-4 py-2 rounded-xl text-sm transition-all"
           >
-            <UserPlus className="w-4 h-4" /> Nouvel utilisateur
+            Nouvel utilisateur
           </button>
         </div>
       </div>

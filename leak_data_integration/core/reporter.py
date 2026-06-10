@@ -281,9 +281,9 @@ class LeakReporter:
                 self.set_font('helvetica', 'B', 10)
                 self.cell(60, 5, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 0, 1, 'R')
                 
-                # Logo
-                if os.path.exists(logo_path):
-                    self.image(logo_path, 15, 10, 35)
+                # Logo (Supprimé à la demande de l'utilisateur)
+                # if os.path.exists(logo_path):
+                #     self.image(logo_path, 15, 10, 35)
                 else:
                     self.set_font('helvetica', 'B', 24)
                     self.set_text_color(23, 54, 93)

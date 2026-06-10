@@ -24,15 +24,15 @@ class LeakBulletinGenerator:
     def header_footer(self, canvas, doc):
         canvas.saveState()
         
-        # Logo BlueSec
-        import os
-        logo_path = r"c:\Users\Hicham\Desktop\PFE\dispostion_CTi\bluesec-logo.png"
-        if os.path.exists(logo_path):
-            # Le coin inférieur gauche de l'image est à (x, y). On le met à A4[1] - 65 pour ne pas déborder en haut.
-            canvas.drawImage(logo_path, doc.leftMargin, A4[1] - 65, width=3*cm, height=1.5*cm, preserveAspectRatio=True, mask='auto')
-            text_x = doc.leftMargin + 3.5*cm
-        else:
-            text_x = doc.leftMargin
+        # Logo BlueSec (Supprimé à la demande de l'utilisateur)
+        # logo_path = r"c:\Users\Hicham\Desktop\PFE\dispostion_CTi\bluesec-logo.png"
+        # if os.path.exists(logo_path):
+        #     # Le coin inférieur gauche de l'image est à (x, y). On le met à A4[1] - 65 pour ne pas déborder en haut.
+        #     canvas.drawImage(logo_path, doc.leftMargin, A4[1] - 65, width=3*cm, height=1.5*cm, preserveAspectRatio=True, mask='auto')
+        #     text_x = doc.leftMargin + 3.5*cm
+        # else:
+        #     text_x = doc.leftMargin
+        text_x = doc.leftMargin
 
         # Header Left: BlueSec
         canvas.setFont('Helvetica-Bold', 12)

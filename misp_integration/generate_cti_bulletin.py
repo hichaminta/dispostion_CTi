@@ -7,7 +7,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image
 
 def get_stix_id(type_name):
     return f"{type_name}--{uuid.uuid4()}"
@@ -106,17 +106,8 @@ class CTIBulletinGenerator:
     def header_footer(self, canvas, doc):
         canvas.saveState()
         
-        # Logo BlueSec
-        import os
-        logo_path = r"c:\Users\Hicham\Desktop\PFE\dispostion_CTi\bluesec-logo.png"
-        if os.path.exists(logo_path):
-            # preserveAspectRatio=True assure que l'image ne soit pas déformée
-            canvas.drawImage(logo_path, doc.leftMargin, A4[1] - 70, width=3*cm, height=1.5*cm, preserveAspectRatio=True, mask='auto')
-            text_x = doc.leftMargin + 3.5*cm
-        else:
-            text_x = doc.leftMargin
-
         # Header Left: BlueSec
+        text_x = doc.leftMargin
         canvas.setFont('Helvetica-Bold', 12)
         canvas.setFillColor(colors.HexColor("#17365d"))
         canvas.drawString(text_x, A4[1] - 40, "BLUESEC SOC · CYBER THREAT INTELLIGENCE")
@@ -148,14 +139,36 @@ class CTIBulletinGenerator:
         story = []
 
         # ----------------------------------------------------
-        # PAGE DE GARDE / SOMMAIRE
+        # PAGE DE GARDE
         # ----------------------------------------------------
-        story.append(Paragraph("Bulletin de Sécurité CTI", self.styles['TitleStyle']))
-        story.append(Paragraph(f"Généré depuis l'export STIX : {os.path.basename(stix_file_path)}", self.styles['SubtitleStyle']))
-        story.append(Paragraph(f"Date: {datetime.now().strftime('%d %B %Y — %H:%MZ')}<br/>TLP:RED - Confidentiel", self.styles['HeaderRight']))
+        story.append(Spacer(1, 2.5*cm))
+        logo_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "bluesec-logo.png"))
+        if os.path.exists(logo_path):
+            img = Image(logo_path, width=9*cm, height=3.5*cm, kind='proportional')
+            img.hAlign = 'CENTER'
+            story.append(img)
+            story.append(Spacer(1, 2*cm))
+            
+        cover_title_style = ParagraphStyle(name='CoverTitle', fontSize=28, leading=34, alignment=1, spaceAfter=20, textColor=colors.HexColor("#17365d"), fontName="Helvetica-Bold")
+        cover_subtitle_style = ParagraphStyle(name='CoverSubtitle', fontSize=16, leading=20, alignment=1, spaceAfter=10, textColor=colors.HexColor("#333333"))
+        cover_red_style = ParagraphStyle(name='CoverRed', fontSize=16, leading=20, alignment=1, spaceAfter=10, textColor=colors.HexColor("#d32f2f"), fontName="Helvetica-Bold")
+
+        story.append(Spacer(1, 4*cm))
+        story.append(Paragraph("BULLETIN DE SÉCURITÉ CTI", cover_title_style))
+        story.append(Paragraph("Intelligence sur les menaces et indicateurs de compromission", cover_subtitle_style))
         story.append(Spacer(1, 1*cm))
+        story.append(Paragraph(f"Date de génération : {datetime.now().strftime('%d %B %Y — %H:%M UTC')}", cover_subtitle_style))
+        story.append(Spacer(1, 0.5*cm))
+        story.append(Paragraph("TLP:RED - Document Confidentiel", cover_red_style))
         
-        story.append(Paragraph("Sommaire des Menaces Détectées", self.styles['SectionTitle']))
+        story.append(PageBreak())
+
+        # ----------------------------------------------------
+        # SOMMAIRE
+        # ----------------------------------------------------
+        story.append(Paragraph("Sommaire des Menaces Détectées", self.styles['TitleStyle']))
+        story.append(Paragraph(f"Généré depuis l'export STIX : {os.path.basename(stix_file_path)}", self.styles['SubtitleStyle']))
+        story.append(Spacer(1, 0.5*cm))
         summary_data = [["Nom de l'Événement", "Priorité", "Action Recommandée", "IOCs"]]
         for ev in events:
             priority = ev.get('priority_score', 'LOW')

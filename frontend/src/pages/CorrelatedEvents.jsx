@@ -101,7 +101,7 @@ function CorrelatedEvents() {
     try {
       const res = await axios.post(`${API_BASE}/api/generate-stix-bulletin`);
       if (res.data.status === "success") {
-        window.open(`${API_BASE}${res.data.url}`, '_blank');
+        alert("Bulletin généré avec succès dans le dossier reports/cti_bulletins");
         setViewMode('bulletins');
         fetchBulletins();
       } else {
