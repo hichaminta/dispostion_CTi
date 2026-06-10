@@ -106,9 +106,9 @@ async def send_code(phone: str = None):
         # Request code
         res = await client.send_code_request(target_phone)
         AUTH_SESSIONS[target_phone] = {
-            "client": client,
             "phone_code_hash": res.phone_code_hash
         }
+        await client.disconnect()
         return {"status": "success", "phone": target_phone, "phone_code_hash": res.phone_code_hash}
     except Exception as e:
         await client.disconnect()
@@ -124,11 +124,10 @@ async def verify_code(phone: str, code: str, phone_code_hash: str):
     
     session_data = AUTH_SESSIONS.get(phone)
     if not session_data:
-        # Try to reconnect if session lost in memory
-        client = TelegramClient(SESSION_PATH, api_id, api_hash)
-        await client.connect()
-    else:
-        client = session_data["client"]
+        raise HTTPException(status_code=400, detail="No active auth session found for this phone. Please request a new code.")
+        
+    client = TelegramClient(SESSION_PATH, api_id, api_hash)
+    await client.connect()
         
     try:
         await client.sign_in(phone, code, phone_code_hash=phone_code_hash)
@@ -161,6 +160,10 @@ async def get_telegram_status():
         await client.disconnect()
         return {"connected": authorized}
     except Exception as e:
+        error_str = str(e).lower()
+        if "database is locked" in error_str:
+            # Si la base est verrouillée, c'est probablement que le collecteur tourne déjà (donc la session est valide et utilisée)
+            return {"connected": True, "reason": "database locked by another process (collector is likely running)"}
         return {"connected": False, "reason": str(e)}
 
 def _normalize_channel(ch) -> dict:
@@ -363,11 +366,10 @@ def get_purified_intel():
 @router.get("/intel/{intel_id}/bulletin")
 def get_leak_bulletin(intel_id: str):
     import sys
-    INTEGRATION_DIR = os.path.join(PROJECT_ROOT, "leak_data_integration")
-    if INTEGRATION_DIR not in sys.path:
-        sys.path.insert(0, INTEGRATION_DIR)
+    if PROJECT_ROOT not in sys.path:
+        sys.path.insert(0, PROJECT_ROOT)
         
-    from core.reporter import LeakReporter
+    from leak_data_integration.core.reporter import LeakReporter
     reporter = LeakReporter(INTEL_FILE)
     content = reporter.generate_individual_bulletin(intel_id)
     if not content:
@@ -379,18 +381,18 @@ def get_pdf_bulletin(intel_id: str):
     from fastapi.responses import FileResponse
     # Use the PDF generation module we just created
     import sys
-    INTEGRATION_DIR = os.path.join(PROJECT_ROOT, "leak_data_integration")
-    if INTEGRATION_DIR not in sys.path:
-        sys.path.append(INTEGRATION_DIR)
+    if PROJECT_ROOT not in sys.path:
+        sys.path.insert(0, PROJECT_ROOT)
         
     try:
-        from core.reporter import LeakReporter
+        from leak_data_integration.core.reporter import LeakReporter
     except ImportError:
         raise HTTPException(status_code=500, detail="Leak reporting module not found")
         
     reporter = LeakReporter(INTEL_FILE)
     
     # Try generating it
+    INTEGRATION_DIR = os.path.join(PROJECT_ROOT, "leak_data_integration")
     pdf_path = os.path.join(INTEGRATION_DIR, "reports", f"bulletin_{intel_id}.pdf")
     success = reporter.generate_pdf_bulletin(intel_id, pdf_path)
     
@@ -675,11 +677,10 @@ async def analyze_csv(path: str):
 
     # Initialize analyzer
     import sys
-    INTEGRATION_DIR = os.path.join(PROJECT_ROOT, "leak_data_integration")
-    if INTEGRATION_DIR not in sys.path:
-        sys.path.insert(0, INTEGRATION_DIR)
+    if PROJECT_ROOT not in sys.path:
+        sys.path.insert(0, PROJECT_ROOT)
 
-    from core.analyzer import LeakAnalyzer
+    from leak_data_integration.core.analyzer import LeakAnalyzer
     analyzer = LeakAnalyzer()
 
     file_name = os.path.basename(abs_path)
