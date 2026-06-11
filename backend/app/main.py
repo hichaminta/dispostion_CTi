@@ -817,41 +817,62 @@ SCHEDULES_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "
 schedules_db = {}
 # Format: { "id": { "id", "source_name", "step_name", "interval_minutes", "active", "next_run", "task" } }
 
+def _migrate_schedules_if_needed():
+    col = db.db["schedules"]
+    if col.count_documents({}) == 0:
+        if os.path.exists(SCHEDULES_FILE):
+            try:
+                with open(SCHEDULES_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if data:
+                    docs = []
+                    for sid, j in data.items():
+                        j["_id"] = sid
+                        docs.append(j)
+                    if docs:
+                        col.insert_many(docs)
+                        print(f"Migrated {len(docs)} schedules from {SCHEDULES_FILE} to MongoDB.")
+            except Exception as e:
+                print(f"Error migrating schedules: {e}")
+
 def load_schedules():
     global schedules_db
-    if os.path.exists(SCHEDULES_FILE):
-        try:
-            with open(SCHEDULES_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            for sid, j in data.items():
-                schedules_db[sid] = {
-                    "id": j["id"],
-                    "source_name": j["source_name"],
-                    "step_name": j["step_name"],
-                    "interval_minutes": j["interval_minutes"],
-                    "active": j["active"],
-                    # Au démarrage, le "next_run" est calculé à partir de maintenant + interval, comme demandé
-                    "next_run": datetime.now() + timedelta(minutes=j["interval_minutes"]) if j["active"] else None,
-                    "task": None
-                }
-        except Exception as e:
-            logger.error(f"Error loading schedules: {e}")
+    _migrate_schedules_if_needed()
+    try:
+        col = db.db["schedules"]
+        docs = col.find({})
+        for j in docs:
+            sid = j.get("id") or str(j["_id"])
+            schedules_db[sid] = {
+                "id": sid,
+                "source_name": j["source_name"],
+                "step_name": j["step_name"],
+                "interval_minutes": j["interval_minutes"],
+                "active": j["active"],
+                # Au démarrage, le "next_run" est calculé à partir de maintenant + interval, comme demandé
+                "next_run": datetime.now() + timedelta(minutes=j["interval_minutes"]) if j["active"] else None,
+                "task": None
+            }
+    except Exception as e:
+        print(f"Error loading schedules: {e}")
 
 def save_schedules():
-    data = {}
-    for sid, j in schedules_db.items():
-        data[sid] = {
-            "id": j["id"],
-            "source_name": j["source_name"],
-            "step_name": j["step_name"],
-            "interval_minutes": j["interval_minutes"],
-            "active": j["active"]
-        }
     try:
-        with open(SCHEDULES_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4)
+        col = db.db["schedules"]
+        docs = []
+        for sid, j in schedules_db.items():
+            docs.append({
+                "id": j["id"],
+                "source_name": j["source_name"],
+                "step_name": j["step_name"],
+                "interval_minutes": j["interval_minutes"],
+                "active": j["active"]
+            })
+        col.delete_many({})
+        if docs:
+            col.insert_many(docs)
     except Exception as e:
-        logger.error(f"Error saving schedules: {e}")
+        print(f"Error saving schedules: {e}")
 
 @app.on_event("startup")
 async def startup_event():

@@ -169,18 +169,17 @@ class CTIBulletinGenerator:
         story.append(Paragraph("Sommaire des Menaces Détectées", self.styles['TitleStyle']))
         story.append(Paragraph(f"Généré depuis l'export STIX : {os.path.basename(stix_file_path)}", self.styles['SubtitleStyle']))
         story.append(Spacer(1, 0.5*cm))
-        summary_data = [["Nom de l'Événement", "Priorité", "Action Recommandée", "IOCs"]]
+        summary_data = [["Nom de l'Événement", "Priorité", "IOCs"]]
         for ev in events:
             priority = ev.get('priority_score', 'LOW')
             color = "#d32f2f" if priority == "CRITICAL" else ("#f57c00" if priority == "HIGH" else "#17365d")
             summary_data.append([
                 Paragraph(ev.get('event_name', 'Unknown')[:60], self.styles['NormalText']),
                 Paragraph(f"<font color='{color}'><b>{priority}</b></font>", self.styles['NormalText']),
-                ev.get('soc_action', 'monitor').upper(),
                 str(len(ev.get('iocs', [])))
             ])
             
-        t_sum = Table(summary_data, colWidths=[7.5*cm, 3*cm, 4*cm, 1.5*cm])
+        t_sum = Table(summary_data, colWidths=[9*cm, 3.5*cm, 3.5*cm])
         t_sum.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#17365d")),
             ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),

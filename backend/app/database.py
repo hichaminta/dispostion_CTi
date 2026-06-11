@@ -2,127 +2,167 @@ import json
 import os
 from datetime import datetime
 from typing import List, Dict, Optional
+from pymongo import MongoClient
 
 DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "runs.json")
 
-class JSONDB:
-    def __init__(self, filename=DATA_FILE):
-        self.filename = filename
-        if not os.path.exists(self.filename):
-            with open(self.filename, 'w') as f:
-                json.dump([], f)
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "cti_db")
 
-    def _read(self) -> List[Dict]:
+class MongoDB:
+    def __init__(self):
         try:
-            with open(self.filename, 'r') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, FileNotFoundError):
-            return []
+            self.client = MongoClient(MONGO_URI)
+            self.db = self.client[MONGO_DB_NAME]
+            self.collection = self.db["runs"]
+            self.intel_collection = self.db["leaks_intel"]
+            self._migrate_if_needed()
+            self._migrate_intel_if_needed()
+        except Exception as e:
+            print(f"Failed to connect to MongoDB: {e}")
 
-    def _write(self, data: List[Dict]):
-        with open(self.filename, 'w') as f:
-            json.dump(data, f, indent=2, default=str)
+    def _migrate_if_needed(self):
+        # Migrate runs.json if MongoDB runs collection is empty but runs.json exists and has data
+        if self.collection.count_documents({}) == 0:
+            if os.path.exists(DATA_FILE):
+                try:
+                    with open(DATA_FILE, 'r', encoding="utf-8") as f:
+                        data = json.load(f)
+                        if data and isinstance(data, list):
+                            # Insert all runs into MongoDB
+                            for run in data:
+                                # Ensure we don't have _id conflicts if it was somehow in json
+                                if "_id" in run:
+                                    del run["_id"]
+                            self.collection.insert_many(data)
+                            print(f"Migrated {len(data)} runs from {DATA_FILE} to MongoDB.")
+                except (json.JSONDecodeError, FileNotFoundError) as e:
+                    print(f"Error during migration: {e}")
+
+    def _migrate_intel_if_needed(self):
+        INTEL_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "leak_data_integration", "results", "leaks_intel.json"))
+        if self.intel_collection.count_documents({}) == 0:
+            if os.path.exists(INTEL_FILE):
+                try:
+                    with open(INTEL_FILE, 'r', encoding="utf-8") as f:
+                        data = json.load(f)
+                        if data and isinstance(data, list):
+                            for record in data:
+                                if "_id" in record:
+                                    del record["_id"]
+                            self.intel_collection.insert_many(data)
+                            print(f"Migrated {len(data)} intelligence records from {INTEL_FILE} to MongoDB.")
+                except Exception as e:
+                    print(f"Error during intelligence migration: {e}")
 
     def get_runs(self) -> List[Dict]:
-        return self._read()
+        runs = list(self.collection.find({}))
+        for run in runs:
+            if '_id' in run:
+                run['_id'] = str(run['_id'])  # Convert ObjectId to string for JSON serialization
+        return runs
 
     def get_run(self, id: int) -> Optional[Dict]:
-        runs = self._read()
-        for run in runs:
-            if run.get('id') == id:
-                return run
-        return None
+        run = self.collection.find_one({"id": id})
+        if run and '_id' in run:
+            run['_id'] = str(run['_id'])
+        return run
 
     def get_run_by_external_id(self, run_id: str) -> Optional[Dict]:
-        runs = self._read()
-        for run in runs:
-            if run.get('run_id') == run_id:
-                return run
-        return None
+        run = self.collection.find_one({"run_id": run_id})
+        if run and '_id' in run:
+            run['_id'] = str(run['_id'])
+        return run
 
     def create_run(self, run_data: Dict) -> Dict:
-        runs = self._read()
-        new_id = len(runs) + 1
+        # Auto-increment logic for 'id'
+        max_run = self.collection.find_one({}, sort=[("id", -1)])
+        new_id = 1
+        if max_run and "id" in max_run:
+            new_id = max_run["id"] + 1
+            
         run_data['id'] = new_id
         run_data['created_at'] = datetime.utcnow().isoformat()
         run_data['updated_at'] = run_data['created_at']
         run_data['steps'] = []
-        runs.append(run_data)
-        self._write(runs)
+        
+        result = self.collection.insert_one(run_data)
+        run_data['_id'] = str(result.inserted_id)
         return run_data
 
     def update_run(self, run_id: str, run_data: Dict):
-        runs = self._read()
-        for i, run in enumerate(runs):
-            if run.get('run_id') == run_id:
-                runs[i].update(run_data)
-                runs[i]['updated_at'] = datetime.utcnow().isoformat()
-                self._write(runs)
-                return runs[i]
-        return None
+        # We need to filter out _id to avoid modification errors
+        update_data = {k: v for k, v in run_data.items() if k != '_id'}
+        update_data['updated_at'] = datetime.utcnow().isoformat()
+        updated_run = self.collection.find_one_and_update(
+            {"run_id": run_id},
+            {"$set": update_data},
+            return_document=True
+        )
+        if updated_run and '_id' in updated_run:
+            updated_run['_id'] = str(updated_run['_id'])
+        return updated_run
 
     def update_step(self, run_id: str, step_data: Dict):
-        runs = self._read()
-        for i, run in enumerate(runs):
-            if run.get('run_id') == run_id:
-                if 'steps' not in runs[i]:
-                    runs[i]['steps'] = []
+        run = self.get_run_by_external_id(run_id)
+        if not run:
+            return None
 
-                found = False
-                for j, step in enumerate(runs[i]['steps']):
-                    if step['step_name'] == step_data['step_name']:
-                        # Preserve existing logs when updating step
-                        existing_logs = runs[i]['steps'][j].get('logs', [])
-                        runs[i]['steps'][j].update(step_data)
-                        if 'logs' not in step_data:
-                            runs[i]['steps'][j]['logs'] = existing_logs
-                        found = True
-                        break
+        steps = run.get('steps', [])
+        found = False
+        for j, step in enumerate(steps):
+            if step['step_name'] == step_data['step_name']:
+                existing_logs = steps[j].get('logs', [])
+                steps[j].update(step_data)
+                if 'logs' not in step_data:
+                    steps[j]['logs'] = existing_logs
+                found = True
+                break
+        
+        if not found:
+            if 'logs' not in step_data:
+                step_data['logs'] = []
+            steps.append(step_data)
 
-                if not found:
-                    if 'logs' not in step_data:
-                        step_data['logs'] = []
-                    runs[i]['steps'].append(step_data)
-
-                runs[i]['updated_at'] = datetime.utcnow().isoformat()
-                self._write(runs)
-                return runs[i]
-        return None
+        updated_run = self.collection.find_one_and_update(
+            {"run_id": run_id},
+            {"$set": {"steps": steps, "updated_at": datetime.utcnow().isoformat()}},
+            return_document=True
+        )
+        if updated_run and '_id' in updated_run:
+            updated_run['_id'] = str(updated_run['_id'])
+        return updated_run
 
     def append_log(self, run_id: str, step_name: str, line: str):
-        """Append a single log line to the specified step's logs list."""
-        runs = self._read()
-        for i, run in enumerate(runs):
-            if run.get('run_id') == run_id:
-                if 'steps' not in runs[i]:
-                    runs[i]['steps'] = []
+        run = self.get_run_by_external_id(run_id)
+        if not run:
+            return None
 
-                # Find or create the step
-                found = False
-                for j, step in enumerate(runs[i]['steps']):
-                    if step['step_name'] == step_name:
-                        if not isinstance(runs[i]['steps'][j].get('logs'), list):
-                            runs[i]['steps'][j]['logs'] = []
-                        runs[i]['steps'][j]['logs'].append(line)
-                        found = True
-                        break
+        steps = run.get('steps', [])
+        found = False
+        for j, step in enumerate(steps):
+            if step['step_name'] == step_name:
+                if not isinstance(steps[j].get('logs'), list):
+                    steps[j]['logs'] = []
+                steps[j]['logs'].append(line)
+                found = True
+                break
+        
+        if not found:
+            steps.append({
+                'step_name': step_name,
+                'status': 'running',
+                'logs': [line],
+                'ioc_count': 0,
+                'cve_count': 0,
+            })
 
-                if not found:
-                    runs[i]['steps'].append({
-                        'step_name': step_name,
-                        'status': 'running',
-                        'logs': [line],
-                        'ioc_count': 0,
-                        'cve_count': 0,
-                    })
-
-                runs[i]['updated_at'] = datetime.utcnow().isoformat()
-                self._write(runs)
-                return
-        return None
+        self.collection.update_one(
+            {"run_id": run_id},
+            {"$set": {"steps": steps, "updated_at": datetime.utcnow().isoformat()}}
+        )
 
     def get_logs(self, run_id: str, step_name: Optional[str] = None) -> List[str]:
-        """Get all logs for a run, optionally filtered by step name."""
         run = self.get_run_by_external_id(run_id)
         if not run:
             return []
@@ -137,16 +177,29 @@ class JSONDB:
         return all_logs
 
     def delete_run(self, run_id: int) -> bool:
-        """Delete a single run by its internal integer id. Returns True if found and deleted."""
-        runs = self._read()
-        new_runs = [r for r in runs if r.get('id') != run_id]
-        if len(new_runs) == len(runs):
-            return False
-        self._write(new_runs)
-        return True
+        result = self.collection.delete_one({"id": run_id})
+        return result.deleted_count > 0
 
     def clear_runs(self):
-        """Delete all runs and reset the file."""
-        self._write([])
+        self.collection.delete_many({})
 
-db = JSONDB()
+    def get_all_intel(self) -> List[Dict]:
+        intel = list(self.intel_collection.find({}))
+        for record in intel:
+            if '_id' in record:
+                record['_id'] = str(record['_id'])
+        return intel
+
+    def save_or_update_intel(self, intel_id: str, data: Dict):
+        update_data = {k: v for k, v in data.items() if k != '_id'}
+        self.intel_collection.update_one(
+            {"intel_id": intel_id},
+            {"$set": update_data},
+            upsert=True
+        )
+
+    def delete_intel(self, intel_id: str) -> bool:
+        result = self.intel_collection.delete_one({"intel_id": intel_id})
+        return result.deleted_count > 0
+
+db = MongoDB()

@@ -11,7 +11,6 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 from core.collector import TelegramCollector
-from core.correlator import DailyCorrelator
 
 async def main():
     import argparse
@@ -45,18 +44,6 @@ async def main():
         print(f"\n[ERROR] {e}")
         traceback.print_exc()
 
-    print("\n====================================================")
-    print("   STARTING LLM CORRELATION AND INTELLIGENCE       ")
-    print("====================================================")
-    
-    correlator = DailyCorrelator(INTEL_DIR)
-    try:
-        await correlator.correlate_day()
-    except Exception as e:
-        import traceback
-        print(f"\n[ERROR] during correlation: {e}")
-        traceback.print_exc()
-        
     print("\n[+] Intelligence Pipeline Completed Successfully.")
 
 if __name__ == "__main__":

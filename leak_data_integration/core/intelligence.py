@@ -6,10 +6,25 @@ from datetime import datetime
 logger = logging.getLogger("IntelligenceAgent")
 
 class IntelligenceAgent:
-    def __init__(self, base_dir):
+    def __init__(self, base_dir, mongo_uri=None, mongo_db="cti_database", mongo_collection="leaks_intel"):
         self.results_dir = os.path.join(base_dir, "results")
         os.makedirs(self.results_dir, exist_ok=True)
         self.intel_file = os.path.join(self.results_dir, "leaks_intel.json")
+        
+        self.mongo_uri = mongo_uri
+        self.mongo_db = mongo_db
+        self.mongo_collection = mongo_collection
+        self.mongo_client = None
+        
+        if self.mongo_uri:
+            try:
+                from pymongo import MongoClient
+                self.mongo_client = MongoClient(self.mongo_uri)
+                logger.info(f"Connected to MongoDB at {self.mongo_uri}")
+            except ImportError:
+                logger.error("pymongo is not installed. Cannot connect to MongoDB.")
+            except Exception as e:
+                logger.error(f"Failed to connect to MongoDB: {e}")
 
     def save_intel(self, analysis_data, metadata, channel_name, leak_date=None):
         """Saves a purified leak record without the raw chat message."""
@@ -95,6 +110,19 @@ class IntelligenceAgent:
     def _write_intel(self, data):
         with open(self.intel_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
+            
+        if getattr(self, 'mongo_client', None):
+            try:
+                db = self.mongo_client[self.mongo_db]
+                collection = db[self.mongo_collection]
+                for record in data:
+                    collection.update_one(
+                        {"intel_id": record.get("intel_id")},
+                        {"$set": record},
+                        upsert=True
+                    )
+            except Exception as e:
+                logger.error(f"Error saving to MongoDB: {e}")
 
     async def process_daily_leaks(self, leaks_file_path, analyzer, channel_name="Jabaroot"):
         """Reads a day's leaks.json, sends the full list to LLM for perfect correlation, and saves the final incidents."""

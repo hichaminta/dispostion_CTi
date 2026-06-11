@@ -37,6 +37,7 @@ export default function Planifications() {
   const [newSource, setNewSource] = useState('Pipeline Complet');
   const [newStep, setNewStep] = useState('Pipeline Complet');
   const [newInterval, setNewInterval] = useState(60);
+  const [isCreating, setIsCreating] = useState(false);
 
   const fetchSchedules = async () => {
     try {
@@ -56,17 +57,21 @@ export default function Planifications() {
   }, []);
 
   const handleCreate = async () => {
+    setIsCreating(true);
     try {
-      await axios.post(`${API_BASE}/api/schedules`, {
+      const resp = await axios.post(`${API_BASE}/api/schedules`, {
         source_name: newSource,
         step_name: newStep,
         interval_minutes: Number(newInterval)
       });
+      console.log("Create response:", resp.data);
       setShowModal(false);
       fetchSchedules();
     } catch (e) {
       console.error("Error creating schedule:", e);
-      alert("Erreur lors de la création de la planification.");
+      alert(`Erreur lors de la création de la planification: ${e.message}`);
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -241,9 +246,10 @@ export default function Planifications() {
                 </button>
                 <button 
                   onClick={handleCreate}
-                  className="flex-1 py-3 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl shadow-lg transition-colors"
+                  disabled={isCreating}
+                  className="flex-1 py-3 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  Créer
+                  {isCreating ? <Loader2 className="w-5 h-5 animate-spin" /> : "Créer"}
                 </button>
               </div>
             </div>

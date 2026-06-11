@@ -141,11 +141,9 @@ class PriorityScorer:
             # Confiance source : 40%
             score += (base_conf / 100.0) * 40.0
             
-            # VirusTotal : 40%
-            if vt >= 50: score += 40
-            elif vt >= 10: score += 30
-            elif vt >= 5: score += 20
-            elif vt >= 1: score += 10
+            # VirusTotal : 40% (calcul progressif basé sur 50 moteurs)
+            if vt > 0:
+                score += 20.0 + min(20.0, ((vt - 1) / 49.0) * 20.0)
             
             # MalwareBazaar : 20%
             if dl >= 500: score += 20
@@ -158,10 +156,9 @@ class PriorityScorer:
             # Confiance source : 30%
             score += (base_conf / 100.0) * 30.0
             
-            # VirusTotal : 30%
-            if vt >= 50: score += 30
-            elif vt >= 10: score += 20
-            elif vt >= 1: score += 10
+            # VirusTotal : 30% (calcul progressif basé sur 50 moteurs)
+            if vt > 0:
+                score += 15.0 + min(15.0, ((vt - 1) / 49.0) * 15.0)
             
             # AbuseIPDB : 30%
             score += (abuse / 100.0) * 30.0
@@ -175,10 +172,9 @@ class PriorityScorer:
             # Confiance source : 30%
             score += (base_conf / 100.0) * 30.0
             
-            # VirusTotal : 30%
-            if vt >= 50: score += 30
-            elif vt >= 10: score += 20
-            elif vt >= 1: score += 10
+            # VirusTotal : 30% (calcul progressif basé sur 50 moteurs)
+            if vt > 0:
+                score += 15.0 + min(15.0, ((vt - 1) / 49.0) * 15.0)
             
             # URLScan : 30%
             urlscan_score = 0
@@ -196,8 +192,9 @@ class PriorityScorer:
         # Fallback pour autres types
         else:
             score += (base_conf / 100.0) * 50.0
-            if vt >= 10: score += 50
-            elif vt >= 1: score += 25
+            # VirusTotal : 50% (calcul progressif basé sur 50 moteurs)
+            if vt > 0:
+                score += 25.0 + min(25.0, ((vt - 1) / 49.0) * 25.0)
 
         # Pénalité stricte pour faux positifs (ex: URLs Malpedia)
         vt_harmless = float(e.get("vt_harmless_count", e.get("harmless_count", 0)) or 0)

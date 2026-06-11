@@ -284,11 +284,11 @@ class LeakReporter:
                 # Logo (Supprimé à la demande de l'utilisateur)
                 # if os.path.exists(logo_path):
                 #     self.image(logo_path, 15, 10, 35)
-                else:
-                    self.set_font('helvetica', 'B', 24)
-                    self.set_text_color(23, 54, 93)
-                    self.set_xy(15, 10)
-                    self.cell(40, 10, 'BlueSec', 0, 0, 'L')
+                
+                self.set_font('helvetica', 'B', 24)
+                self.set_text_color(23, 54, 93)
+                self.set_xy(15, 10)
+                self.cell(40, 10, 'BlueSec', 0, 0, 'L')
                 
                 self.ln(20)
 

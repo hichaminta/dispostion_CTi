@@ -53,7 +53,7 @@ class BaseExtractor:
             "sinkhole.ch", "abuse.ch", "shadowserver.org",
             "phishtank.com", "abuseipdb.com", "alienvault.com",
             "pulsedive.com", "openphish.com", "spamhaus.org", "cinsarmy.com",
-            "nist.gov", "filebase.com", "dropbox.com",
+            "nist.gov", "filebase.com", "dropbox.com", "fraunhofer.de",
             "localhost", "example.com", "127.0.0.1"
         }
 
@@ -457,8 +457,14 @@ class BaseExtractor:
         return attrs
 
     def process_item(self, source_name, item):
+        # Create a copy to remove fields that shouldn't be parsed for IOCs
+        item_for_extraction = item.copy() if isinstance(item, dict) else item
+        if isinstance(item_for_extraction, dict):
+            for field in ['reference', 'references', 'malware_malpedia', 'urlscan_report_url', 'link', 'source_url', 'url_haus_reference', 'threatfox_reference']:
+                item_for_extraction.pop(field, None)
+                
         # Convert item to a string representation for extraction purposes only
-        temp_text = json.dumps(item, ensure_ascii=False)
+        temp_text = json.dumps(item_for_extraction, ensure_ascii=False)
         extracted = self.extract_from_text(temp_text)
         
         # Ensure structured fields are caught if regex missed them (e.g. compressed IPv6)

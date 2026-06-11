@@ -6,3 +6,4 @@ python-multipart
 websockets
 python-dotenv
 python-keycloak
+pymongo
