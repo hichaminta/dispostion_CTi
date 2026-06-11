@@ -33,7 +33,7 @@ class LeakAnalyzer:
             logger.info(f"Using Ollama AI Provider ({self.ollama_model})")
         elif self.provider == "openrouter":
             self.openrouter_key = os.getenv("OPENROUTER_API_KEY")
-            self.openrouter_model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
+            self.openrouter_model = os.getenv("OPENROUTER_MODEL", "google/gemini-3.5-flash")
             if self.openrouter_key:
                 from openai import OpenAI
                 self.client = OpenAI(
@@ -101,6 +101,7 @@ class LeakAnalyzer:
                     response = self.client.chat.completions.create(
                         model=self.openrouter_model,
                         messages=[{"role": "user", "content": prompt}],
+                        max_tokens=1024,
                         response_format={ "type": "json_object" } if "JSON" in prompt else None
                     )
                     return response.choices[0].message.content
@@ -193,17 +194,30 @@ class LeakAnalyzer:
 
     def _parse_ai_json(self, text):
         try:
-            # Clean text from markdown blocks if present
-            clean_text = re.sub(r'```json\s*|\s*```', '', text).strip()
+            clean_text = text.strip()
+            # Try to find JSON block if markdown is used
+            json_match = re.search(r'```(?:json)?\s*(.*?)\s*```', clean_text, re.DOTALL | re.IGNORECASE)
+            if json_match:
+                clean_text = json_match.group(1).strip()
             
-            # If there's still non-json text around, try to extract just the {...}
-            match = re.search(r'\{.*\}', clean_text, re.DOTALL)
-            if match:
-                clean_text = match.group(0)
+            # Find the first { or [ and the last } or ]
+            start_idx = -1
+            end_idx = -1
+            for i, char in enumerate(clean_text):
+                if char in ('{', '['):
+                    start_idx = i
+                    break
+            for i in range(len(clean_text)-1, -1, -1):
+                if clean_text[i] in ('}', ']'):
+                    end_idx = i
+                    break
+            
+            if start_idx != -1 and end_idx != -1 and end_idx >= start_idx:
+                clean_text = clean_text[start_idx:end_idx+1]
                 
             return json.loads(clean_text)
         except Exception as e:
-            logger.debug(f"JSON Parse failed: {e}")
+            logger.debug(f"JSON Parse failed: {e}\nText was: {text[:200]}...")
             return None
 
     def _max_severity(self, s1, s2):
