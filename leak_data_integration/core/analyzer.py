@@ -44,6 +44,19 @@ class LeakAnalyzer:
             else:
                 self.client = None
                 logger.warning("OpenRouter API Key missing.")
+        elif self.provider == "nebius":
+            self.nebius_key = os.getenv("NEBIUS_API_KEY")
+            self.nebius_model = os.getenv("NEBIUS_MODEL", "meta-llama/Llama-3.3-70B-Instruct")
+            if self.nebius_key:
+                from openai import OpenAI
+                self.client = OpenAI(
+                    base_url="https://api.studio.nebius.ai/v1/",
+                    api_key=self.nebius_key,
+                )
+                logger.info(f"Using Nebius AI Provider ({self.nebius_model})")
+            else:
+                self.client = None
+                logger.warning("Nebius API Key missing.")
         else:
             self.client = None
             logger.warning(f"AI Provider {self.provider} not fully configured. Falling back to Regex.")
@@ -100,6 +113,14 @@ class LeakAnalyzer:
                 elif self.provider == "openrouter" and self.client:
                     response = self.client.chat.completions.create(
                         model=self.openrouter_model,
+                        messages=[{"role": "user", "content": prompt}],
+                        max_tokens=1024,
+                        response_format={ "type": "json_object" } if "JSON" in prompt else None
+                    )
+                    return response.choices[0].message.content
+                elif self.provider == "nebius" and self.client:
+                    response = self.client.chat.completions.create(
+                        model=self.nebius_model,
                         messages=[{"role": "user", "content": prompt}],
                         max_tokens=1024,
                         response_format={ "type": "json_object" } if "JSON" in prompt else None

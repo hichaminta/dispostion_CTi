@@ -328,17 +328,12 @@ const Leaks = ({ onBack }) => {
 
   const handleStartMonitoring = async (config = null) => {
     try {
-      const params = new URLSearchParams();
-      if (config) {
-        if (config.channels && config.channels.length > 0) {
-          config.channels.forEach(c => params.append('channels', typeof c === 'object' ? c.url : c));
-        }
-        if (config.startDate) {
-          params.append('start_date', config.startDate);
-        }
-      }
+      const payload = {
+        channels: config?.channels?.map(c => typeof c === 'object' ? c.url : c) || [],
+        start_date: config?.startDate || null
+      };
       
-      const res = await axios.post(`${API_BASE}/api/leaks/start?${params.toString()}`);
+      const res = await axios.post(`${API_BASE}/api/leaks/start`, payload);
       setActiveRunId(res.data.run_id);
       setShowStartConfig(false);
       alert("Monitoring started! Check the Live Activity panel below.");

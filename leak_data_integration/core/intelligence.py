@@ -32,8 +32,10 @@ class IntelligenceAgent:
             logger.info(f"Skipping saving leak {metadata.get('id')} because it has no extracted file (user requirement).")
             return None
 
+        targets = analysis_data.get('targets') or ['Unknown']
+        target_prefix = targets[0][:3].upper() if targets and targets[0] else 'UNK'
         purified_record = {
-            "intel_id": f"INTEL-{datetime.now().strftime('%Y%m%d')}-{analysis_data.get('targets', ['Unknown'])[0][:3].upper()}-{metadata.get('id')}",
+            "intel_id": f"INTEL-{datetime.now().strftime('%Y%m%d')}-{target_prefix}-{metadata.get('id')}",
             "timestamp": datetime.now().isoformat(),
             "leak_date": leak_date,
             "detected_dates": [leak_date],

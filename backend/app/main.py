@@ -636,12 +636,14 @@ def get_ai_settings():
         "gemini_api_key": "",
         "openai_api_key": "",
         "openrouter_api_key": "",
+        "nebius_api_key": "",
         "openrouter_model": os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001"),
+        "nebius_model": os.getenv("NEBIUS_MODEL", "meta-llama/Llama-3.3-70B-Instruct"),
         "ollama_url": os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate"),
         "ollama_model": os.getenv("OLLAMA_MODEL", "qwen2.5-coder:1.5b"),
     }
     # Mask keys: show only last 4 chars
-    for key_name, env_var in [("gemini_api_key","GEMINI_API_KEY"),("openai_api_key","OPENAI_API_KEY"),("openrouter_api_key","OPENROUTER_API_KEY")]:
+    for key_name, env_var in [("gemini_api_key","GEMINI_API_KEY"),("openai_api_key","OPENAI_API_KEY"),("openrouter_api_key","OPENROUTER_API_KEY"),("nebius_api_key","NEBIUS_API_KEY")]:
         val = os.getenv(env_var, "")
         config[key_name] = ("*" * (len(val) - 4) + val[-4:]) if len(val) > 4 else ("*" * len(val))
     return config
@@ -669,6 +671,7 @@ async def save_ai_settings(body: dict):
     mapping = {
         "provider": "AI_PROVIDER",
         "openrouter_model": "OPENROUTER_MODEL",
+        "nebius_model": "NEBIUS_MODEL",
         "ollama_url": "OLLAMA_URL",
         "ollama_model": "OLLAMA_MODEL",
     }
@@ -676,6 +679,7 @@ async def save_ai_settings(body: dict):
         "gemini_api_key": "GEMINI_API_KEY",
         "openai_api_key": "OPENAI_API_KEY",
         "openrouter_api_key": "OPENROUTER_API_KEY",
+        "nebius_api_key": "NEBIUS_API_KEY",
     }
 
     for field, env_var in mapping.items():

@@ -1,8 +1,8 @@
 nlp:
   language_support:
-    - en
-    - fr
-    - ar
+  - en
+  - fr
+  - ar
   min_confidence: 60
 storage:
   base_path: ../data/leaks
@@ -10,29 +10,36 @@ storage:
 telegram:
   backfill_days: 10
   channels:
-    - category: Hacktiviste
-      country: Algérie
-      description:
-        Groupe hacktiviste algérien ciblant les institutions marocaines via
-        des campagnes de leak massives sur Telegram.
-      language: AR/FR
-      member_count: 0
-      name: Jabaroot DZ
-      risk_level: high
-      url: https://t.me/jabaroot_1
-    - category: ""
-      country: ""
-      description: ""
-      language: ""
-      member_count: 0
-      name: ""
-      risk_level: unknown
-      url: https://t.me/+Lv3LYdpVyJc5ZTM0
-    - category: ""
-      country: ""
-      description: ""
-      language: ""
-      member_count: 3502
-      name: VOLT CRACKS ,
-      risk_level: unknown
-      url: https://t.me/+0oMGVE6t9g45MzBk#
+  - category: Hacktiviste
+    country: Algérie
+    description: Groupe hacktiviste algérien ciblant les institutions marocaines via
+      des campagnes de leak massives sur Telegram.
+    language: AR/FR
+    member_count: 0
+    name: Jabaroot DZ
+    risk_level: high
+    url: https://t.me/jabaroot_1
+  - category: ''
+    country: ''
+    description: ''
+    language: ''
+    member_count: 0
+    name: ''
+    risk_level: unknown
+    url: https://t.me/+Lv3LYdpVyJc5ZTM0
+  - category: ''
+    country: ''
+    description: ''
+    language: ''
+    member_count: 3502
+    name: VOLT CRACKS ,
+    risk_level: unknown
+    url: https://t.me/+0oMGVE6t9g45MzBk#
+  - category: ''
+    country: ''
+    description: ''
+    language: ''
+    member_count: 0
+    name: TEST
+    risk_level: unknown
+    url: https://t.me/+UTPNQ7gjYaUwY2Vk

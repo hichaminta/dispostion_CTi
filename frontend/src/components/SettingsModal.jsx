@@ -12,6 +12,7 @@ const PROVIDERS = [
   { id: 'gemini',     name: 'Google Gemini', description: 'Gemini 1.5 Flash — Gratuit', color: 'from-blue-500/20 to-indigo-500/10 border-blue-500/30', activeColor: 'from-blue-500/30 to-indigo-500/20 border-blue-400/60 shadow-[0_0_20px_rgba(59,130,246,0.15)]', dot: 'bg-blue-400',   icon: '✦' },
   { id: 'openai',     name: 'OpenAI',         description: 'GPT-4o-mini — Précis',       color: 'from-emerald-500/20 to-teal-500/10 border-emerald-500/30', activeColor: 'from-emerald-500/30 to-teal-500/20 border-emerald-400/60 shadow-[0_0_20px_rgba(16,185,129,0.15)]', dot: 'bg-emerald-400', icon: '⬡' },
   { id: 'openrouter', name: 'OpenRouter',     description: 'Multi-modèle + Free tier',  color: 'from-violet-500/20 to-purple-500/10 border-violet-500/30', activeColor: 'from-violet-500/30 to-purple-500/20 border-violet-400/60 shadow-[0_0_20px_rgba(139,92,246,0.15)]', dot: 'bg-violet-400', icon: '◈' },
+  { id: 'nebius',     name: 'Nebius AI',      description: 'Llama 3.3 70B & plus',       color: 'from-cyan-500/20 to-sky-500/10 border-cyan-500/30', activeColor: 'from-cyan-500/30 to-sky-500/20 border-cyan-400/60 shadow-[0_0_20px_rgba(6,182,212,0.15)]', dot: 'bg-cyan-400', icon: '◉' },
   { id: 'ollama',     name: 'Ollama',         description: 'Local — Privé & Offline',   color: 'from-orange-500/20 to-amber-500/10 border-orange-500/30', activeColor: 'from-orange-500/30 to-amber-500/20 border-orange-400/60 shadow-[0_0_20px_rgba(249,115,22,0.15)]', dot: 'bg-orange-400', icon: '⬢' },
 ];
 
@@ -410,6 +411,25 @@ const SettingsModal = ({ onClose }) => {
                           onChange={e => setConfig(c => ({ ...c, openrouter_model: e.target.value }))}
                           placeholder="ou entrez un modèle personnalisé: provider/model-name"
                           className="w-full mt-2 bg-slate-900/60 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-brand-500/40 transition-all"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {config.provider === 'nebius' && (
+                    <div className="space-y-4">
+                      <SecretInput label="Nebius API Key" value={config.nebius_api_key} onChange={v => setConfig(c => ({ ...c, nebius_api_key: v }))} placeholder="v1.••••••••••••••••••••••••••••••" />
+
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-2">
+                          <Sparkles className="w-3 h-3 text-cyan-400" /> Modèle Nebius
+                        </label>
+                        <input
+                          type="text"
+                          value={config.nebius_model}
+                          onChange={e => setConfig(c => ({ ...c, nebius_model: e.target.value }))}
+                          placeholder="meta-llama/Llama-3.3-70B-Instruct"
+                          className="w-full bg-slate-900/80 border border-slate-700/60 text-white rounded-xl px-4 py-3 text-xs font-mono focus:outline-none focus:border-brand-500/60 transition-all"
                         />
                       </div>
                     </div>

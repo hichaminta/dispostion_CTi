@@ -49,8 +49,15 @@ INTEL_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..",
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SESSION_PATH = os.path.join(PROJECT_ROOT, "telegram_leak_session")
 
+from pydantic import BaseModel
+
+class LeakStartRequest(BaseModel):
+    channels: List[str] = None
+    start_date: str = None
+
 @router.post("/start")
-async def start_leak_collection(background_tasks: BackgroundTasks, channels: List[str] = None, start_date: str = None):
+async def start_leak_collection(background_tasks: BackgroundTasks, req: LeakStartRequest = None):
+    req = req or LeakStartRequest()
     external_id = str(uuid.uuid4())
     new_run = {
         "run_id": external_id,
@@ -69,7 +76,7 @@ async def start_leak_collection(background_tasks: BackgroundTasks, channels: Lis
         "logs": [],
     })
     
-    background_tasks.add_task(worker.execute_leak_collection_task, external_id, channels, start_date)
+    background_tasks.add_task(worker.execute_leak_collection_task, external_id, req.channels, req.start_date)
     return {"status": "success", "run_id": external_id}
 
 # Global client store for auth (temporary)
