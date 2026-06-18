@@ -1,3 +1,8 @@
+import sys
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
 import os
 import json
 import logging
@@ -13,7 +18,7 @@ TRACKING    = os.path.join(SCRIPT_DIR, "tracking.json")
 RSS_URL     = "https://thedfirreport.com/feed/"
 MAX_ARTICLES = 20   # articles maximum par run
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(encoding="utf-8", level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("DFIR-Collector")
 
 
@@ -21,13 +26,27 @@ log = logging.getLogger("DFIR-Collector")
 # Tracking
 # ─────────────────────────────────────────────
 
+def _get_mongo_tracker():
+    import sys
+    import os
+    # Ensure utils is in path dynamically
+    project_root = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    try:
+        from utils.mongo_tracking import SourceTracker
+        source_name = os.path.basename(SCRIPT_DIR)
+        return SourceTracker(source_name)
+    except Exception as e:
+        logging.error(f"Failed to load MongoTracker: {e}")
+        return None
+
 def load_tracking() -> dict:
-    if os.path.exists(TRACKING):
-        try:
-            with open(TRACKING, encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
+    tracker = _get_mongo_tracker()
+    if tracker:
+        doc = tracker.get_tracking()
+        if doc:
+            return doc
     return {
         "earliest_modified": None,
         "latest_modified": None,
@@ -38,8 +57,9 @@ def load_tracking() -> dict:
 
 
 def save_tracking(data: dict):
-    with open(TRACKING, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    tracker = _get_mongo_tracker()
+    if tracker:
+        tracker.save_tracking(data)
 
 
 # ─────────────────────────────────────────────

@@ -31,7 +31,7 @@ DAILY_JSON       = os.path.join(SCRIPT_DIR, f"phishtank_data_{today_str}.json")
 SAVE_EVERY   = 500
 TIMEOUT      = 90
 
-logging.basicConfig(
+logging.basicConfig(encoding="utf-8", 
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%H:%M:%S",
@@ -47,23 +47,31 @@ OPENPHISH_URL       = "https://openphish.com/feed.txt"
 URLHAUS_API         = "https://urlhaus-api.abuse.ch/v1/urls/recent/"
 
 # ── Tracking / IO helpers ────────────────────────────────────────────────────
+def _get_mongo_tracker():
+    import sys
+    import os
+    # Ensure utils is in path dynamically
+    project_root = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    try:
+        from utils.mongo_tracking import SourceTracker
+        source_name = os.path.basename(SCRIPT_DIR)
+        return SourceTracker(source_name)
+    except Exception as e:
+        logging.error(f"Failed to load MongoTracker: {e}")
+        return None
+
 def load_tracking():
-    if os.path.exists(TRACKING_FILE):
-        try:
-            with open(TRACKING_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
+    tracker = _get_mongo_tracker()
+    if tracker:
+        return tracker.get_tracking()
     return {}
 
 def save_tracking(tracking):
-    tmp = TRACKING_FILE + ".tmp"
-    try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(tracking, f, indent=4, ensure_ascii=False)
-        os.replace(tmp, TRACKING_FILE)
-    except Exception as e:
-        logging.error(f"Erreur tracking : {e}")
+    tracker = _get_mongo_tracker()
+    if tracker:
+        tracker.save_tracking(tracking)
 
 def load_existing():
     if os.path.exists(OUTPUT_JSON):

@@ -67,3 +67,8 @@ OPENROUTER_MODEL=
 
 # Hybrid Analysis -> https://hybrid-analysis.com/
 HA_API_KEY=
+# ══════════════════════════════════════════════════════
+#   MongoDB Configuration
+# ══════════════════════════════════════════════════════
+MONGO_URI=
+MONGO_DB_NAME=

@@ -1,3 +1,8 @@
+import sys
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
 import os
 import json
 import sys
@@ -31,17 +36,22 @@ def run_extraction():
     # 1. Load tracking
     oldest_extracted_at = None
     recent_extracted_at = None
-    if os.path.exists(TRACKING_FILE) and not force_full:
-        try:
-            with open(TRACKING_FILE, "r") as f:
-                tracking = json.load(f)
-                oldest_extracted_at = tracking.get('oldest_extracted_at')
-                recent_extracted_at = tracking.get('recent_extracted_at')
-                # Migration from old format
-                if not recent_extracted_at and tracking.get('last_extracted_at'):
-                    recent_extracted_at = tracking.get('last_extracted_at')
-                    oldest_extracted_at = tracking.get('last_extracted_at')
-        except: pass
+    
+    tracker = None
+    try:
+        project_root = os.path.abspath(os.path.join(EXTRACTORS_DIR, ".."))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        from utils.mongo_tracking import ExtractionTracker
+        tracker = ExtractionTracker(SOURCE_NAME)
+        tracking = tracker.get_tracking()
+        
+        if not force_full:
+            oldest_extracted_at = tracking.get('oldest_extracted_at')
+            recent_extracted_at = tracking.get('recent_extracted_at')
+    except Exception as e:
+        print(f"Error loading MongoTracker: {e}")
+
 
     # 2. Load raw data
     if not os.path.exists(INPUT_FILE):
@@ -105,11 +115,15 @@ def run_extraction():
         json.dump(all_results, f, ensure_ascii=False, indent=2)
         
     # 6. Update tracking
-    with open(TRACKING_FILE, "w") as f:
-        json.dump({
-            "oldest_extracted_at": current_oldest,
-            "recent_extracted_at": current_recent
-        }, f)
+    if tracker:
+        try:
+            tracker.save_tracking({
+                "oldest_extracted_at": current_oldest,
+                "recent_extracted_at": current_recent
+            })
+        except Exception as e:
+            print(f"Error saving tracking: {e}")
+
     
     print(f"Extraction for {SOURCE_NAME} completed. {len(new_results)} items processed. Bounds: {current_oldest} to {current_recent}")
 

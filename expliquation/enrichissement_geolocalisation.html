@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enrichissement : Géolocalisation</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #e2e8f0; max-width: 1200px; margin: 0 auto; padding: 20px; background-color: #0f172a; }
+        h1 { color: #10b981; border-bottom: 3px solid #059669; padding-bottom: 10px; }
+        .card { background: #1e293b; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border-left: 4px solid #10b981; }
+        pre { background: #0f172a; color: #a5b4fc; padding: 15px; border-radius: 5px; overflow-x: auto; font-size: 13px; border: 1px solid #334155; }
+        .tag { display: inline-block; background: #475569; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-bottom: 10px; margin-right: 5px;}
+    </style>
+</head>
+<body>
+
+    <h1>Détail de l'Enrichissement : Géolocalisation</h1>
+    <p>Le module <code>geolocalisation/enrichir.py</code> est essentiel pour cartographier l'infrastructure des attaquants. Il permet par exemple au SOC de bloquer instantanément certaines IPs si l'entreprise a une politique interdisant le trafic en provenance de certains pays à risque (Russie, Corée du Nord, etc).</p>
+
+    <div class="card">
+        <h2>Double Injection Métadonnées (Top-Level & IOC-Level)</h2>
+        <span class="tag">NLP Advanced</span> <span class="tag">Tags</span>
+        <p>Ce script est unique car une fois la géolocalisation obtenue, il l'injecte à deux endroits différents du fichier JSON. Il l'injecte dans le champ spécifique de l'indicateur (pour analyser l'IP seule), et il l'injecte dans un tableau global <code>nlp_advanced</code> pour permettre un futur affichage cartographique global sur un Dashboard.</p>
+        <pre><code># 1. Niveau de l'IOC
+ioc["ioc_enrichment"]["country"] = country_code
+ioc["ioc_enrichment"]["country_name"] = country_name
+
+# 2. Niveau "Record" (Global pour le fichier complet)
+# Ajoute le pays dans une liste géographique si pas encore présent
+geo_list = record["enrichment"]["nlp_advanced"].get("geography", [])
+if country_code not in geo_list:
+    geo_list.append(country_code)
+    record["enrichment"]["nlp_advanced"]["geography"] = sorted(geo_list)
+
+# 3. Injection sous forme de Tag direct pour MISP
+tags = record.get("tags", [])
+if country_code.lower() not in [t.lower() for t in tags]:
+    tags.append(country_code)
+    record["tags"] = sorted(list(set(tags)))</code></pre>
+    </div>
+
+    <div class="card">
+        <h2>Mise en Cache Collective Intelligente (Batch Lookup)</h2>
+        <p>Au lieu de lire les IPs une par une (ce qui pourrait faire appeler l'API 10 fois pour la même IP si elle apparaît 10 fois dans le document), le script exécute une "Phase 1" qui collecte toutes les IPs uniques d'un seul coup (dans un Set), puis appelle l'API pour ce Set restreint, et enfin redistribue les résultats sur tous les IOCs.</p>
+        <pre><code># PHASE 1: COLLECT UNIQUE IPs
+unique_raw_ips = set()
+for record in data:
+    for ioc in record.get("iocs", []):
+        if ioc.get("type") == "ip":
+            unique_raw_ips.add(ioc.get("value"))
+
+# PHASE 2: BATCH LOOKUP AND CACHE POPULATION
+lookup_cache = {}
+for raw_ip in sorted(list(unique_raw_ips)):
+    # Appel à ip-api.com limité en fréquence (45 req/min)
+    time.sleep(1.5)
+    country_code, country_name = fetch_external_geo(raw_ip)
+    lookup_cache[raw_ip] = (country_code, country_name)
+
+# PHASE 3: APPLY ENRICHMENT (La boucle ré-injecte le cache dans les IOCs)</code></pre>
+    </div>
+
+</body>
+</html>

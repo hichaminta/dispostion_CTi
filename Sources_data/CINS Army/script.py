@@ -24,7 +24,7 @@ TIMEOUT = 30
 SAVE_EVERY = 100
 
 # Configuration du logging
-logging.basicConfig(
+logging.basicConfig(encoding="utf-8", 
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     datefmt='%H:%M:%S'
@@ -53,23 +53,32 @@ def fetch_cins_list(url: str) -> list[str]:
         if is_valid_ip(line): ips.append(line)
     return ips
 
+def _get_mongo_tracker():
+    import sys
+    import os
+    # Ensure utils is in path dynamically
+    project_root = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    try:
+        from utils.mongo_tracking import SourceTracker
+        source_name = os.path.basename(SCRIPT_DIR)
+        return SourceTracker(source_name)
+    except Exception as e:
+        logging.error(f"Failed to load MongoTracker: {e}")
+        return None
+
 def load_tracking():
-    if os.path.exists(TRACKING_FILE):
-        try:
-            with open(TRACKING_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            logging.warning(f"Impossible de lire le tracking JSON : {e}")
+    tracker = _get_mongo_tracker()
+    if tracker:
+        return tracker.get_tracking()
     return {}
 
 def save_tracking_atomic(tracking):
-    tmp_file = TRACKING_FILE + ".tmp"
-    try:
-        with open(tmp_file, "w", encoding="utf-8") as f:
-            json.dump(tracking, f, indent=4, ensure_ascii=False)
-        os.replace(tmp_file, TRACKING_FILE)
-    except Exception as e:
-        logging.error(f"Erreur tracking : {e}")
+    tracker = _get_mongo_tracker()
+    if tracker:
+        tracker.save_tracking(tracking)
+
 
 def load_existing_data():
     if os.path.exists(OUTPUT_JSON):
@@ -212,4 +221,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
+

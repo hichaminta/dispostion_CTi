@@ -20,3 +20,4 @@ leak_session.session
 bultein_de_security
 keylocker
 .claude
+*.json.bak

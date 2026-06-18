@@ -587,6 +587,28 @@ class STIXExporter:
         if ioc.get("typosquat_flag") or ioc.get("enrichment",{}).get("typosquat_flag"):
             labels.append("urlscan:typosquat=true")
 
+        enrich_data = ioc.get("enrichment", {})
+        
+        # VirusTotal
+        if "vt_malicious_count" in enrich_data:
+            labels.append(f"virustotal:malicious-count=\"{enrich_data['vt_malicious_count']}\"")
+        if "vt_suspicious_count" in enrich_data:
+            labels.append(f"virustotal:suspicious-count=\"{enrich_data['vt_suspicious_count']}\"")
+            
+        # AbuseIPDB
+        if "abuseConfidenceScore" in enrich_data:
+            labels.append(f"abuseipdb:confidence-score=\"{enrich_data['abuseConfidenceScore']}\"")
+        if "totalReports" in enrich_data:
+            labels.append(f"abuseipdb:total-reports=\"{enrich_data['totalReports']}\"")
+            
+        # URLScan
+        if "urlscan_score" in enrich_data:
+            labels.append(f"urlscan:score=\"{enrich_data['urlscan_score']}\"")
+        
+        # Pulsedive
+        if "pulsedive_risk" in enrich_data:
+            labels.append(f"pulsedive:risk=\"{enrich_data['pulsedive_risk']}\"")
+
         ind_id = f"indicator--{uuid.uuid4()}"
         indicator = {
             "type":            "indicator",
@@ -701,6 +723,10 @@ class STIXExporter:
                 "labels":        [t for t in event.get("tags",[]) if t],
                 "x_soc_sources": event.get("source_list",[]),
                 "x_correlation_strength": event.get("correlation_strength",0),
+                "x_soc_priority": event.get("priority_score", "LOW"),
+                "x_soc_risk": event.get("risk_score", 0),
+                "x_soc_action": event.get("soc_action", "monitor"),
+                "x_soc_threat_type": event.get("attack_type", "unknown")
             }
             self.objects.append(report)
 

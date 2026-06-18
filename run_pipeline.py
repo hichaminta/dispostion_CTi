@@ -17,7 +17,7 @@ import subprocess
 import logging
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', encoding='utf-8')
 logger = logging.getLogger("MasterPipeline")
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))

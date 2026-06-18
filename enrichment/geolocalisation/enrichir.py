@@ -1,3 +1,8 @@
+import sys
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
 import os
 import json
 import sys
@@ -13,7 +18,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 from enrichment.geolocalisation.geo_manager import GeoManager
 
 # Logging Configuration
-logging.basicConfig(
+logging.basicConfig(encoding="utf-8", 
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[

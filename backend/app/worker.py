@@ -10,7 +10,7 @@ from .database import db
 from .websockets import manager
 
 # Configuration du logging pour le worker
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(encoding="utf-8", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Registre global des processus actifs par run_id
@@ -65,7 +65,7 @@ COLLECTION_SCRIPT = os.path.join(SCRIPTS_DIR, "run_collection_all.py")
 LEAK_INTEGRATION_SCRIPT = os.path.join(PROJECT_ROOT, "leak_data_integration", "main.py")
 ENRICHMENT_DIR    = os.path.join(PROJECT_ROOT, "enrichment")
 CORRELATION_SCRIPT = os.path.join(PROJECT_ROOT, "misp_integration", "correlation_pre_misp.py")
-STIX_EXPORT_SCRIPT = os.path.join(PROJECT_ROOT, "misp_integration", "stix_reporter.py")
+STIX_EXPORT_SCRIPT = os.path.join(PROJECT_ROOT, "misp_integration", "stix_exporter.py")
 
 # Sources CVE-only (pas d'IOCs)
 CVE_ONLY_SOURCES = {"NVD", "NVd"}

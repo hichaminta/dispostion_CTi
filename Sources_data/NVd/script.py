@@ -1,3 +1,8 @@
+import sys
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
 import requests
 import json
 import time
@@ -9,7 +14,7 @@ import subprocess
 
 # ── Configuration du logging ──────────────────────────────────────────────────
 import logging
-logging.basicConfig(
+logging.basicConfig(encoding="utf-8", 
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     datefmt='%H:%M:%S'
@@ -28,25 +33,32 @@ OUTPUT_JSON = os.path.join(SCRIPT_DIR, "nvd_data.json")
 today_str = datetime.now().strftime("%Y-%m-%d")
 DAILY_OUTPUT_JSON = os.path.join(SCRIPT_DIR, f"nvd_data_{today_str}.json")
 
+def _get_mongo_tracker():
+    import sys
+    import os
+    # Ensure utils is in path dynamically
+    project_root = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    try:
+        from utils.mongo_tracking import SourceTracker
+        source_name = os.path.basename(SCRIPT_DIR)
+        return SourceTracker(source_name)
+    except Exception as e:
+        logging.error(f"Failed to load MongoTracker: {e}")
+        return None
+
 def load_tracking():
-    """Charge l'état du dernier scan depuis tracking.json."""
-    if os.path.exists(TRACKING_FILE):
-        try:
-            with open(TRACKING_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            logging.warning(f"Impossible de lire le tracking JSON : {e}")
+    tracker = _get_mongo_tracker()
+    if tracker:
+        return tracker.get_tracking()
     return {}
 
 def save_tracking_atomic(tracking):
-    """Sauvegarde l'état du scan de manière sécurisée dans tracking.json."""
-    tmp_file = TRACKING_FILE + ".tmp"
-    try:
-        with open(tmp_file, "w", encoding="utf-8") as f:
-            json.dump(tracking, f, indent=4, ensure_ascii=False)
-        os.replace(tmp_file, TRACKING_FILE)
-    except Exception as e:
-        logging.error(f"Erreur tracking : {e}")
+    tracker = _get_mongo_tracker()
+    if tracker:
+        tracker.save_tracking(tracking)
+
 
 def fetch_cves(params, retries=5):
     headers = {"apiKey": API_KEY} if API_KEY else {}

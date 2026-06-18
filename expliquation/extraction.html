@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Explication Approfondie : Phase d'Extraction CTI</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #e2e8f0; max-width: 1200px; margin: 0 auto; padding: 20px; background-color: #0f172a; }
+        h1 { color: #c084fc; border-bottom: 3px solid #9333ea; padding-bottom: 10px; }
+        h2 { color: #d8b4fe; margin-top: 30px; border-bottom: 1px solid #334155; padding-bottom: 5px; }
+        h3 { color: #f472b6; }
+        .card { background: #1e293b; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border-left: 4px solid #c084fc; }
+        pre { background: #0f172a; color: #a5b4fc; padding: 15px; border-radius: 5px; overflow-x: auto; font-size: 13px; border: 1px solid #334155; }
+        code { font-family: Consolas, Monaco, 'Andale Mono', monospace; }
+        .tag { display: inline-block; background: #475569; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <h1>Mécanisme Détaillé d'Extraction des IOCs et CVEs</h1>
+    
+    <div class="card">
+        <h2>La Puissance de `BaseExtractor` : Le Moteur Central</h2>
+        <p>Situé dans <code>extraction_ioc_cve/base_extractor.py</code> (729 lignes de code), c'est le coeur du parsing textuel du système. Il transforme n'importe quel dictionnaire JSON ou bloc de texte non structuré en une liste normée d'indicateurs (IP, URL, MD5, CVE).</p>
+    </div>
+
+    <div class="card">
+        <h2>1. Les Expressions Régulières (Regex)</h2>
+        <span class="tag">Regex Extrêmes</span> <span class="tag">IPv6 Complexes</span>
+        <p>Le constructeur de <code>BaseExtractor</code> définit un dictionnaire de regex très strictes pour s'assurer que rien n'échappe à l'extracteur :</p>
+        <pre><code>self.patterns = {
+    # Capture IPv4 standard (ex: 192.168.1.1)
+    'ip': r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}...\b',
+    
+    # Capture IPv6 (très complexe en regex car compression des zéros avec ::)
+    'ipv6': r'\b(?:[a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}\b|\b(?:[a-fA-F0-9]{1,4}:){1,7}:|:[:a-fA-F0-9]{1,7}\b',
+    
+    # Capture les plages CIDR (ex: 10.0.0.0/8)
+    'ip_range': r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}.../(?:[1-2]?[0-9]|3[0-2])\b',
+    
+    # Capture les hashes avec exactitude (longueur 32, 40, 64)
+    'md5': r'\b[a-fA-F0-9]{32}\b',
+    'sha256': r'\b[a-fA-F0-9]{64}\b',
+    
+    # Capture les CVE avec l'année
+    'cve': r'CVE-\d{4}-\d{4,}'
+}</code></pre>
+    </div>
+
+    <div class="card">
+        <h2>2. L'Intelligence Anti-Faux Positifs (Whitelisting & Filtres)</h2>
+        <span class="tag">Exclusion Systématique</span>
+        <p>Extraire des noms de domaines dans des textes bruts génère beaucoup de déchets. La classe implémente <code>self.WHITELIST_DOMAINS</code> (contenant <em>google.com, github.com, microsoft.com, 127.0.0.1</em>). Si un indicateur trouve un domaine lié (ex: <code>api.google.com</code>), la fonction récursive <code>is_whitelisted()</code> le supprime des résultats.</p>
+        <p>De plus, l'algorithme fait la distinction entre un "Domaine" et un "Nom de fichier" qui se ressemblent (ex: <code>malware.exe</code> ressemble à un domaine <code>.exe</code> en regex).</p>
+        <pre><code>self.INVALID_DOMAIN_EXTENSIONS = {
+    '.exe', '.dll', '.zip', '.rar', '.js', '.bin', '.dat', '.tmp', '.json', '.txt'
+}
+# Logique de rejet :
+for ext in self.INVALID_DOMAIN_EXTENSIONS:
+    if val_lower.endswith(ext):
+        is_filename = True
+        break # Ignoré en tant que domaine</code></pre>
+    </div>
+
+    <div class="card">
+        <h2>3. L'Extraction Sémantique des Noms de Fichiers (Hashes Mapping)</h2>
+        <span class="tag">Parsing Sémantique</span>
+        <p>Une des fonctions les plus avancées est <code>extract_file_hashes_general(text)</code>. Parfois, un rapport DFIR texte ressemble à :<br>
+        <em>"File: trojan.exe<br>8b1a9953c4611296a827abf8c47804d7"</em>.<br>
+        Le parseur détecte le mot-clé <code>File:</code>, mémorise le nom <code>trojan.exe</code>, et l'associe dans un dictionnaire à chaque hash trouvé sur les lignes suivantes.</p>
+        <pre><code># 1. Header detection
+header_match = re.match(r'^(?:File|Filename|Fichier):\s*(.+)$', line, re.IGNORECASE)
+if header_match:
+    current_header_file = header_match.group(1).strip()
+    
+# Si on a un fichier "actif", on attache le hash
+if current_header_file and hash_regex.match(line):
+    file_map[line.lower()] = current_header_file</code></pre>
+        <p>Ensuite, l'attribut <code>ioc['file'] = trojan.exe</code> est injecté dans le JSON final pour le hash donné.</p>
+    </div>
+
+    <div class="card">
+        <h2>4. L'Enrichissement Natif lors de l'Extraction</h2>
+        <span class="tag">Ancrage d'Attributs</span>
+        <p>Plutôt que d'avoir un "IOC nu", la méthode <code>_extract_attributes(item)</code> aspire toutes les clés intéressantes trouvées à la racine du JSON récupéré de l'API (ex: pays, ports, nom du malware, niveau de confiance de la source), et les ancre directement dans un bloc <code>ioc_enrichment</code> pour CHAQUE indicateur (URL, Hash, IP).</p>
+        <pre><code># Résultat d'un IOC typique renvoyé par la pipeline d'extraction :
+{
+    "type": "hashe",
+    "value": "b9c5a... (sha256)",
+    "file": "invoice.exe",
+    "source": "MalwareBazaar Community API",
+    "ioc_enrichment": {
+        "file_size": 15042,
+        "malware_family": "emotet",
+        "tlsh": "T1EF11...",
+        "intel_downloads": 405
+    }
+}</code></pre>
+    </div>
+
+    <div class="card">
+        <h2>5. La Fusion et Normalisation Intelligente (Merge)</h2>
+        <span class="tag">Dédoublonnage JSON</span>
+        <p>La méthode <code>merge_results</code> prend le vieux fichier JSON et le nouveau, et les fusionne. C'est ici que l'orthographe est normalisée pour l'outil de stockage final (MISP ou Base de données). Par exemple, le type "domain" devient "domaine", et "sha256/md5" devient "hashe".</p>
+        <pre><code>type_map = {"domain": "domaine", "hash": "hashe", "sha256": "hashe", "md5": "hashe"}
+
+# Si l'IOC existe déjà, on fusionne son enrichissement
+if "ioc_enrichment" in new_ioc:
+    for ek, ev in new_ioc["ioc_enrichment"].items():
+        existing_ioc["ioc_enrichment"][ek] = ev</code></pre>
+        <p>Cela garantit que le système s'enrichit sans cesse sans jamais dupliquer un IOC, gardant un fichier <code>_extracted.json</code> optimisé et propre.</p>
+    </div>
+
+</body>
+</html>

@@ -1,3 +1,8 @@
+import sys
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
 import os
 import json
 import sys
@@ -249,31 +254,41 @@ TRACKING_DIR  = os.path.join(EXTRACTORS_DIR, "tracking")
 TRACKING_FILE = os.path.join(TRACKING_DIR, "dfir_report_tracking.json")
 
 
+def _get_mongo_tracker():
+    import sys
+    import os
+    project_root = os.path.abspath(os.path.join(EXTRACTORS_DIR, ".."))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    try:
+        from utils.mongo_tracking import ExtractionTracker
+        return ExtractionTracker(SOURCE_NAME)
+    except Exception as e:
+        print(f"Failed to load MongoTracker: {e}")
+        return None
+
 def _load_tracking():
     oldest = None
     recent = None
-    if os.path.exists(TRACKING_FILE):
-        try:
-            with open(TRACKING_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                oldest = data.get("oldest_extracted_at")
-                recent = data.get("recent_extracted_at")
-                # migration fallback
-                if not recent and data.get("last_extracted_at"):
-                    recent = data.get("last_extracted_at")
-                    oldest = data.get("last_extracted_at")
-        except Exception:
-            pass
+    tracker = _get_mongo_tracker()
+    if tracker:
+        data = tracker.get_tracking()
+        oldest = data.get("oldest_extracted_at")
+        recent = data.get("recent_extracted_at")
+        # migration fallback
+        if not recent and data.get("last_extracted_at"):
+            recent = data.get("last_extracted_at")
+            oldest = data.get("last_extracted_at")
     return oldest, recent
 
 
 def _save_tracking(oldest, recent):
-    os.makedirs(TRACKING_DIR, exist_ok=True)
-    with open(TRACKING_FILE, "w", encoding="utf-8") as f:
-        json.dump({
+    tracker = _get_mongo_tracker()
+    if tracker:
+        tracker.save_tracking({
             "oldest_extracted_at": oldest,
             "recent_extracted_at": recent
-        }, f, indent=2)
+        })
 
 
 def _load_existing(path: str) -> list:

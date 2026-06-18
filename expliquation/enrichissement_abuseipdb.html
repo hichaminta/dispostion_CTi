@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enrichissement : AbuseIPDB</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #e2e8f0; max-width: 1200px; margin: 0 auto; padding: 20px; background-color: #0f172a; }
+        h1 { color: #38bdf8; border-bottom: 3px solid #0284c7; padding-bottom: 10px; }
+        .card { background: #1e293b; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border-left: 4px solid #38bdf8; }
+        pre { background: #0f172a; color: #a5b4fc; padding: 15px; border-radius: 5px; overflow-x: auto; font-size: 13px; border: 1px solid #334155; }
+        .tag { display: inline-block; background: #475569; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-bottom: 10px; margin-right: 5px;}
+    </style>
+</head>
+<body>
+
+    <h1>Détail de l'Enrichissement : AbuseIPDB</h1>
+    <p>Le module <code>enrichment_ip/enrichir_abuseipdb.py</code> est spécialisé dans l'analyse de la réputation des adresses IP. Il ajoute un score de malveillance basé sur les signalements de la communauté mondiale de cybersécurité.</p>
+
+    <div class="card">
+        <h2>Mécanisme de Cache Local Intelligement Conçu</h2>
+        <span class="tag">Économie de Quota API</span> <span class="tag">JSON Local DB</span>
+        <p>L'API AbuseIPDB a des limites strictes (ex: 1000 requêtes par jour en compte gratuit). Pour éviter d'épuiser ce quota, le système initialise au démarrage une base locale <code>abuseipdb_data.json</code> en RAM (dans un dictionnaire Python). Lorsqu'une IP doit être analysée :</p>
+        <pre><code># Vérification dans le cache local avant appel API
+if ip in self.local_db:
+    logger.debug(f"[LOCAL] {ip} found in local DB — skipping API call.")
+    return self.local_db[ip]
+else:
+    # Si introuvable, appel de l'API externe
+    url = "https://api.abuseipdb.com/api/v2/check"
+    headers = {"Key": API_KEY, "Accept": "application/json"}
+    params  = {"ipAddress": ip, "maxAgeInDays": 90}
+    response = requests.get(url, headers=headers, params=params, timeout=10)
+    
+    # Enregistrement du résultat dans le cache local pour les prochaines exécutions !
+    self.local_db[ip] = response.json().get("data", {})</code></pre>
+    </div>
+
+    <div class="card">
+        <h2>Nettoyage Dynamique des IPs</h2>
+        <p>Avant d'envoyer l'adresse IP à l'API, le script s'assure qu'elle est "propre". Les extracteurs peuvent remonter des IPs avec un port attaché, ou des plages réseau (CIDR) que l'API AbuseIPDB ne peut pas traiter sur l'endpoint <code>/check</code>.</p>
+        <pre><code>raw_ip = ioc.get("value")
+# Retirer le port s'il est présent (ex: 42.225.207.134:34110 -> 42.225.207.134)
+clean_ip = raw_ip.split(":")[0]
+
+# Ignorer les blocs CIDR (ex: 1.10.16.0/20) non supportés par l'endpoint /check
+if "/" in clean_ip:
+    continue</code></pre>
+    </div>
+
+    <div class="card">
+        <h2>Données Injectées dans l'IOC</h2>
+        <p>Une fois les informations récupérées, elles sont structurées dans le bloc <code>ioc_enrichment</code> de chaque indicateur. Le script laisse également une "marque" (le flag <code>passer_par_abuseipdb = 1</code>) pour s'assurer que ce fichier ne sera plus jamais traité par ce script s'il est relancé.</p>
+        <pre><code>enrichment.update({
+    "abuseConfidenceScore": info.get("abuseConfidenceScore"), # Le score critique sur 100
+    "totalReports":         info.get("totalReports"),         # Le nombre de personnes ayant reporté l'IP
+    "lastReportedAt":       info.get("lastReportedAt"),       # Date de la dernière attaque
+    "countryCode":          info.get("countryCode"),
+    "isp":                  info.get("isp"),                  # Le fournisseur d'accès (ex: OVH, DigitalOcean)
+    "source_reliability":   "AbuseIPDB Local/API",
+    
+    # Le Flag de Tracking
+    "passer_par_abuseipdb": 1,
+})</code></pre>
+    </div>
+
+</body>
+</html>

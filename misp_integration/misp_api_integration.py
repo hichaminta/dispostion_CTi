@@ -1,3 +1,8 @@
+import sys
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
 import os
 import json
 import logging
@@ -10,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configuration du logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(encoding="utf-8", level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("MISP_Integration")
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -54,6 +59,23 @@ class MISPClient:
     def _save_tracking(self, tracking_data):
         with open(self.tracking_file, "w") as f:
             json.dump(tracking_data, f, indent=4)
+
+    def _load_stix_tracking(self):
+        """Charge le tracking STIX pour la détection de doublons par report."""
+        stix_tracking_file = os.path.join(BASE_DIR, "misp_integration", "stix_tracking.json")
+        if os.path.exists(stix_tracking_file):
+            try:
+                with open(stix_tracking_file, "r") as f:
+                    return json.load(f)
+            except Exception:
+                return {"integrated_reports": {}}
+        return {"integrated_reports": {}}
+
+    def _save_stix_tracking(self, data):
+        """Sauvegarde le tracking STIX."""
+        stix_tracking_file = os.path.join(BASE_DIR, "misp_integration", "stix_tracking.json")
+        with open(stix_tracking_file, "w") as f:
+            json.dump(data, f, indent=4)
 
     # ------------------------------------------------------------------
     # Mappage SOC -> MISP
@@ -257,7 +279,8 @@ class MISPClient:
     def push_stix_bundle(self, stix_file_path):
         """
         Importe un bundle STIX 2.1 dans MISP en le découpant par Report.
-        Cela force MISP à créer un événement séparé pour chaque Report STIX.
+        Détecte les événements/IOCs déjà intégrés pour éviter les doublons.
+        Utilise un tracking persistant (stix_tracking.json) + vérification MISP.
         """
         if not self.misp:
             return False
@@ -276,9 +299,85 @@ class MISPClient:
 
             logger.info(f"Découpage du bundle en {len(reports)} événements individuels...")
 
+            # Charger le tracking STIX pour la détection de doublons
+            stix_tracking = self._load_stix_tracking()
+
             success_count = 0
+            skipped_count = 0
+
             for report in reports:
-                # Créer un mini-bundle pour ce report
+                report_name = report.get('name', 'Unnamed Event')
+                report_id = report.get('id', '')
+
+                # ── Vérification 1 : Tracking local ──
+                if report_id in stix_tracking.get("integrated_reports", {}):
+                    logger.info(f"[SKIP] Déjà intégré (tracking local) : {report_name}")
+                    skipped_count += 1
+                    continue
+
+                # ── Vérification 2 : Événement déjà présent dans MISP ──
+                already_in_misp = False
+                try:
+                    existing = self.misp.search(controller='events', info=report_name)
+                    if existing:
+                        for evt in existing:
+                            if evt.get("Event", {}).get("info") == report_name:
+                                logger.info(f"[SKIP] Déjà présent dans MISP : {report_name}")
+                                stix_tracking.setdefault("integrated_reports", {})[report_id] = {
+                                    "name": report_name,
+                                    "integrated_at": datetime.now().isoformat(),
+                                    "status": "already_exists_in_misp"
+                                }
+                                self._save_stix_tracking(stix_tracking)
+                                skipped_count += 1
+                                already_in_misp = True
+                                break
+                except Exception as e:
+                    logger.warning(f"Erreur recherche événement '{report_name}': {e}")
+
+                if already_in_misp:
+                    continue
+
+                # ── Vérification 3 : IOCs individuels déjà dans MISP ──
+                # Compter les indicateurs dans ce report
+                report_refs = report.get("object_refs", [])
+                indicators_in_report = []
+                for ref_id in report_refs:
+                    obj = other_objects.get(ref_id)
+                    if obj and obj.get("type") == "indicator":
+                        indicators_in_report.append(obj)
+
+                iocs_already_count = 0
+                for indicator in indicators_in_report:
+                    pattern = indicator.get("pattern", "")
+                    # Extraire la valeur de l'IOC du pattern STIX (ex: [ipv4-addr:value = '1.2.3.4'])
+                    ioc_value = self._extract_ioc_from_stix_pattern(pattern)
+                    if ioc_value:
+                        try:
+                            search_res = self.misp.search(controller='attributes', value=ioc_value)
+                            # PyMISP renvoie {'Attribute': []} si vide, dont la longueur est 1 (la clé 'Attribute')
+                            if isinstance(search_res, dict) and search_res.get('Attribute'):
+                                iocs_already_count += 1
+                            elif isinstance(search_res, list) and len(search_res) > 0:
+                                iocs_already_count += 1
+                        except Exception:
+                            pass
+
+                if indicators_in_report and iocs_already_count == len(indicators_in_report):
+                    logger.info(f"[SKIP] Tous les IOCs ({iocs_already_count}) déjà dans MISP : {report_name}")
+                    stix_tracking.setdefault("integrated_reports", {})[report_id] = {
+                        "name": report_name,
+                        "integrated_at": datetime.now().isoformat(),
+                        "status": "all_iocs_exist",
+                        "ioc_count": iocs_already_count
+                    }
+                    self._save_stix_tracking(stix_tracking)
+                    skipped_count += 1
+                    continue
+                elif iocs_already_count > 0:
+                    logger.info(f"[PARTIAL] {iocs_already_count}/{len(indicators_in_report)} IOCs déjà dans MISP pour : {report_name} — import quand même")
+
+                # ── Import du mini-bundle STIX ──
                 report_objects = [report]
                 
                 # Ajouter l'identité si référencée
@@ -318,34 +417,81 @@ class MISPClient:
 
                     if status_ok:
                         success_count += 1
-                        report_name = report.get('name', 'Unnamed Event')
+
+                        # Marquer comme intégré dans le tracking
+                        stix_tracking.setdefault("integrated_reports", {})[report_id] = {
+                            "name": report_name,
+                            "integrated_at": datetime.now().isoformat(),
+                            "status": "imported",
+                            "ioc_count": len(indicators_in_report),
+                            "iocs_already_existed": iocs_already_count
+                        }
                         
                         try:
                             created_events = res_data if isinstance(res_data, list) else [res_data]
                             if created_events and "Event" in created_events[0]:
                                 event_id = created_events[0]["Event"]["id"]
-                                self.misp.update_event({'id': event_id, 'info': report_name})
-                                logger.info(f"Importé et renommé ({success_count}/{len(reports)}) : {report_name}")
+                                event_uuid = created_events[0]["Event"]["uuid"]
+                                
+                                # Extraire les infos SOC du STIX
+                                priority = report.get('x_soc_priority', 'LOW')
+                                threat_level_id = self._get_threat_level(priority)
+                                
+                                # Mettre à jour le titre et le Threat Level
+                                self.misp.update_event({
+                                    'id': event_id,
+                                    'info': report_name,
+                                    'threat_level_id': threat_level_id
+                                })
+                                
+                                # Taguer l'événement avec les infos SOC complètes
+                                soc_tags = [
+                                    f"soc:priority=\"{priority}\"",
+                                    f"soc:risk-score=\"{report.get('x_soc_risk', 0)}\"",
+                                    f"soc:action=\"{report.get('x_soc_action', 'monitor')}\"",
+                                    f"soc:threat-type=\"{report.get('x_soc_threat_type', 'unknown')}\""
+                                ]
+                                for tag in soc_tags:
+                                    try:
+                                        self.misp.tag(event_uuid, tag)
+                                    except Exception:
+                                        pass
+                                logger.info(f"[OK] Importé et renommé ({success_count}/{len(reports)}) : {report_name}")
                             else:
-                                logger.info(f"Importé ({success_count}/{len(reports)}) : {report_name} (Renommage impossible)")
+                                logger.info(f"[OK] Importé ({success_count}/{len(reports)}) : {report_name}")
                         except Exception as e:
                             logger.warning(f"Import réussi mais erreur lors du renommage : {e}")
                     else:
                         err = res_data.get('errors') if isinstance(res_data, dict) else "Erreur inconnue"
-                        logger.error(f"Erreur pour {report.get('name')} : {err}")
+                        logger.error(f"Erreur pour {report_name} : {err}")
                 finally:
                     try:
                         if os.path.exists(temp_path):
                             os.remove(temp_path)
                     except:
                         pass
+                    
+                    # Sauvegarder le tracking mis à jour à chaque événement
+                    self._save_stix_tracking(stix_tracking)
 
-            logger.info(f"Terminé : {success_count} événements créés sur {len(reports)} prévus.")
-            return success_count > 0
+            logger.info(f"══ Résumé : {success_count} importés, {skipped_count} ignorés sur {len(reports)} reports ══")
+            return success_count > 0 or skipped_count > 0
 
         except Exception as e:
             logger.error(f"Exception lors du découpage STIX : {e}")
             return False
+
+    @staticmethod
+    def _extract_ioc_from_stix_pattern(pattern):
+        """
+        Extrait la valeur d'un IOC depuis un pattern STIX 2.1.
+        Ex: "[ipv4-addr:value = '1.2.3.4']" → "1.2.3.4"
+        """
+        import re
+        match = re.search(r"=\s*'([^']+)'", pattern)
+        if match:
+            return match.group(1)
+        return None
 
     # ------------------------------------------------------------------
     # Push d'un fichier JSON classique
@@ -429,8 +575,9 @@ class MISPClient:
 
     def push_all(self, source_filter=None):
         """
-        Synchronise les fichiers de corrélation SOC vers MISP.
-        Cherche tous les fichiers correlation_file_*.json et les importe s'ils ne l'ont pas encore été.
+        Synchronise les bundles STIX 2.1 vers MISP.
+        Cherche tous les fichiers stix_export_*.json et les importe avec tracking.
+        Détecte automatiquement les fichiers et reports déjà intégrés.
         """
         corr_dir = os.path.join(BASE_DIR, "output_correlation")
         if not os.path.exists(corr_dir):
@@ -438,39 +585,43 @@ class MISPClient:
             return
 
         tracking_data = self._load_tracking()
-        
-        corr_files = [f for f in os.listdir(corr_dir) if f.startswith("correlation_file_") and f.endswith(".json")]
-        
-        if not corr_files:
-            if os.path.exists(os.path.join(corr_dir, "correlated_events_soc_enriched.json")):
-                corr_files = ["correlated_events_soc_enriched.json"]
-            else:
-                logger.info("Aucun fichier de corrélation à importer. Assurez-vous d'avoir exécuté correlation_pre_misp.py d'abord.")
-                return
 
-        # Sort files by modification time (oldest first) so we push in chronological order
-        corr_files.sort(key=lambda f: os.path.getmtime(os.path.join(corr_dir, f)))
+        # Chercher les fichiers STIX (stix_export_*.json ou stix_export.json)
+        stix_files = [f for f in os.listdir(corr_dir) if f.startswith("stix_export") and f.endswith(".json")]
+
+        if not stix_files:
+            logger.info("Aucun fichier STIX à importer. Assurez-vous d'avoir exécuté stix_exporter.py d'abord.")
+            return
+
+        # Trier par date de modification (le plus ancien en premier)
+        stix_files.sort(key=lambda f: os.path.getmtime(os.path.join(corr_dir, f)))
+
+        logger.info(f"Fichiers STIX détectés : {len(stix_files)}")
 
         success_any = False
-        for filename in corr_files:
+        for filename in stix_files:
             if filename in tracking_data:
-                logger.info(f"Fichier de corrélation déjà importé, ignoré : {filename}")
+                logger.info(f"[SKIP] Fichier STIX déjà importé (tracking) : {filename}")
                 continue
 
-            corr_path = os.path.join(corr_dir, filename)
-            logger.info(f"Début de l'importation du fichier de corrélation : {filename}")
-            
-            success = self.push_correlated_file(corr_path)
+            stix_path = os.path.join(corr_dir, filename)
+            file_size = os.path.getsize(stix_path) / (1024 * 1024)
+            logger.info(f"Début de l'importation STIX : {filename} ({file_size:.1f} MB)")
+
+            success = self.push_stix_bundle(stix_path)
             if success:
-                logger.info(f"Intégration MISP terminée avec succès pour : {filename}")
-                tracking_data[filename] = datetime.now().isoformat()
+                logger.info(f"Intégration STIX terminée avec succès pour : {filename}")
+                tracking_data[filename] = {
+                    "imported_at": datetime.now().isoformat(),
+                    "file_size_mb": round(file_size, 2)
+                }
                 self._save_tracking(tracking_data)
                 success_any = True
             else:
-                logger.error(f"L'intégration MISP a échoué pour : {filename}")
-                
-        if not success_any and corr_files:
-            logger.info("Aucun nouveau fichier de corrélation n'avait besoin d'être importé ou erreur survenue.")
+                logger.error(f"L'intégration STIX a échoué pour : {filename}")
+
+        if not success_any and stix_files:
+            logger.info("Aucun nouveau fichier STIX n'avait besoin d'être importé ou erreur survenue.")
 
 
 if __name__ == "__main__":
