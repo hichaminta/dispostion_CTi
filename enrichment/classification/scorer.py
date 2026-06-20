@@ -135,7 +135,7 @@ class PriorityScorer:
         # Extraction des signaux
         vt = float(e.get("vt_malicious_count", e.get("malicious_count", 0)) or 0)
         abuse = float(e.get("abuseConfidenceScore", 0) or 0)
-        
+
         try:
             dl = int(e.get("intel_downloads", 0) or 0)
         except:
@@ -145,16 +145,19 @@ class PriorityScorer:
         if ioc_type in ("sha256", "sha1", "md5", "hash", "hashe"):
             # Confiance source : 40%
             score += (base_conf / 100.0) * 40.0
-            
-            # VirusTotal : 40% (calcul progressif basé sur 50 moteurs)
-            if vt > 0:
-                score += 20.0 + min(20.0, ((vt - 1) / 49.0) * 20.0)
-            
-            # MalwareBazaar : 20%
-            if dl >= 500: score += 20
-            elif dl >= 100: score += 15
-            elif dl >= 10: score += 10
-            elif dl > 0: score += 5
+
+            if dl > 0:
+                # MalwareBazaar : VT 40% + volumétrie 20%
+                if vt > 0:
+                    score += 20.0 + min(20.0, ((vt - 1) / 49.0) * 20.0)
+                if dl >= 500: score += 20
+                elif dl >= 100: score += 15
+                elif dl >= 10: score += 10
+                else: score += 5
+            else:
+                # Autres sources : VT 60%
+                if vt > 0:
+                    score += 30.0 + min(30.0, ((vt - 1) / 49.0) * 30.0)
             
         # Type IP
         elif ioc_type in ("ip", "ipv4", "ipv6"):

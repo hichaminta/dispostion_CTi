@@ -21,94 +21,59 @@
     
     <div class="card">
         <h2>La Puissance de `BaseExtractor` : Le Moteur Central</h2>
-        <p>Situé dans <code>extraction_ioc_cve/base_extractor.py</code> (729 lignes de code), c'est le coeur du parsing textuel du système. Il transforme n'importe quel dictionnaire JSON ou bloc de texte non structuré en une liste normée d'indicateurs (IP, URL, MD5, CVE).</p>
-    </div>
-
-    <div class="card">
-        <h2>1. Les Expressions Régulières (Regex)</h2>
-        <span class="tag">Regex Extrêmes</span> <span class="tag">IPv6 Complexes</span>
-        <p>Le constructeur de <code>BaseExtractor</code> définit un dictionnaire de regex très strictes pour s'assurer que rien n'échappe à l'extracteur :</p>
+        <p>Le fichier <code>base_extractor.py</code> gère le parsing universel des textes et JSON. Ses expressions régulières (Regex) sont redoutables et identifient avec précision adresses IP, plages CIDR, Hashes (MD5, SHA1, SHA256) et vulnérabilités (CVE).</p>
         <pre><code>self.patterns = {
-    # Capture IPv4 standard (ex: 192.168.1.1)
     'ip': r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}...\b',
-    
-    # Capture IPv6 (très complexe en regex car compression des zéros avec ::)
-    'ipv6': r'\b(?:[a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}\b|\b(?:[a-fA-F0-9]{1,4}:){1,7}:|:[:a-fA-F0-9]{1,7}\b',
-    
-    # Capture les plages CIDR (ex: 10.0.0.0/8)
-    'ip_range': r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}.../(?:[1-2]?[0-9]|3[0-2])\b',
-    
-    # Capture les hashes avec exactitude (longueur 32, 40, 64)
-    'md5': r'\b[a-fA-F0-9]{32}\b',
+    'ipv6': r'\b(?:[a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}\b',
     'sha256': r'\b[a-fA-F0-9]{64}\b',
-    
-    # Capture les CVE avec l'année
     'cve': r'CVE-\d{4}-\d{4,}'
 }</code></pre>
     </div>
 
     <div class="card">
-        <h2>2. L'Intelligence Anti-Faux Positifs (Whitelisting & Filtres)</h2>
-        <span class="tag">Exclusion Systématique</span>
-        <p>Extraire des noms de domaines dans des textes bruts génère beaucoup de déchets. La classe implémente <code>self.WHITELIST_DOMAINS</code> (contenant <em>google.com, github.com, microsoft.com, 127.0.0.1</em>). Si un indicateur trouve un domaine lié (ex: <code>api.google.com</code>), la fonction récursive <code>is_whitelisted()</code> le supprime des résultats.</p>
-        <p>De plus, l'algorithme fait la distinction entre un "Domaine" et un "Nom de fichier" qui se ressemblent (ex: <code>malware.exe</code> ressemble à un domaine <code>.exe</code> en regex).</p>
-        <pre><code>self.INVALID_DOMAIN_EXTENSIONS = {
-    '.exe', '.dll', '.zip', '.rar', '.js', '.bin', '.dat', '.tmp', '.json', '.txt'
-}
-# Logique de rejet :
-for ext in self.INVALID_DOMAIN_EXTENSIONS:
-    if val_lower.endswith(ext):
-        is_filename = True
-        break # Ignoré en tant que domaine</code></pre>
+        <h2>1. Filtrage et Intelligence Anti-Faux Positifs</h2>
+        <span class="tag">Exclusion Systématique</span> <span class="tag">Whitelisting Dynamique</span>
+        <p>Dans l'analyse des domaines, l'extracteur distingue les domaines réels des faux positifs. Des noms de fichiers (<code>malware.exe</code>, <code>script.js</code>) peuvent ressembler à des domaines pour une Regex. L'extracteur vérifie contre un set de <code>INVALID_DOMAIN_EXTENSIONS</code> (.exe, .dll, .js, .sys).</p>
+        <p>Il maintient également une liste blanche de domaines à ignorer de manière récursive (Microsoft, Google, GitHub, localhost).</p>
     </div>
 
     <div class="card">
-        <h2>3. L'Extraction Sémantique des Noms de Fichiers (Hashes Mapping)</h2>
-        <span class="tag">Parsing Sémantique</span>
-        <p>Une des fonctions les plus avancées est <code>extract_file_hashes_general(text)</code>. Parfois, un rapport DFIR texte ressemble à :<br>
-        <em>"File: trojan.exe<br>8b1a9953c4611296a827abf8c47804d7"</em>.<br>
-        Le parseur détecte le mot-clé <code>File:</code>, mémorise le nom <code>trojan.exe</code>, et l'associe dans un dictionnaire à chaque hash trouvé sur les lignes suivantes.</p>
-        <pre><code># 1. Header detection
-header_match = re.match(r'^(?:File|Filename|Fichier):\s*(.+)$', line, re.IGNORECASE)
-if header_match:
-    current_header_file = header_match.group(1).strip()
-    
-# Si on a un fichier "actif", on attache le hash
-if current_header_file and hash_regex.match(line):
-    file_map[line.lower()] = current_header_file</code></pre>
-        <p>Ensuite, l'attribut <code>ioc['file'] = trojan.exe</code> est injecté dans le JSON final pour le hash donné.</p>
+        <h2>2. L'Extraction Sémantique et NLP (Natural Language Processing)</h2>
+        <span class="tag">SpaCy Models</span> <span class="tag">Entity Recognition</span>
+        <p>Le système implémente une logique spécifique ultra-avancée pour <strong>The DFIR Report</strong>. Plutôt que de chercher aveuglément des IPs, il utilise la bibliothèque d'IA <strong>SpaCy (en_core_web_sm)</strong> pour comprendre le sens grammatical du texte.</p>
+        <p>Le code extrait les TTPs (Tactics, Techniques & Procedures) en classant le texte en 4 grandes catégories :</p>
+        <ul>
+            <li><strong>Commandes:</strong> Regex spécifiques cherchant "powershell", "net user", "wmi".</li>
+            <li><strong>Actors:</strong> Reconnaissance des groupes de menace via l'entité "ORG" de SpaCy couplée à des mots-clés ("spider", "unc", "ransomhub").</li>
+            <li><strong>Victims:</strong> Localisations ou cibles identifiées par les tags SpaCy "GPE" (Géopolitique) et "LOC".</li>
+            <li><strong>Technology:</strong> Le tag SpaCy "PRODUCT" repère les logiciels ciblés, complété par une extraction Regex pour capturer la version (ex: <i>Log4j 2.x</i>, <i>Apache 2.4.51</i>).</li>
+        </ul>
+        <pre><code>doc = nlp(clean_text)
+for ent in doc.ents:
+    if ent.label_ == "ORG" and any(k in val_lower for k in actor_keywords):
+        actors.append(val) # Identifié en tant que groupe de menace
+    elif ent.label_ == "PRODUCT":
+        technologies.append(val) # Identifié comme technologie ciblée</code></pre>
     </div>
 
     <div class="card">
-        <h2>4. L'Enrichissement Natif lors de l'Extraction</h2>
-        <span class="tag">Ancrage d'Attributs</span>
-        <p>Plutôt que d'avoir un "IOC nu", la méthode <code>_extract_attributes(item)</code> aspire toutes les clés intéressantes trouvées à la racine du JSON récupéré de l'API (ex: pays, ports, nom du malware, niveau de confiance de la source), et les ancre directement dans un bloc <code>ioc_enrichment</code> pour CHAQUE indicateur (URL, Hash, IP).</p>
-        <pre><code># Résultat d'un IOC typique renvoyé par la pipeline d'extraction :
-{
-    "type": "hashe",
-    "value": "b9c5a... (sha256)",
-    "file": "invoice.exe",
-    "source": "MalwareBazaar Community API",
-    "ioc_enrichment": {
-        "file_size": 15042,
-        "malware_family": "emotet",
-        "tlsh": "T1EF11...",
-        "intel_downloads": 405
-    }
-}</code></pre>
+        <h2>3. L'Analyse Contextuelle des Faux Positifs (DNS Resolvers)</h2>
+        <span class="tag">Contextual Heuristics</span>
+        <p>L'extracteur DFIR intègre une logique de filtrage des IP qui élimine intelligemment les résolveurs publics (ex: <code>8.8.8.8</code>, <code>1.1.1.1</code>), les IPs de bouclage, privées, multicast, et va même jusqu'à détecter des versions de logiciels déguisées en IP (ex: version "19.0.0.0").</p>
+        <p>Le filtrage s'appuie également sur le résultat du modèle NLP : les domaines liés à une entité marquée comme "victim" (ex: domaine interne de l'entreprise ciblée) sont mis sur liste blanche dynamique et rejetés de la liste des attaquants.</p>
     </div>
 
     <div class="card">
-        <h2>5. La Fusion et Normalisation Intelligente (Merge)</h2>
-        <span class="tag">Dédoublonnage JSON</span>
-        <p>La méthode <code>merge_results</code> prend le vieux fichier JSON et le nouveau, et les fusionne. C'est ici que l'orthographe est normalisée pour l'outil de stockage final (MISP ou Base de données). Par exemple, le type "domain" devient "domaine", et "sha256/md5" devient "hashe".</p>
-        <pre><code>type_map = {"domain": "domaine", "hash": "hashe", "sha256": "hashe", "md5": "hashe"}
+        <h2>4. L'Enrichissement Natif par Mapping de Structure</h2>
+        <span class="tag">Ancrage d'Attributs JSON</span>
+        <p>Pour les APIs structurées comme ThreatFox ou MalwareBazaar, le <code>BaseExtractor</code> récupère non seulement l'IOC, mais aspire récursivement toutes les clés adjacentes (tags, type d'arme, niveau de menace) pour les injecter dans un sous-dictionnaire <code>ioc_enrichment</code> propre à chaque IOC.</p>
+    </div>
 
-# Si l'IOC existe déjà, on fusionne son enrichissement
-if "ioc_enrichment" in new_ioc:
-    for ek, ev in new_ioc["ioc_enrichment"].items():
-        existing_ioc["ioc_enrichment"][ek] = ev</code></pre>
-        <p>Cela garantit que le système s'enrichit sans cesse sans jamais dupliquer un IOC, gardant un fichier <code>_extracted.json</code> optimisé et propre.</p>
+    <div class="card">
+        <h2>5. Partitionnement et Format de Sortie Normalisé</h2>
+        <span class="tag">Dédoublonnage JSON</span> <span class="tag">Routage Intelligent</span>
+        <p>Les données extraites sont fusionnées (merged) avec l'existant. L'orthographe est normalisée (ex: "domain" devient "domaine"). Les attributs contextuels s'additionnent si l'IOC existait déjà.</p>
+        <p>Le système route les menaces intelligemment : s'il s'agit d'un article contenant uniquement des CVE sans indicateurs compromis, le rapport est envoyé dans un fichier spécifique (<code>_vuln_extracted.json</code>) formaté pour attaquer directement la phase de corrélation, économisant des appels d'API coûteux.</p>
     </div>
 
 </body>

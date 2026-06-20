@@ -21,122 +21,87 @@
     <h1>Mécanisme Détaillé de Collecte des Sources CTI</h1>
     
     <div class="card">
-        <h2>Architecture Standard et Résilience</h2>
-        <p>L'auteur de la pipeline a mis en place un "Template" (un socle de code commun) que chaque script de source utilise pour garantir la stabilité du système. Cela passe par deux mécanismes clés : <strong>Le suivi MongoDB (Tracking)</strong> et <strong>la Sauvegarde Atomique</strong>.</p>
+        <h2>Architecture Standard et Résilience Globale</h2>
+        <p>L'architecture de collecte repose sur un socle commun robuste qui garantit qu'aucune donnée n'est dupliquée et qu'aucune corruption ne se produit lors de l'écriture. Chaque script de collecte hérite de ces mécanismes de base :</p>
         
-        <h3>1. Le Tracking (mongo_tracking.py)</h3>
-        <p>Pour éviter de télécharger les mêmes données en boucle, chaque script appelle un Tracker. S'il n'y a pas de base MongoDB, il crée un fichier JSON local (Fallback). Voici comment MalwareBazaar ou NVD l'utilisent :</p>
+        <h3>1. Le Tracking Intelligent (MongoDB & Fallback JSON)</h3>
+        <p>Chaque source maintient un curseur temporel (timestamp de la dernière collecte). Avant toute requête réseau, le script interroge la base de données de suivi (Tracker) pour reprendre exactement là où il s'est arrêté.</p>
         <pre><code>def _get_mongo_tracker():
     try:
         from utils.mongo_tracking import SourceTracker
         source_name = os.path.basename(SCRIPT_DIR)
         return SourceTracker(source_name)
     except Exception as e:
-        return None
-
-def load_tracking():
-    tracker = _get_mongo_tracker()
-    return tracker.get_tracking() if tracker else {}</code></pre>
+        return None</code></pre>
     
-        <h3>2. La Sauvegarde Atomique (Atomic Save)</h3>
-        <p>Le fait d'écrire de gros fichiers JSON peut prendre du temps. Si le script plante (ou qu'on l'arrête) pendant l'écriture, le fichier JSON est corrompu. Pour l'éviter, le script écrit dans un fichier <code>.tmp</code> avec un UUID unique, puis le renomme de manière quasi-instantanée :</p>
-        <pre><code>def save_json_atomic(data, filepath=None):
-    import uuid
-    target_file = filepath if filepath else OUTPUT_JSON
-    tmp_file = target_file + "." + uuid.uuid4().hex[:8] + ".tmp"
-    
-    with open(tmp_file, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
-        
-    # Os.replace écrase le fichier cible de manière atomique
-    os.replace(tmp_file, target_file)</code></pre>
+        <h3>2. Sauvegarde Atomique (Prévention de Corruption)</h3>
+        <p>Écrire des gigaoctets de données JSON est risqué. Si une coupure survient, le fichier cible est corrompu. La fonction <code>save_json_atomic</code> utilise un fichier temporaire <code>.tmp</code> avec un UUID, puis utilise <code>os.replace()</code> au niveau système pour remplacer instantanément le fichier final.</p>
     </div>
 
     <!-- NVD Detailed -->
     <div class="card">
-        <h2>Détail Source : NVD (National Vulnerability Database)</h2>
-        <span class="tag">Pagination Indexée</span> <span class="tag">Rate Limit Dynamique</span> <span class="tag">Extraction CVSS Différenciée</span>
-        <p>L'API NVD est très capricieuse et bloque facilement les adresses IP (Rate-Limiting). Le code gère un "backoff exponentiel", c'est-à-dire qu'il attend de plus en plus longtemps entre chaque essai en cas d'erreur.</p>
-        <pre><code>def fetch_cves(params, retries=5):
-    headers = {"apiKey": API_KEY} if API_KEY else {}
-    for i in range(retries):
-        try:
-            r = requests.get(BASE_URL, params=params, headers=headers, timeout=60)
-            r.raise_for_status()
-            return r.json()
-        except Exception as e:
-            if i == retries - 1: raise e
-            # Attente : 5s, puis 10s, puis 15s
-            sleep_time = 5 * (i + 1)
-            time.sleep(sleep_time)</code></pre>
-        <p>Le paramétrage temporel utilise la date exacte UTC du tracking précédent pour ne récupérer que les "Nouveautés" et paginer via <code>startIndex</code> et <code>resultsPerPage</code>.</p>
+        <h2>1. NVD (National Vulnerability Database)</h2>
+        <span class="tag">Pagination Indexée</span> <span class="tag">Rate Limit Dynamique</span> <span class="tag">CVE JSON</span>
+        <p>L'API NVD impose des limites de requêtes très strictes. Le script utilise un mécanisme de backoff exponentiel (attente de 5s, puis 10s, puis 15s) en cas de blocage IP (Code 403/429).</p>
+        <p>Il utilise les paramètres de requête <code>pubStartDate</code> et <code>pubEndDate</code> générés dynamiquement par le Tracker, et pagine avec <code>startIndex</code> et <code>resultsPerPage</code>.</p>
     </div>
 
     <!-- MalwareBazaar Detailed -->
     <div class="card">
-        <h2>Détail Source : MalwareBazaar (abuse.ch)</h2>
-        <span class="tag">API REST</span> <span class="tag">Mode Bulk en Mémoire</span>
-        <p>MalwareBazaar a deux comportements. Le premier télécharge les 100 derniers malwares via l'API. Le second (mode Bulk) est invoqué si l'argument <code>--full</code> est passé. Il télécharge un énorme fichier ZIP contenant toute la base. <strong>Le code extrait ce fichier ZIP directement en mémoire (BytesIO)</strong> pour éviter de créer un fichier massif sur le disque de l'ordinateur :</p>
-        <pre><code>def fetch_bulk_export():
-    url_json = "https://mb-api.abuse.ch/v2/files/exports/{api_key}/full.json.zip"
-    response = requests.get(url_json, timeout=300)
-    
-    # Traitement du ZIP dans la RAM
-    with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-        json_filename = [f for f in z.namelist() if f.endswith('.json')][0]
-        with z.open(json_filename) as f:
-            data = json.load(f)
-            return data.get("data", [])</code></pre>
+        <h2>2. MalwareBazaar (abuse.ch)</h2>
+        <span class="tag">API REST</span> <span class="tag">Mode Bulk en Mémoire</span> <span class="tag">ZIP Stream</span>
+        <p>MalwareBazaar fournit des informations sur les malwares récents. Le script supporte un "Mode Bulk" pour récupérer la base complète historique.</p>
+        <p>Afin de ne pas sature le disque, le code télécharge un fichier ZIP compressé et le décompresse <strong>entièrement en mémoire RAM</strong> via <code>io.BytesIO</code> pour en extraire le JSON directement.</p>
+        <pre><code>with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+    json_filename = [f for f in z.namelist() if f.endswith('.json')][0]
+    with z.open(json_filename) as f:
+        data = json.load(f)</code></pre>
+    </div>
+
+    <!-- The DFIR Report Detailed -->
+    <div class="card">
+        <h2>3. The DFIR Report</h2>
+        <span class="tag">Scraping Web</span> <span class="tag">Parsing HTML</span> <span class="tag">Format Non-Structuré</span>
+        <p>Contrairement aux APIs classiques, DFIR Report fournit des rapports de réponse aux incidents (Incident Response) sous forme de longs articles HTML. Le script télécharge la page, extrait le contenu textuel brut du bloc principal (balises <code>&lt;article&gt;</code> ou classes CSS spécifiques) et l'agrège dans un objet JSON.</p>
+        <p>Il conserve précieusement le bloc "Indicators of Compromise" pour la phase d'extraction NLP ultérieure.</p>
+    </div>
+
+    <!-- ThreatFox Detailed -->
+    <div class="card">
+        <h2>4. ThreatFox (abuse.ch)</h2>
+        <span class="tag">Rotation Quotidienne</span> <span class="tag">Volumes Massifs</span>
+        <p>ThreatFox partage d'énormes listes d'IOCs. Pour éviter des fichiers locaux de plusieurs gigaoctets, la stratégie de stockage de cette source crée des fichiers JSON horodatés (ex: <code>threatfox_data_2026-06-18.json</code>). Le script partitionne les données dès la collecte, facilitant la gestion de l'espace disque.</p>
     </div>
 
     <!-- CINS Army Detailed -->
     <div class="card">
-        <h2>Détail Source : CINS Army (Fichier Plat)</h2>
-        <span class="tag">Parsing Ligne par Ligne</span> <span class="tag">Validation IP</span>
-        <p>Pour les sources fournissant des fichiers "plats" (juste du texte brut), la pipeline doit s'assurer de ne pas injecter des commentaires ou du code cassé dans sa base. Elle utilise le module <code>ipaddress</code> natif de Python.</p>
-        <pre><code>def is_valid_ip(ip_str):
-    try:
-        import ipaddress
-        ipaddress.ip_address(ip_str)
-        return True
-    except ValueError:
-        return False
-
-# Dans la boucle de lecture :
-for raw_line in response.text.splitlines():
-    line = raw_line.strip()
-    if not line or line.startswith("#"): continue
-    if is_valid_ip(line): ips.append(line)</code></pre>
+        <h2>5. CINS Army</h2>
+        <span class="tag">Fichier Plat (TXT)</span> <span class="tag">Validation d'IP Stricte</span>
+        <p>CINS Army distribue un simple fichier texte avec une IP par ligne. Le script implémente une validation stricte avec le module <code>ipaddress</code> de Python pour ignorer silencieusement les commentaires (#), les lignes vides et les éventuelles erreurs de formatage.</p>
     </div>
 
     <!-- OTX AlienVault Detailed -->
     <div class="card">
-        <h2>Détail Source : OTX AlienVault (SDK & Multi-Threading)</h2>
-        <span class="tag">Pool de Threads</span> <span class="tag">SDK OTXv2</span>
-        <p>OTX fonctionne par "Pulses" (Rapports). Un Pulse peut contenir des centaines d'indicateurs (IOCs). Récupérer le contenu d'un Pulse prend 1 seconde. S'il y a 500 Pulses, cela prendrait 500 secondes séquentiellement. Le script utilise un <code>ThreadPoolExecutor</code> (10 travailleurs simultanés) pour paralléliser les requêtes réseau et gagner énormément de temps.</p>
-        <pre><code>from concurrent.futures import ThreadPoolExecutor, as_completed
-from OTXv2 import OTXv2
-
-otx = OTXv2(api_key)
-with ThreadPoolExecutor(max_workers=10) as executor:
+        <h2>6. OTX AlienVault</h2>
+        <span class="tag">SDK OTXv2</span> <span class="tag">Multi-Threading Avancé</span>
+        <p>OTX repose sur le concept de "Pulses", qui eux-mêmes contiennent des "Indicators". Une requête est nécessaire par Pulse pour récupérer ses IOCs.</p>
+        <p>Le script déploie un <code>ThreadPoolExecutor</code> avec 10 travailleurs simultanés pour lancer les requêtes réseau en parallèle, divisant le temps de traitement de l'historique par 10.</p>
+        <pre><code>with ThreadPoolExecutor(max_workers=10) as executor:
     futures = {}
-    for pulse in otx.getall_iter(modified_since=last_date, limit=200):
-        # On donne le travail à un thread d'arrière-plan
-        future = executor.submit(otx.get_pulse_indicators, pulse.get("id"))
-        futures[future] = pulse
-        
-    for future in as_completed(futures):
-        indicators = future.result()
-        # Traitement des indicateurs...</code></pre>
+    for pulse in otx.getall_iter(modified_since=last_date):
+        future = executor.submit(otx.get_pulse_indicators, pulse.get("id"))</code></pre>
+    </div>
+
+    <!-- Spamhaus & OpenPhish & FeodoTracker Detailed -->
+    <div class="card">
+        <h2>7. Spamhaus, OpenPhish & FeodoTracker</h2>
+        <span class="tag">Liste Noire</span> <span class="tag">Dédoublonnage Local</span>
+        <p>Ces sources proposent de longues listes textuelles ou CSV (Spamhaus DROP/EDROP, URLs de phishing). Le mécanisme de collecte stocke tout dans des structures en mémoire de type <code>set()</code> (Ensembles Python) lors du parsing pour garantir un dédoublonnage mathématiquement parfait avant l'enregistrement local en JSON.</p>
     </div>
     
     <div class="card">
-        <h2>L'Automatisation Post-Collecte</h2>
-        <p>À la toute fin du bloc <code>main()</code> de n'importe quel script de collection, on retrouve systématiquement ce bloc qui ordonne au système de déclencher immédiatement le parseur d'Extraction associé, créant ainsi la continuité de la "Pipeline" :</p>
-        <pre><code># [AUTOMATION] Extraction directe des IOCs/CVEs après collecte
-extraction_dir = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..', 'extraction_ioc_cve'))
-extractor_script = os.path.join(extraction_dir, "nvd_extractor.py")
-subprocess.run([sys.executable, extractor_script], cwd=extraction_dir)</code></pre>
+        <h2>L'Automatisation Post-Collecte (Triggering)</h2>
+        <p>A la toute fin de <strong>chaque script</strong>, une commande système ordonne le lancement immédiat du script d'Extraction associé via <code>subprocess.run</code>, liant les phases de la pipeline de manière réactive.</p>
     </div>
 
 </body>
