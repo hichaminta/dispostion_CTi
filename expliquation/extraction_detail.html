@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Extraction IOC/CVE — Détail Technique avec NLP DFIR</title>
+<style>
+  :root{--bg:#0d1117;--s:#161b22;--s2:#1c2230;--b:#30363d;--t:#e6edf3;--m:#7d8590;--ac:#58a6ff;--g:#3fb950;--y:#d29922;--o:#f0883e;--r:#f85149;--p:#bc8cff;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--t);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.6;}
+  nav{position:sticky;top:0;z-index:100;background:#0d1117ee;backdrop-filter:blur(8px);border-bottom:1px solid var(--b);padding:0 2rem;display:flex;align-items:center;gap:1.5rem;height:50px;}
+  nav .logo{font-weight:700;color:var(--ac);}
+  nav a{color:var(--m);text-decoration:none;font-size:.8rem;}
+  .page{max-width:1250px;margin:0 auto;padding:2rem 1.5rem 4rem;}
+
+  .hero{background:linear-gradient(135deg,#0d2137 0%,#1a1040 100%);border:1px solid var(--b);border-radius:12px;padding:2rem 2.5rem;margin-bottom:2.5rem;}
+  .hero h1{font-size:1.8rem;font-weight:800;margin-bottom:.4rem;}.hero h1 span{color:var(--ac);}
+  .hero p{color:var(--m);font-size:.9rem;}
+
+  h2{font-size:1.1rem;font-weight:700;color:var(--ac);margin:2rem 0 1rem;padding-bottom:.4rem;border-bottom:1px solid var(--b);display:flex;align-items:center;gap:.5rem;}
+  h2 .dot{width:8px;height:8px;border-radius:50%;background:var(--ac);flex-shrink:0;}
+  h3{font-size:.95rem;font-weight:700;margin:1.25rem 0 .6rem;color:var(--t);}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;}
+  @media(max-width:900px){.grid2{grid-template-columns:1fr;}}
+  .card{background:var(--s);border:1px solid var(--b);border-radius:10px;padding:1.1rem;}
+  .card-title{font-size:.75rem;font-weight:700;color:var(--m);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.6rem;}
+
+  code{background:#21262d;padding:.1rem .35rem;border-radius:4px;font-family:monospace;font-size:.82em;color:#ffa657;}
+  .formula{background:#0d2137;border:1px solid #1e4976;border-radius:8px;padding:.85rem 1.1rem;margin:.6rem 0;font-family:'Consolas',monospace;font-size:.82rem;color:#79c0ff;line-height:1.9;}
+  .formula .c{color:var(--m);font-style:italic;}
+  .formula .k{color:#ff7b72;}
+  .formula .s{color:#a5d3ff;}
+  .formula .n{color:#79c0ff;}
+  .formula .fn{color:var(--g);}
+
+  .regex-box{background:#0e1e12;border:1px solid #2e4a3c;border-radius:8px;padding:.85rem 1.1rem;margin:.6rem 0;font-family:monospace;font-size:.8rem;color:#7ee787;line-height:2;}
+
+  .badge{display:inline-block;padding:.12rem .45rem;border-radius:12px;font-size:.7rem;font-weight:700;}
+  .b-ip{background:#58a6ff22;color:var(--ac);border:1px solid #58a6ff44;}
+  .b-url{background:#bc8cff22;color:var(--p);border:1px solid #bc8cff44;}
+  .b-hash{background:#f0883e22;color:var(--o);border:1px solid #f0883e44;}
+  .b-dom{background:#3fb95022;color:var(--g);border:1px solid #3fb95044;}
+  .b-cve{background:#f8514922;color:var(--r);border:1px solid #f8514944;}
+  .b-mail{background:#d2992222;color:var(--y);border:1px solid #d2992244;}
+
+  .pipeline-v{display:flex;flex-direction:column;gap:0;}
+  .pv-step{background:var(--s2);border:1px solid var(--b);border-radius:8px;padding:.65rem 1rem;font-size:.83rem;position:relative;}
+  .pv-arrow{width:2px;height:22px;background:var(--b);margin-left:20px;position:relative;}
+  .pv-arrow::after{content:'▼';position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);color:var(--m);font-size:.65rem;}
+
+  .nlp-section{background:#1a1040;border:1px solid #3d2b5e;border-radius:10px;padding:1.25rem;margin-bottom:1.5rem;}
+  .nlp-title{font-size:1rem;font-weight:700;color:var(--p);margin-bottom:1rem;display:flex;align-items:center;gap:.5rem;}
+
+  .entity-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin:.75rem 0;}
+  @media(max-width:700px){.entity-grid{grid-template-columns:1fr 1fr;}}
+  .entity-card{background:#21262d;border:1px solid var(--b);border-radius:8px;padding:.75rem;}
+  .ec-label{font-size:.7rem;color:var(--m);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.3rem;}
+  .ec-val{font-size:.82rem;}
+
+  .flow-step-num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--ac);color:#000;font-size:.7rem;font-weight:800;flex-shrink:0;margin-right:.4rem;}
+
+  .info-box{background:#58a6ff14;border:1px solid #58a6ff44;border-radius:8px;padding:.85rem 1.1rem;margin:.75rem 0;font-size:.85rem;color:#a5d3ff;}
+  .warn-box{background:#f8514914;border:1px solid #f8514944;border-radius:8px;padding:.85rem 1.1rem;margin:.75rem 0;font-size:.85rem;color:#fca5a5;}
+  .ok-box{background:#3fb95014;border:1px solid #3fb95044;border-radius:8px;padding:.85rem 1.1rem;margin:.75rem 0;font-size:.85rem;color:#7ee787;}
+
+  ul.steplist{list-style:none;padding:0;margin:.5rem 0 0;}
+  ul.steplist li{display:flex;gap:.5rem;margin-bottom:.35rem;font-size:.83rem;}
+  ul.steplist li::before{content:'→';color:var(--ac);flex-shrink:0;}
+
+  .table-wrap{background:var(--s);border:1px solid var(--b);border-radius:10px;overflow:hidden;margin:.75rem 0;}
+  table{width:100%;border-collapse:collapse;}
+  th{background:var(--s2);padding:.5rem .8rem;text-align:left;color:var(--m);font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--b);}
+  td{padding:.5rem .8rem;border-bottom:1px solid #21262d;font-size:.82rem;vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+
+  .dfir-flow{display:flex;flex-direction:column;gap:0;margin:1rem 0;}
+  .df-step{display:flex;gap:.75rem;align-items:flex-start;margin-bottom:.25px;}
+  .df-dot{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.8rem;flex-shrink:0;border:2px solid;}
+  .df-content{flex:1;background:var(--s);border:1px solid var(--b);border-radius:8px;padding:.65rem .9rem;margin-bottom:.5rem;}
+  .df-title{font-size:.85rem;font-weight:700;margin-bottom:.2rem;}
+  .df-detail{font-size:.78rem;color:var(--m);}
+  .df-arrow{width:2px;height:18px;background:var(--b);margin:0 0 0 17px;}
+</style>
+</head>
+<body>
+<nav>
+  <span class="logo">CTI — Extraction IOC/CVE</span>
+  <a href="#base">BaseExtractor</a>
+  <a href="#regex">Regex</a>
+  <a href="#nlp">NLP spaCy</a>
+  <a href="#dfir">DFIR Pipeline</a>
+  <a href="#fp">Faux Positifs</a>
+  <a href="#telegram" style="color:#79c0ff;font-weight:700;">✈️ Telegram LLM</a>
+</nav>
+
+<div class="page">
+
+<div class="hero">
+  <h1>Extraction <span>IOC / CVE</span> — Détail Technique</h1>
+  <p>Comment les données brutes de chaque source sont parsées pour en extraire des IOC structurés (IP, URL, hash, CVE, domaine). Focus sur le NLP spaCy utilisé exclusivement pour les articles DFIR Report.</p>
+</div>
+
+<!-- ARCHITECTURE GLOBALE -->
+<h2><span class="dot"></span>Architecture Globale de l'Extraction</h2>
+
+<div class="grid2">
+  <div>
+    <div class="pipeline-v">
+      <div class="pv-step"><span class="flow-step-num">1</span><strong>Lecture source_data.json</strong><br><small style="color:var(--m)">Chargement du JSON brut collecté</small></div>
+      <div class="pv-arrow"></div>
+      <div class="pv-step"><span class="flow-step-num">2</span><strong>Filtre incrémental</strong><br><small style="color:var(--m)">filter_by_timestamp() — skip déjà traités</small></div>
+      <div class="pv-arrow"></div>
+      <div class="pv-step"><span class="flow-step-num">3</span><strong>BaseExtractor.extract_from_text()</strong><br><small style="color:var(--m)">Regex sur texte JSON sérialisé</small></div>
+      <div class="pv-arrow"></div>
+      <div class="pv-step"><span class="flow-step-num">4</span><strong>Filtrage faux positifs</strong><br><small style="color:var(--m)">Whitelist + extensions invalides</small></div>
+      <div class="pv-arrow"></div>
+      <div class="pv-step"><span class="flow-step-num">5</span><strong>Ancrage attributs → IOC</strong><br><small style="color:var(--m)">_extract_attributes() → ioc_enrichment</small></div>
+      <div class="pv-arrow"></div>
+      <div class="pv-step"><span class="flow-step-num">6</span><strong>Merge / Déduplication</strong><br><small style="color:var(--m)">merge_results() par record_id</small></div>
+      <div class="pv-arrow"></div>
+      <div class="pv-step"><span class="flow-step-num">7</span><strong>Sauvegarde output_cve_ioc/</strong><br><small style="color:var(--m)">source_extracted.json</small></div>
+    </div>
+  </div>
+  <div>
+    <h3>Classe BaseExtractor — Rôle</h3>
+    <p style="font-size:.85rem;color:#c9d1d9;margin-bottom:.75rem;">La classe <code>BaseExtractor</code> est le moteur commun à tous les extracteurs sources. Elle fournit :</p>
+    <ul class="steplist">
+      <li>Les patterns regex pour chaque type d'IOC</li>
+      <li>La whitelist de domaines bénins (google.com, github.com...)</li>
+      <li>La logique d'extraction et déduplication</li>
+      <li>L'ancrage des attributs source dans chaque IOC</li>
+      <li>Le merge des records existants vs nouveaux</li>
+    </ul>
+    <div class="info-box" style="margin-top:.75rem;">
+      Chaque source hérite de <code>BaseExtractor</code> ou l'instancie directement. Les extracteurs spécifiques (ex: <code>dfir_report_extractor.py</code>) ajoutent leur propre logique de filtrage en plus.
+    </div>
+  </div>
+</div>
+
+<!-- REGEX PAR TYPE -->
+<h2 id="regex"><span class="dot"></span>Regex d'Extraction par Type d'IOC</h2>
+
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Type</th><th>Priorité</th><th>Pattern Regex</th><th>Normalisation</th><th>Cas spéciaux</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="badge b-cve">CVE</span></td>
+        <td>1 (premier)</td>
+        <td><code>CVE-\d{4}-\d{4,}</code></td>
+        <td><code>.upper()</code></td>
+        <td>Dédupliqué par <code>cve.id</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge b-url">URL</span></td>
+        <td>2 (haute)</td>
+        <td><code>\bhttps?://[^\s&lt;"&gt;]+\b</code></td>
+        <td><code>.strip()</code></td>
+        <td>Blacklist <code>phishtank.com/phish_detail...</code> — Whitelist domaine hôte</td>
+      </tr>
+      <tr>
+        <td><span class="badge b-mail">Email</span></td>
+        <td>3</td>
+        <td><code>[a-zA-Z0-9._%+-]+@[...]+\.[a-zA-Z]{2,}</code></td>
+        <td><code>.lower()</code></td>
+        <td>Type <code>autr</code> dans le JSON de sortie</td>
+      </tr>
+      <tr>
+        <td><span class="badge b-hash">SHA256</span></td>
+        <td>4</td>
+        <td><code>[a-fA-F0-9]{64}</code></td>
+        <td><code>.lower()</code></td>
+        <td>Mapping hash → nom de fichier via <code>extract_file_hashes_general()</code></td>
+      </tr>
+      <tr>
+        <td><span class="badge b-hash">SHA1</span></td>
+        <td>4</td>
+        <td><code>[a-fA-F0-9]{40}</code></td>
+        <td><code>.lower()</code></td>
+        <td>Type <code>hashe</code> unifié</td>
+      </tr>
+      <tr>
+        <td><span class="badge b-hash">MD5</span></td>
+        <td>4</td>
+        <td><code>[a-fA-F0-9]{32}</code></td>
+        <td><code>.lower()</code></td>
+        <td>Type <code>hashe</code> unifié</td>
+      </tr>
+      <tr>
+        <td><span class="badge b-ip">IP/CIDR</span></td>
+        <td>5a</td>
+        <td><code>\d{1,3}\.\d{1,3}..../\d{1,2}</code></td>
+        <td>via <code>ipaddress.ip_address()</code></td>
+        <td>Ranges extraits EN PREMIER, évite duplication dans IPs simples</td>
+      </tr>
+      <tr>
+        <td><span class="badge b-ip">IP:Port</span></td>
+        <td>5b</td>
+        <td><code>\d{1,3}\.\d{1,3}...:\d{1,5}</code></td>
+        <td>gardé tel quel</td>
+        <td>Extrait avant IPs simples pour éviter collision</td>
+      </tr>
+      <tr>
+        <td><span class="badge b-ip">IP simple</span></td>
+        <td>5c</td>
+        <td><code>(?:(?:25[0-5]|2[0-4]\d|...)\.){3}...</code></td>
+        <td><code>ipaddress.ip_address()</code></td>
+        <td>Skip si déjà inclus dans un IP:Port ou CIDR</td>
+      </tr>
+      <tr>
+        <td><span class="badge b-dom">Domaine</span></td>
+        <td>6 (dernier)</td>
+        <td><code>(?:[a-z0-9][a-z0-9-]{0,61}\.)+[a-z]{2,}</code></td>
+        <td><code>.lower()</code></td>
+        <td>Skip si : dans une URL déjà extraite, extension fichier, whitelist, pas de point</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>Ordre de priorité — pourquoi ?</h3>
+<p style="font-size:.85rem;color:#c9d1d9;margin-bottom:.75rem;">L'ordre évite les collisions : une URL <code>http://evil.com</code> est extraite comme URL, et son domaine <code>evil.com</code> n'est PAS re-extrait séparément (test <code>val_lower in ioc['value'].lower()</code>). Idem pour IP:port avant IP simple.</p>
+
+<!-- HASH → FILENAME -->
+<h2 id="base"><span class="dot"></span>Mapping Hash → Nom de Fichier</h2>
+<div class="grid2">
+  <div>
+    <p style="font-size:.85rem;color:#c9d1d9;margin-bottom:.75rem;"><code>extract_file_hashes_general()</code> parcourt le texte pour associer chaque hash à son nom de fichier. 4 formats supportés :</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Format</th><th>Exemple</th></tr></thead>
+        <tbody>
+          <tr><td>Header block</td><td><code>File: w.exe</code> puis <code>a3f2...hash</code></td></tr>
+          <tr><td>Inline separator</td><td><code>w.exe: a3f2...</code> ou <code>w.exe - a3f2...</code></td></tr>
+          <tr><td>Inline parenthèses</td><td><code>w.exe (a3f2...)</code></td></tr>
+          <tr><td>Checksum utility</td><td><code>a3f2... *w.exe</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div>
+    <h3>Résultat dans le JSON</h3>
+    <div class="formula">
+<span class="c"># Champ "file" ajouté à l'IOC hash</span>
+{
+  <span class="s">"type"</span>: <span class="s">"hashe"</span>,
+  <span class="s">"value"</span>: <span class="s">"a3f2c7...9d1e"</span>,
+  <span class="s">"file"</span>: <span class="s">"w.exe"</span>,    <span class="c">← ajouté si trouvé</span>
+  <span class="s">"source"</span>: <span class="s">"DFIR Report"</span>,
+  <span class="s">"ioc_enrichment"</span>: <span class="c">{}</span>
+}
+    </div>
+    <div class="ok-box">Les fichiers <code>.conf</code>, <code>.log</code>, <code>.xml</code>, <code>.json</code> sont exclus du mapping — seuls les exécutables et scripts sont mappés.</div>
+  </div>
+</div>
+
+<!-- NLP SPACY -->
+<h2 id="nlp"><span class="dot"></span>NLP spaCy — Utilisé UNIQUEMENT pour DFIR Report</h2>
+
+<div class="nlp-section">
+  <div class="nlp-title">🧠 <span>spaCy <code>en_core_web_sm</code> — Contexte sémantique des rapports DFIR</span></div>
+
+  <p style="font-size:.85rem;color:#c9d1d9;margin-bottom:1rem;">
+    Le NLP est activé à <strong>deux endroits</strong> dans la plateforme, toujours dans le contexte DFIR Report :
+    (1) dans l'<strong>extracteur</strong> pour filtrer les faux positifs et contextualiser les IOC,
+    (2) dans l'<strong>enrichissement NLP CVE</strong> pour extraire entités de la description CVE.
+  </p>
+
+  <div class="grid2">
+    <div>
+      <h3>Contexte 1 — Extracteur DFIR</h3>
+      <p style="font-size:.83rem;color:#c9d1d9;margin-bottom:.5rem;">Fonction : <code>_extract_nlp_context(text)</code> dans <code>dfir_report_extractor.py</code></p>
+      <ul class="steplist">
+        <li>Nettoyage HTML : suppression balises <code>&lt;script&gt;</code>, <code>&lt;style&gt;</code>, attributs WordPress</li>
+        <li>Analyse du texte nettoyé (max 100 000 chars) par spaCy NER</li>
+        <li>Classification des entités en 5 catégories</li>
+        <li>Extraction regex complémentaire : versions logicielles et commandes système</li>
+      </ul>
+
+      <div class="entity-grid">
+        <div class="entity-card">
+          <div class="ec-label">actor</div>
+          <div class="ec-val" style="color:var(--r);">Groupes d'attaquants<br><small style="color:var(--m)">label ORG + keywords (spider, apt, lockbit...)</small></div>
+        </div>
+        <div class="entity-card">
+          <div class="ec-label">victim</div>
+          <div class="ec-val" style="color:var(--y);">Cibles / infrastructures<br><small style="color:var(--m)">labels GPE, LOC, ORG non-acteur</small></div>
+        </div>
+        <div class="entity-card">
+          <div class="ec-label">command</div>
+          <div class="ec-val" style="color:var(--o);">Outils & commandes<br><small style="color:var(--m)">regex cmd.exe, powershell, whoami + .exe/.dll/.ps1</small></div>
+        </div>
+        <div class="entity-card">
+          <div class="ec-label">technology</div>
+          <div class="ec-val" style="color:var(--ac);">Logiciels & versions<br><small style="color:var(--m)">label PRODUCT + regex "nom v1.2.3"</small></div>
+        </div>
+        <div class="entity-card">
+          <div class="ec-label">other</div>
+          <div class="ec-val" style="color:var(--m);">Entités contextuelles<br><small style="color:var(--m)">tout le reste non classifié</small></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3>Contexte 2 — Enrichissement NLP CVE</h3>
+      <p style="font-size:.83rem;color:#c9d1d9;margin-bottom:.5rem;">Fonction : <code>extract_entities(text)</code> dans <code>enrichment/enrichment_cve/nlp_enrichir.py</code></p>
+      <ul class="steplist">
+        <li>Appliqué aux descriptions CVE des records enrichis (<code>output_enrichment/</code>)</li>
+        <li>Extrait : <strong>vendors</strong> (ORG), <strong>products</strong> (PRODUCT), <strong>platforms</strong> (GPE), <strong>versions</strong> (regex)</li>
+        <li>Ajouté dans <code>record["attributes"]["nlp_analysis"]</code></li>
+        <li>Propagé aussi dans chaque <code>cve["ioc_enrichment"]["nlp_extracted"]</code></li>
+      </ul>
+
+      <div class="formula" style="margin-top:.75rem;">
+<span class="c"># Résultat dans output_enrichment/nvd_enriched.json</span>
+record[<span class="s">"attributes"</span>][<span class="s">"nlp_analysis"</span>] = {
+  <span class="s">"vendors"</span>:   [<span class="s">"Apache"</span>, <span class="s">"Microsoft"</span>],
+  <span class="s">"products"</span>:  [<span class="s">"Log4j"</span>, <span class="s">"Windows Server"</span>],
+  <span class="s">"versions"</span>:  [<span class="s">"2.14.1"</span>, <span class="s">"v2.0"</span>],
+  <span class="s">"platforms"</span>: [<span class="s">"Linux"</span>],
+  <span class="s">"tlp"</span>:       <span class="s">"TLP:CLEAR"</span>,
+  <span class="s">"nlp_enriched_at"</span>: <span class="s">"2026-06-20T..."</span>
+}
+      </div>
+    </div>
+  </div>
+
+  <h3>Filtrage faux positifs par NLP — Interaction avec l'extraction</h3>
+  <p style="font-size:.85rem;color:#c9d1d9;margin-bottom:.75rem;">Les entités NLP extraites servent de <strong>contexte dynamique</strong> pour filtrer les faux positifs dans <code>_is_false_positive()</code> :</p>
+  <div class="formula">
+<span class="c"># Logique de filtre dynamique NLP dans dfir_report_extractor.py</span>
+legit_names = <span class="fn">set</span>()
+<span class="k">for</span> key <span class="k">in</span> [<span class="s">"victim"</span>, <span class="s">"command"</span>, <span class="s">"other"</span>]:
+    <span class="k">for</span> item <span class="k">in</span> nlp_analysis.get(key, []):
+        cleaned = re.<span class="fn">sub</span>(<span class="s">r'[^a-z0-9]'</span>, <span class="s">''</span>, item.lower())
+        legit_names.add(cleaned)   <span class="c"># ex: "microsoft" "cmd" "powershell"</span>
+
+<span class="c"># Lors du test d'un domaine extrait :</span>
+sld = <span class="fn">_get_sld</span>(domain)   <span class="c"># "microsoft" depuis "login.microsoft.com"</span>
+<span class="k">if</span> sld <span class="k">in</span> legit_names:
+    <span class="k">return</span> True   <span class="c"># → faux positif, nom d'outil mentionné dans le texte</span>
+  </div>
+  <div class="warn-box">Cette logique NLP est UNIQUE à DFIR Report. Aucun autre extracteur ne fait de NLP. Pour les autres sources (ThreatFox, FeodoTracker, MalwareBazaar...), les IOC sont déjà structurés : pas besoin de NLP, les champs sont directement mappés.</div>
+</div>
+
+<!-- PIPELINE DFIR COMPLET -->
+<h2 id="dfir"><span class="dot"></span>Pipeline Complet DFIR Report — Étape par Étape</h2>
+
+<div class="dfir-flow">
+  <div class="df-step">
+    <div class="df-dot" style="background:#58a6ff22;border-color:var(--ac);">1</div>
+    <div class="df-content">
+      <div class="df-title">Lecture des articles RSS collectés</div>
+      <div class="df-detail">Chargement de <code>dfir_report_data.json</code> — liste d'articles avec <code>content</code> (HTML complet) + <code>ioc_section</code> (HTML après le marqueur "IOCs")</div>
+    </div>
+  </div>
+  <div class="df-arrow"></div>
+  <div class="df-step">
+    <div class="df-dot" style="background:#3fb95022;border-color:var(--g);">2</div>
+    <div class="df-content">
+      <div class="df-title">Filtre incrémental par timestamp</div>
+      <div class="df-detail"><code>filter_by_timestamp()</code> — skip les articles dont la date est dans l'intervalle déjà traité (<code>oldest</code> / <code>recent</code> du tracking)</div>
+    </div>
+  </div>
+  <div class="df-arrow"></div>
+  <div class="df-step">
+    <div class="df-dot" style="background:#bc8cff22;border-color:var(--p);">3</div>
+    <div class="df-content">
+      <div class="df-title">NLP spaCy — <code>_extract_nlp_context(text)</code></div>
+      <div class="df-detail">
+        Nettoyage HTML → analyse spaCy → extraction : actors, victims, commands, technologies, others<br>
+        Aussi : regex versions logicielles (<code>Apache 2.4.51</code>) + commandes (<code>powershell.exe</code>)<br>
+        <strong>Résultat stocké dans <code>nlp_analysis</code> pour usage dans les étapes suivantes</strong>
+      </div>
+    </div>
+  </div>
+  <div class="df-arrow"></div>
+  <div class="df-step">
+    <div class="df-dot" style="background:#f0883e22;border-color:var(--o);">4</div>
+    <div class="df-content">
+      <div class="df-title">Extraction regex — <code>extract_from_text(content + ioc_section)</code></div>
+      <div class="df-detail">Regex sur le texte combiné (article complet + section IOC). Produit : URLs, hashes (SHA256, SHA1, MD5), IPs, domaines, CVEs</div>
+    </div>
+  </div>
+  <div class="df-arrow"></div>
+  <div class="df-step">
+    <div class="df-dot" style="background:#f8514922;border-color:var(--r);">5</div>
+    <div class="df-content">
+      <div class="df-title">Filtrage faux positifs — <code>_is_false_positive(ioc, nlp_analysis)</code></div>
+      <div class="df-detail">
+        IPs privées/loopback/multicast rejetées • Résolveurs DNS publics (8.8.8.8...) rejetés •
+        IPs "version déguisée" rejetées (dernier octet=0) • Domaines whitelist blog rejetés •
+        Extensions fichier comme domaine rejetées (<code>.exe</code>, <code>.dll</code>...) •
+        <strong>Filtre dynamique NLP : SLD dans legit_names → rejeté</strong>
+      </div>
+    </div>
+  </div>
+  <div class="df-arrow"></div>
+  <div class="df-step">
+    <div class="df-dot" style="background:#d2992222;border-color:var(--y);">6</div>
+    <div class="df-content">
+      <div class="df-title">Enrichissement des tags via NLP technology</div>
+      <div class="df-detail">
+        Les technologies détectées par NLP (<code>Apache 2.4.51</code>, <code>Log4j 2.x</code>) sont ajoutées comme tags <code>tech:...</code><br>
+        Les fichiers associés aux hashes → tags <code>file:w.exe</code>
+      </div>
+    </div>
+  </div>
+  <div class="df-arrow"></div>
+  <div class="df-step">
+    <div class="df-dot" style="background:#0e1e12;border-color:var(--g);">7</div>
+    <div class="df-content">
+      <div class="df-title">Routage — IOC vs Vulnérabilité</div>
+      <div class="df-detail">
+        <strong>Cas 1 : IOC présents</strong> → <code>_make_ioc_record()</code> → <code>output_cve_ioc/dfir_report_extracted.json</code> → pipeline enrichissement normal<br>
+        <strong>Cas 2 : CVE seul, pas d'IOC</strong> → <code>_make_vuln_record()</code> → <code>output_cve_ioc/dfir_report_vuln_extracted.json</code> → bypass enrichissement, direct corrélation<br>
+        <strong>Cas 3 : Ni IOC ni CVE</strong> → skip
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FAUX POSITIFS GÉNÉRAUX -->
+<h2 id="fp"><span class="dot"></span>Filtres Faux Positifs — BaseExtractor</h2>
+
+<div class="grid2">
+  <div class="card">
+    <div class="card-title">Whitelist domaines bénins</div>
+    <p style="font-size:.82rem;color:#c9d1d9;margin-bottom:.5rem;">Domaines toujours ignorés même s'ils apparaissent dans un texte malveillant :</p>
+    <div style="font-size:.78rem;color:var(--m);font-family:monospace;line-height:1.8;">
+      google.com · microsoft.com · amazon.com · cloudflare.com<br>
+      github.com · apple.com · facebook.com · openai.com<br>
+      sinkhole.ch · abuse.ch · shadowserver.org<br>
+      phishtank.com · abuseipdb.com · nist.gov · localhost
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Extensions invalides — domaines</div>
+    <p style="font-size:.82rem;color:#c9d1d9;margin-bottom:.5rem;">Valeurs qui ressemblent à des domaines mais sont en réalité des noms de fichiers :</p>
+    <div style="font-size:.78rem;color:var(--m);font-family:monospace;line-height:1.8;">
+      .exe .dll .zip .rar .7z .tar .gz .bin .dat<br>
+      .hta .msi .bat .vbs .scr .js .elf .sh .lnk<br>
+      .conf .ini .cfg .xml .json .yaml .txt .log
+    </div>
+  </div>
+</div>
+
+<div class="info-box" style="margin-top:1rem;">
+  <strong>Déduplication finale :</strong> après extraction, chaque IOC est dédupliqué par la clé <code>(type, value)</code>. Puis le merge entre enregistrements existants et nouveaux se fait par <code>record_id</code> avec fusion des champs <code>iocs</code>, <code>cves</code>, <code>tags</code>, <code>references</code> et <code>attributes</code>.
+</div>
+
+<!-- JSON FINAL -->
+<h2><span class="dot"></span>Format JSON de Sortie — Après Extraction</h2>
+<div class="formula">
+<span class="c"># output_cve_ioc/feodotracker_extracted.json — exemple d'un record</span>
+{
+  <span class="s">"source"</span>:     <span class="s">"FeodoTracker"</span>,
+  <span class="s">"record_id"</span>:  <span class="s">"185.220.101.47"</span>,
+  <span class="s">"summary"</span>:    <span class="s">"Extracted 1 IOCs from FeodoTracker..."</span>,
+  <span class="s">"iocs"</span>: [{
+    <span class="s">"type"</span>:   <span class="s">"ip"</span>,
+    <span class="s">"value"</span>: <span class="s">"185.220.101.47"</span>,
+    <span class="s">"source"</span>:<span class="s">"FeodoTracker"</span>,
+    <span class="s">"ioc_enrichment"</span>: {   <span class="c">← attributs de la source ancrés ici</span>
+      <span class="s">"malware_family"</span>: <span class="s">"Emotet"</span>,
+      <span class="s">"status"</span>:        <span class="s">"online"</span>,
+      <span class="s">"port"</span>:          <span class="n">443</span>,
+      <span class="s">"country"</span>:       <span class="s">"NL"</span>
+    }
+  }],
+  <span class="s">"cves"</span>:       [],
+  <span class="s">"tags"</span>:       [<span class="s">"emotet"</span>, <span class="s">"online"</span>],
+  <span class="s">"references"</span>: [],
+  <span class="s">"attributes"</span>: { <span class="s">"malware_family"</span>: <span class="s">"Emotet"</span>, <span class="s">"status"</span>: <span class="s">"online"</span> },
+  <span class="s">"collected_at"</span>: <span class="s">"2026-06-20T08:00:00Z"</span>
+}
+</div>
+
+<div class="formula" style="margin-top:.75rem;">
+<span class="c"># output_cve_ioc/dfir_report_extracted.json — avec NLP</span>
+{
+  <span class="s">"source"</span>:    <span class="s">"DFIR Report"</span>,
+  <span class="s">"iocs"</span>: [
+    { <span class="s">"type"</span>:<span class="s">"ip"</span>,    <span class="s">"value"</span>:<span class="s">"185.220.101.47"</span> },
+    { <span class="s">"type"</span>:<span class="s">"hashe"</span>, <span class="s">"value"</span>:<span class="s">"a3f2..."</span>, <span class="s">"file"</span>:<span class="s">"w.exe"</span> }
+  ],
+  <span class="s">"cves"</span>: [{ <span class="s">"id"</span>:<span class="s">"CVE-2023-28252"</span>, <span class="s">"source"</span>:<span class="s">"DFIR Report"</span> }],
+  <span class="s">"tags"</span>: [<span class="s">"lockbit"</span>, <span class="s">"ransomware"</span>, <span class="s">"tech:cobalt strike v4.9"</span>, <span class="s">"file:w.exe"</span>],
+  <span class="s">"attributes"</span>: {
+    <span class="s">"nlp_analysis"</span>: {       <span class="c">← unique à DFIR Report</span>
+      <span class="s">"actor"</span>:      [<span class="s">"LockBit Group"</span>],
+      <span class="s">"victim"</span>:     [<span class="s">"France"</span>, <span class="s">"Manufacturing"</span>],
+      <span class="s">"command"</span>:    [<span class="s">"cmd.exe"</span>, <span class="s">"powershell.exe"</span>, <span class="s">"nxc.exe"</span>],
+      <span class="s">"technology"</span>: [<span class="s">"Cobalt Strike v4.9"</span>, <span class="s">"Mimikatz v2.2"</span>],
+      <span class="s">"other"</span>:      []
+    }
+  }
+}
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════
+     PIPELINE TELEGRAM LEAK — LLM + PROMPTS
+═══════════════════════════════════════════════════════════ -->
+
+<div style="margin-top:3rem;border-top:2px solid #1e40af;padding-top:2rem;">
+
+<div style="background:linear-gradient(135deg,#0a1628 0%,#0d2137 50%,#0a1628 100%);border:1px solid #1e40af;border-radius:12px;padding:2rem 2.5rem;margin-bottom:2.5rem;">
+  <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.6rem;">
+    <span style="font-size:1.5rem;">✈️</span>
+    <h1 style="font-size:1.8rem;font-weight:800;margin:0;">Pipeline <span style="color:#2196F3;">Telegram Leak</span> — LLM & Prompts</h1>
+  </div>
+  <p style="color:var(--m);font-size:.9rem;max-width:750px;">Pipeline indépendant du CTI classique. Il surveille des canaux Telegram hacktivistes, télécharge les fichiers partagés, et utilise un <strong style="color:#79c0ff;">LLM</strong> pour qualifier automatiquement chaque message comme fuite de données ou bruit.</p>
+  <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem;">
+    <span style="background:#1e3a5f;color:#79c0ff;border:1px solid #2d5a8e;border-radius:4px;padding:.15rem .5rem;font-size:.72rem;font-weight:700;">PIPELINE SÉPARÉ</span>
+    <span style="background:#1a2f1a;color:#7ee787;border:1px solid #2d4f2d;border-radius:4px;padding:.15rem .5rem;font-size:.72rem;font-weight:700;">2 APPELS LLM</span>
+    <span style="background:#2f1a3a;color:#bc8cff;border:1px solid #4d2b6e;border-radius:4px;padding:.15rem .5rem;font-size:.72rem;font-weight:700;">5 PROVIDERS IA</span>
+    <span style="background:#3f1a1a;color:#fca5a5;border:1px solid #6e2d2d;border-radius:4px;padding:.15rem .5rem;font-size:.72rem;font-weight:700;">OVERRIDE HEURISTIQUE</span>
+  </div>
+</div>
+
+<!-- ARCHITECTURE GLOBALE TELEGRAM -->
+<h2 id="telegram"><span class="dot" style="background:#2196F3;"></span>Architecture du Pipeline Telegram Leak</h2>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+  <div>
+    <div class="pipeline-v">
+      <div class="pv-step" style="border-left:3px solid #2196F3;"><span class="flow-step-num" style="background:#2196F3;">1</span><strong>TelegramCollector.start()</strong><br><small style="color:var(--m)">Connexion Telethon API — itération messages newest→oldest</small></div>
+      <div class="pv-arrow"></div>
+      <div class="pv-step" style="border-left:3px solid #2196F3;"><span class="flow-step-num" style="background:#2196F3;">2</span><strong>process_message()</strong><br><small style="color:var(--m)">Téléchargement média (≤200 MB) + sampling archive</small></div>
+      <div class="pv-arrow"></div>
+      <div class="pv-step" style="border-left:3px solid var(--p);"><span class="flow-step-num" style="background:var(--p);">3</span><strong>LeakAnalyzer.analyze_leak()</strong><br><small style="color:var(--m)">Regex + <strong>PROMPT LLM #1</strong> → qualification individuelle</small></div>
+      <div class="pv-arrow"></div>
+      <div class="pv-step" style="border-left:3px solid var(--o);"><span class="flow-step-num" style="background:var(--o);color:#000;">4</span><strong>Override Heuristique</strong><br><small style="color:var(--m)">Si archive présente → forcer is_leak=true même si LLM dit non</small></div>
+      <div class="pv-arrow"></div>
+      <div class="pv-step" style="border-left:3px solid var(--g);"><span class="flow-step-num" style="background:var(--g);color:#000;">5</span><strong>IntelligenceAgent.save_intel()</strong><br><small style="color:var(--m)">Sauvegarde purifiée → leaks.json + leaks_intel.json</small></div>
+      <div class="pv-arrow"></div>
+      <div class="pv-step" style="border-left:3px solid var(--y);"><span class="flow-step-num" style="background:var(--y);color:#000;">6</span><strong>process_daily_leaks()</strong><br><small style="color:var(--m)"><strong>PROMPT LLM #2</strong> — corrélation + fusion incidents du jour</small></div>
+    </div>
+  </div>
+  <div>
+    <h3>Séparation vs Pipeline IOC/CVE classique</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Aspect</th><th>Pipeline IOC/CVE</th><th>Pipeline Telegram</th></tr></thead>
+        <tbody>
+          <tr><td>Source</td><td>APIs, feeds, RSS</td><td>Canaux Telegram privés</td></tr>
+          <tr><td>IA</td><td>spaCy NLP (règles)</td><td>LLM génératif (Gemini, GPT...)</td></tr>
+          <tr><td>Sortie</td><td>output_cve_ioc/*.json</td><td>data/leaks + leaks_intel.json</td></tr>
+          <tr><td>Format</td><td>IOC structurés</td><td>Incidents de fuite enrichis</td></tr>
+          <tr><td>Tracking</td><td>MongoDB</td><td>tracking.json local</td></tr>
+          <tr><td>Objet</td><td>Malware, CVE, phishing</td><td>Leaks données, PII, credentials</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:.9rem;">Providers LLM supportés</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Provider</th><th>Modèle</th><th>Variable env</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Gemini</strong> (défaut)</td><td><code>gemini-1.5-flash</code></td><td><code>GEMINI_API_KEY</code></td></tr>
+          <tr><td><strong>OpenAI</strong></td><td><code>gpt-4o-mini</code></td><td><code>OPENAI_API_KEY</code></td></tr>
+          <tr><td><strong>Ollama</strong> (local)</td><td><code>qwen2.5-coder:1.5b</code></td><td><code>OLLAMA_URL</code></td></tr>
+          <tr><td><strong>OpenRouter</strong></td><td><code>gemini-3.5-flash</code></td><td><code>OPENROUTER_API_KEY</code></td></tr>
+          <tr><td><strong>Nebius</strong></td><td><code>Llama-3.3-70B-Instruct</code></td><td><code>NEBIUS_API_KEY</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="info-box" style="margin-top:.5rem;">Sélection via <code>AI_PROVIDER=gemini|openai|ollama|openrouter|nebius</code> dans le <code>.env</code>. Fallback automatique vers Regex si le LLM est indisponible.</div>
+  </div>
+</div>
+
+<!-- COLLECTE TELETHON -->
+<h2 id="tg-collect"><span class="dot" style="background:#2196F3;"></span>Étape 1 — Collecte Telethon (TelegramCollector)</h2>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+  <div>
+    <p class="desc">La collecte utilise la librairie <strong>Telethon</strong>, un client Telegram MTProto complet. Elle parcourt les messages du plus récent au plus ancien et s'arrête dès qu'elle atteint la date de début configurée.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Paramètre</th><th>Source</th><th>Valeur exemple</th></tr></thead>
+        <tbody>
+          <tr><td><code>TELEGRAM_API_ID</code></td><td>.env</td><td>Application ID Telegram</td></tr>
+          <tr><td><code>TELEGRAM_API_HASH</code></td><td>.env</td><td>Hash de l'application</td></tr>
+          <tr><td><code>TELEGRAM_PHONE</code></td><td>.env</td><td>+212 6xxxxxxxx</td></tr>
+          <tr><td>Canaux</td><td>settings.yaml</td><td>https://t.me/jabaroot_1</td></tr>
+          <tr><td>Session</td><td>fichier .session</td><td>telegram_leak_session.session</td></tr>
+          <tr><td>Max taille fichier</td><td>code</td><td>200 MB</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div>
+    <h3>Tracking incrémental (tracking.json)</h3>
+    <p style="font-size:.83rem;color:#c9d1d9;margin-bottom:.5rem;">Chaque canal a son propre intervalle de tracking pour éviter de re-traiter les mêmes messages :</p>
+    <div class="formula" style="background:#0a1628;border-color:#1e3a5f;">
+<span class="c"># tracking.json — structure par canal</span>
+[{
+  <span class="s">"group_name"</span>:        <span class="s">"Jabaroot DZ"</span>,
+  <span class="s">"start_date"</span>:        <span class="s">"2026-05-05"</span>,
+  <span class="s">"earliest_modified"</span>: <span class="s">"2026-04-08T10:23:00"</span>,
+  <span class="s">"last_run"</span>:          <span class="s">"2026-06-20T09:15:00"</span>
+}]
+<span class="c">
+# Logique SKIP : messages dans [earliest → last_run]
+# sont ignorés → seuls AVANT et APRÈS sont traités</span>
+    </div>
+    <h3>Configuration canal (settings.yaml)</h3>
+    <div class="formula" style="background:#0a1628;border-color:#1e3a5f;font-size:.78rem;">
+telegram:
+  channels:
+  - url: https://t.me/jabaroot_1
+    name: <span class="s">"Jabaroot DZ"</span>
+    category: <span class="s">"Hacktiviste"</span>
+    country: <span class="s">"Algérie"</span>
+    risk_level: <span class="s">"high"</span>
+    language: <span class="s">"AR/FR"</span>
+    description: <span class="s">"Groupe hacktiviste algérien ciblant
+      les institutions marocaines..."</span>
+    </div>
+  </div>
+</div>
+
+<!-- TRAITEMENT MESSAGES -->
+<h2 id="tg-media"><span class="dot" style="background:#2196F3;"></span>Étape 2 — Traitement des Messages et Fichiers</h2>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+  <div>
+    <h3>Arborescence de stockage</h3>
+    <div class="formula" style="background:#0a1628;border-color:#1e3a5f;font-size:.78rem;">
+data/leaks/
+  Jabaroot_DZ/
+    2026-04-08/
+      leaks.json         <span class="c">← records du jour</span>
+      downloads/
+        fichier.zip
+        fichier.zip_extracted/
+          employees.csv
+          database.sql
+    2026-05-18/
+      leaks.json
+    </div>
+
+    <h3 style="margin-top:.9rem;">Lecture archive → file_sample</h3>
+    <ul class="steplist">
+      <li>Extension <code>.zip / .ziip / .rar</code> → extraction dans sous-dossier</li>
+      <li>Lecture des fichiers <code>.txt .sql .csv .json .log</code> dedans</li>
+      <li>100 premières lignes + métadonnées (taille, nb lignes) → <code>file_sample</code></li>
+      <li>Si fichier > 500 MB : limite à 100 lignes seulement</li>
+      <li>Encodage détecté automatiquement : UTF-8, UTF-16, UTF-32, BOM</li>
+      <li><code>file_sample</code> tronqué à 6000 chars avant envoi au LLM</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Record brut créé avant analyse LLM</h3>
+    <div class="formula" style="background:#0a1628;border-color:#1e3a5f;font-size:.78rem;">
+leak_record = {
+  <span class="s">"id"</span>:      message.id,
+  <span class="s">"date"</span>:    <span class="s">"2026-04-08T10:23:00+00:00"</span>,
+  <span class="s">"channel"</span>: <span class="s">"Jabaroot DZ"</span>,
+  <span class="s">"content"</span>: message.message,   <span class="c">← texte Telegram</span>
+  <span class="s">"metadata"</span>: {
+    <span class="s">"has_media"</span>:       <span class="k">true</span>,
+    <span class="s">"file_path"</span>:       <span class="s">"Jabaroot_DZ/2026-04-08/employees.zip"</span>,
+    <span class="s">"extracted_files"</span>: [<span class="s">"...employees.csv"</span>]
+  },
+  <span class="s">"analysis"</span>: <span class="k">null</span>   <span class="c">← sera rempli par le LLM</span>
+}
+    </div>
+    <div class="warn-box" style="margin-top:.5rem;">Fichiers > 200 MB : skip du téléchargement. Un flag <code>"SKIPPED_TOO_LARGE"</code> est mis dans <code>file_path</code> pour traçabilité.</div>
+  </div>
+</div>
+
+<!-- PROMPT LLM #1 -->
+<h2 id="tg-prompt1"><span class="dot" style="background:var(--p);"></span>Étape 3 — PROMPT LLM #1 : Qualification individuelle du message</h2>
+
+<div style="background:#1a1040;border:1px solid #3d2b5e;border-radius:10px;padding:1.25rem;margin-bottom:1.5rem;">
+  <div style="font-size:.9rem;font-weight:700;color:var(--p);margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem;">🧠 <span>Prompt de qualification — LeakAnalyzer.analyze_leak()</span></div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+    <div>
+      <h3>Inputs envoyés au LLM</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Input</th><th>Taille max</th><th>Source</th></tr></thead>
+          <tbody>
+            <tr><td>Texte du message Telegram</td><td>1 500 chars</td><td><code>message.message</code></td></tr>
+            <tr><td>File Sample (100 lignes archive)</td><td>1 000 chars</td><td><code>file_sample[:1000]</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="margin-top:.75rem;">Outputs attendus (JSON strict)</h3>
+      <div class="formula" style="background:#0a1028;border-color:#3d2b5e;font-size:.78rem;">
+{
+  <span class="s">"is_leak"</span>:    <span class="k">true</span>,
+  <span class="s">"severity"</span>:   <span class="s">"high"</span>,     <span class="c">← low|medium|high|critical</span>
+  <span class="s">"leak_type"</span>:  <span class="s">"Database"</span>, <span class="c">← Database|Credentials|PII|Corporate_Secret|Other</span>
+  <span class="s">"summary"</span>:    <span class="s">"Fuite de base de données CNOPS..."</span>,
+  <span class="s">"targets"</span>:    [<span class="s">"CNOPS"</span>],
+  <span class="s">"confidence"</span>: <span class="n">95</span>
+}
+      </div>
+    </div>
+    <div>
+      <h3>Prompt complet envoyé</h3>
+      <div style="background:#0a1028;border:1px solid #3d2b5e;border-radius:8px;padding:.85rem 1rem;font-family:monospace;font-size:.75rem;color:#c9d1d9;line-height:1.7;white-space:pre-wrap;">Analyze the following data leak message
+and associated file content.
+Your task is to identify CORPORATE,
+BUSINESS, or GOVERNMENT data leaks.
+
+CRITERIA:
+1. IS A LEAK IF: Contains enterprise data,
+   company employee lists, corporate credentials,
+   business databases, PII from customers
+   (Nom, Prénom, CIN, Téléphone, Adresse, etc.),
+   or any structured data that looks like
+   a database export.
+
+2. SENSITIVITY: If a file sample is provided,
+   be EXTRA SENSITIVE. If you see emails,
+   names, numbers, or structured lines,
+   mark it as a leak (is_leak: true).
+
+3. IS NOT A LEAK IF: Purely political news,
+   religious content, public propaganda,
+   general chat, or generic system messages
+   WITHOUT any attached files or data patterns.
+
+SPECIAL INSTRUCTIONS:
+- FILE CONTENT IS KEY: Even if the Telegram
+  message is vague, if the 'File Sample'
+  contains structured data (CSVs, logs, SQL),
+  IT IS A LEAK.
+- POLITICAL FILTER: If the message contains
+  political rhetoric BUT also includes a database
+  or credentials, IT IS A LEAK.
+- OUTPUT: Respond ONLY in valid JSON format.
+
+Message text: {text[:1500]}
+File Sample: {file_context[:1000]}</div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:1rem;">Parsing de la réponse LLM — _parse_ai_json()</h3>
+  <p style="font-size:.83rem;color:#c9d1d9;margin-bottom:.5rem;">Le LLM peut envoyer du JSON en bloc markdown (<code>```json ... ```</code>), du JSON brut, ou du texte avec JSON inséré. La fonction extrait robustement :</p>
+  <ul class="steplist">
+    <li>Cherche un bloc <code>```json...```</code> en premier (markdown)</li>
+    <li>Sinon : cherche le premier <code>{</code> et le dernier <code>}</code> dans la réponse</li>
+    <li>Parse <code>json.loads()</code> sur cette portion extraite</li>
+    <li>Si échec → retourne <code>None</code> → fallback sur l'analyse regex</li>
+  </ul>
+</div>
+
+<!-- OVERRIDE HEURISTIQUE -->
+<h2 id="tg-heuristic"><span class="dot" style="background:var(--o);"></span>Étape 4 — Override Heuristique : Protection contre les Faux Négatifs</h2>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+  <div>
+    <p class="desc">Le LLM peut parfois marquer un message comme "non-fuite" si le texte Telegram est vague (ex: message en arabe sans contexte explicite). Mais si une archive est attachée, c'est presque toujours une fuite réelle. L'override heuristique corrige ce cas.</p>
+
+    <div class="formula" style="background:#1a1010;border-color:#3d2010;font-size:.78rem;">
+<span class="c"># Extension archives qui déclenchent l'override</span>
+ARCHIVE_EXTS = (
+  <span class="s">'.zip'</span>, <span class="s">'.ziip'</span>, <span class="s">'.rar'</span>,
+  <span class="s">'.dbf'</span>, <span class="s">'.sql'</span>, <span class="s">'.xlsx'</span>, <span class="s">'.xls'</span>,
+  <span class="s">'.xlsm'</span>, <span class="s">'.csv'</span>, <span class="s">'.txt'</span>,
+  <span class="s">'.log'</span>
+)
+
+<span class="c"># Logique override dans process_message()</span>
+<span class="k">if</span> file_path.endswith(ARCHIVE_EXTS):
+    is_archive = <span class="k">True</span>
+
+<span class="k">if</span> is_archive <span class="k">and not</span> analysis[<span class="s">"is_leak"</span>]:
+    analysis[<span class="s">"is_leak"</span>] = <span class="k">True</span>
+    analysis[<span class="s">"title"</span>]   = <span class="s">"Database Dump / Archive Leak"</span>
+    analysis[<span class="s">"severity"</span>] = <span class="s">"High"</span>
+    <span class="c"># → Le record est QUAND MÊME sauvegardé</span>
+    </div>
+  </div>
+  <div>
+    <h3>Tableau de décision</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>LLM dit</th><th>Archive présente ?</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td style="color:var(--r);">is_leak = false</td><td style="color:var(--r);">Non</td><td style="color:var(--m);">Skip — record non sauvegardé</td></tr>
+          <tr><td style="color:var(--r);">is_leak = false</td><td style="color:var(--g);">Oui (zip, csv...)</td><td style="color:var(--o);">Override → is_leak = true forcé</td></tr>
+          <tr><td style="color:var(--g);">is_leak = true</td><td style="color:var(--m);">N'importe</td><td style="color:var(--g);">Sauvegardé normalement</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="warn-box" style="margin-top:.75rem;">
+      <strong>Pourquoi cet override ?</strong> Les messages hacktivistes sont souvent en arabe avec du contexte politique. Le LLM les classe comme "propagande politique" (pas une fuite). Mais s'il y a un fichier <code>.zip</code> de 50 MB attaché, c'est clairement une fuite de données — peu importe le texte.
+    </div>
+
+    <div class="ok-box" style="margin-top:.5rem;">
+      <strong>Regex en parallèle :</strong> Pendant l'analyse LLM, <code>extract_patterns()</code> extrait emails, IPs, URLs, credentials via regex. Ces patterns sont sauvegardés dans <code>analysis["entities"]</code> même si le LLM est indisponible.
+    </div>
+  </div>
+</div>
+
+<!-- INTELLIGENCE AGENT -->
+<h2 id="tg-intel"><span class="dot" style="background:var(--g);"></span>Étape 5 — IntelligenceAgent : Sauvegarde Purifiée</h2>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+  <div>
+    <p class="desc"><code>save_intel()</code> filtre et structure les enregistrements confirmés comme fuites. Il n'enregistre PAS les records sans fichier joint (règle métier) — les menaces textuelles pures sont intégrées lors de la corrélation.</p>
+
+    <ul class="steplist">
+      <li>Skip si <code>is_leak = false</code> — double vérification</li>
+      <li>Skip si aucun fichier attaché (<code>extracted_files</code> vide) — seules les fuites avec preuve sont sauvegardées</li>
+      <li>ID unique : <code>INTEL-{YYYYMMDD}-{ORG3CHARS}-{msg_id}</code></li>
+      <li>Sauvegarde dans <code>results/leaks_intel.json</code></li>
+      <li>Déduplication par <code>intel_id</code> avec merge si déjà présent</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Format INTEL sauvegardé</h3>
+    <div class="formula" style="background:#0e1e12;border-color:#1e4020;font-size:.78rem;">
+{
+  <span class="s">"intel_id"</span>:      <span class="s">"INTEL-20260408-CNO-51"</span>,
+  <span class="s">"timestamp"</span>:      <span class="s">"2026-04-08T10:23:00"</span>,
+  <span class="s">"leak_date"</span>:      <span class="s">"2026-04-08"</span>,
+  <span class="s">"source_channel"</span>: <span class="s">"Jabaroot DZ"</span>,
+  <span class="s">"leak_metadata"</span>: {
+    <span class="s">"target_organization"</span>: [<span class="s">"CNOPS"</span>],
+    <span class="s">"leak_type"</span>:          <span class="s">"Database"</span>,
+    <span class="s">"severity"</span>:           <span class="s">"high"</span>,
+    <span class="s">"confidence_score"</span>:    <span class="n">95</span>
+  },
+  <span class="s">"extracted_data"</span>: {    <span class="c">← Regex</span>
+    <span class="s">"emails"</span>:      [<span class="s">"xxx@cnops.ma"</span>],
+    <span class="s">"ips"</span>:         [],
+    <span class="s">"credentials"</span>: [<span class="s">"admin@cnops.ma:p@ss"</span>]
+  },
+  <span class="s">"extracted_files"</span>: [<span class="s">"Jabaroot_DZ/2026-04-08/cnops.zip"</span>],
+  <span class="s">"summary_fr"</span>:    <span class="s">"Fuite de base de données CNOPS contenant
+    ~120k dossiers patients (nom, CIN, adresse)."</span>
+}
+    </div>
+  </div>
+</div>
+
+<!-- PROMPT LLM #2 -->
+<h2 id="tg-prompt2"><span class="dot" style="background:var(--y);"></span>Étape 6 — PROMPT LLM #2 : Corrélation et Fusion Quotidienne</h2>
+
+<div style="background:#1e1608;border:1px solid #4a3010;border-radius:10px;padding:1.25rem;margin-bottom:1.5rem;">
+  <div style="font-size:.9rem;font-weight:700;color:var(--y);margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem;">🔗 <span>Prompt de corrélation — IntelligenceAgent.process_daily_leaks()</span></div>
+
+  <p style="font-size:.85rem;color:#c9d1d9;margin-bottom:.75rem;">Ce deuxième appel LLM est lancé par <code>runner_intelligence.py</code>. Il regroupe tous les leaks du jour pour un canal et demande au LLM de les corréler — notamment fusionner une menace textuelle et l'archive correspondante en UN seul incident.</p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+    <div>
+      <h3>Contexte du problème</h3>
+      <p style="font-size:.82rem;color:#c9d1d9;margin-bottom:.5rem;">Dans les canaux hacktivistes, un acteur publie souvent :</p>
+      <div style="background:#12090a;border:1px solid #4a2020;border-radius:8px;padding:.7rem .9rem;font-size:.8rem;color:#c9d1d9;margin-bottom:.5rem;">
+        <div style="color:var(--r);font-weight:700;margin-bottom:.3rem;">Message 51 (texte seul)</div>
+        <em>"سنكشف قاعدة بيانات وزارة الداخلية المغربية"</em><br>
+        <small style="color:var(--m);">"Nous allons publier la base de données du Ministère de l'Intérieur"</small>
+      </div>
+      <div style="background:#0e1e12;border:1px solid #2d4f2d;border-radius:8px;padding:.7rem .9rem;font-size:.8rem;color:#c9d1d9;">
+        <div style="color:var(--g);font-weight:700;margin-bottom:.3rem;">Message 53 (avec archive)</div>
+        <em>"وزارة الداخلية.zip (2.3 GB)"</em><br>
+        <small style="color:var(--m);">Archive contenant 800k lignes d'employés</small>
+      </div>
+      <div class="ok-box" style="margin-top:.5rem;">LLM #2 → fusionne 51 + 53 en <strong>un seul incident</strong> "Ministère de l'Intérieur"</div>
+    </div>
+    <div>
+      <h3>Prompt complet de corrélation</h3>
+      <div style="background:#120e04;border:1px solid #4a3010;border-radius:8px;padding:.85rem 1rem;font-family:monospace;font-size:.75rem;color:#e8c97a;line-height:1.7;white-space:pre-wrap;">CORRELATION AND MAPPING TASK:
+Here are the Telegram leaks detected on
+{date_str} for channel {channel_name}.
+Your task is to correlate and map these
+messages into FINAL Intelligence Incidents.
+
+RULES:
+1. If a message is a threat (تهديد) and
+   another message contains the actual
+   file/archive for the SAME target
+   organization, you MUST MERGE them into
+   ONE single incident.
+2. A final incident should ideally have
+   an extracted file.
+3. Normalize the target names (e.g., 'CNOPS'
+   and 'CNOPS', 'Ministère de l'Intérieur'
+   and 'وزارة الداخلية' are the same).
+4. Provide a unified summary for merged
+   incidents in French.
+
+DATA:
+{json.dumps(prompt_data)}
+
+OUTPUT FORMAT (Strict JSON ONLY):
+{
+  "incidents": [{
+    "target_organization": ["Target"],
+    "leak_type": "PII/Database/Credentials",
+    "severity": "high",
+    "summary_fr": "Résumé unifié...",
+    "extracted_files": ["path1","path2"],
+    "original_ids": [51, 53]
+  }]
+}</div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:1rem;">Résultat — Incidents finaux dans leaks_intel.json</h3>
+  <div class="formula" style="background:#120e04;border-color:#4a3010;font-size:.78rem;">
+<span class="c"># Après fusion LLM des messages 51+53 :</span>
+{
+  <span class="s">"intel_id"</span>:      <span class="s">"INTEL-20260408-MIN-51"</span>,
+  <span class="s">"leak_metadata"</span>: {
+    <span class="s">"target_organization"</span>: [<span class="s">"Ministère de l'Intérieur"</span>],
+    <span class="s">"leak_type"</span>:          <span class="s">"Database"</span>,
+    <span class="s">"severity"</span>:           <span class="s">"high"</span>,
+    <span class="s">"confidence_score"</span>:    <span class="n">1.0</span>    <span class="c">← 100% car fichier confirmé</span>
+  },
+  <span class="s">"extracted_files"</span>: [<span class="s">"Jabaroot_DZ/2026-04-08/wiz_interieur.zip"</span>],
+  <span class="s">"summary_fr"</span>: <span class="s">"Fuite massive de données du Ministère de l'Intérieur
+    marocain : archive ZIP de 2.3 GB contenant ~800k dossiers
+    d'employés (nom, prénom, CIN, adresse, grade)."</span>
+}
+  </div>
+</div>
+
+<!-- RETRY + FALLBACK -->
+<h2 id="tg-retry"><span class="dot" style="background:#2196F3;"></span>Retry Automatique & Fallback Regex</h2>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+  <div>
+    <h3>Backoff exponentiel sur _query_ai()</h3>
+    <div class="formula" style="background:#0a1628;border-color:#1e3a5f;font-size:.78rem;">
+max_retries = 3
+backoff_factor = 2.0
+
+<span class="k">for</span> attempt <span class="k">in</span> range(1, 4):
+    <span class="k">try</span>:
+        response = LLM_call(prompt)
+        <span class="k">return</span> response
+    <span class="k">except</span> Exception:
+        sleep_time = 2.0 ** attempt
+        <span class="c"># Tentative 1 : sleep 2s
+# Tentative 2 : sleep 4s
+# Tentative 3 : sleep 8s → erreur finale</span>
+        await asyncio.sleep(sleep_time)
+    </div>
+  </div>
+  <div>
+    <h3>Fallback Regex si LLM indisponible</h3>
+    <p style="font-size:.83rem;color:#c9d1d9;margin-bottom:.5rem;"><code>extract_patterns()</code> s'exécute TOUJOURS, avant ou sans LLM :</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Pattern</th><th>Regex</th></tr></thead>
+        <tbody>
+          <tr><td>Emails</td><td><code>[a-zA-Z0-9._%+-]+@...</code></td></tr>
+          <tr><td>IPs</td><td><code>\b\d{1,3}\.\d{1,3}...\b</code></td></tr>
+          <tr><td>URLs</td><td><code>https?://[^\s&lt;"&gt;]+</code></td></tr>
+          <tr><td>Credentials</td><td><code>email@...:password</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="info-box" style="margin-top:.5rem;">Si des entités regex sont trouvées → <code>is_leak=true</code> avec <code>confidence=70</code> même sans LLM. Le champ <code>summary</code> indique "No AI analysis available".</div>
+  </div>
+</div>
+
+</div>
+
+</div>
+</body>
+</html>

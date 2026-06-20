@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vue Analyste SOC — Scoring CTI contre l'Alert Fatigue</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2230;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #7d8590;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --orange: #f0883e;
+    --red: #f85149;
+    --purple: #bc8cff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: #0d1117ee;
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex; align-items: center; gap: 2rem;
+    height: 50px;
+  }
+  nav .logo { font-weight: 700; font-size: 0.95rem; color: var(--accent); }
+  nav span { color: var(--muted); font-size: 0.82rem; }
+
+  .page { max-width: 1300px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+  /* ── QUESTION PIÈGE ── */
+  .trap-box {
+    background: linear-gradient(135deg, #1a1010 0%, #2a1010 100%);
+    border: 1px solid #f8514933;
+    border-left: 4px solid var(--red);
+    border-radius: 10px;
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 2.5rem;
+  }
+  .trap-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--red); font-weight: 700; margin-bottom: 0.4rem; }
+  .trap-q { font-size: 1.05rem; font-weight: 700; color: #fca5a5; margin-bottom: 0.75rem; }
+  .trap-a { font-size: 0.92rem; color: #c9d1d9; }
+  .trap-a strong { color: var(--green); }
+
+  /* ── FUNNEL ── */
+  .funnel-section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.1rem; font-weight: 700; color: var(--accent); margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem; }
+  h2 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+
+  .funnel {
+    display: flex; align-items: stretch; gap: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+  }
+  .funnel-step {
+    flex: 1; padding: 1.25rem 1rem;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; position: relative;
+    border-right: 1px solid var(--border);
+  }
+  .funnel-step:last-child { border-right: none; }
+  .funnel-step::after {
+    content: '→';
+    position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
+    color: var(--muted); font-size: 1.2rem; z-index: 2;
+  }
+  .funnel-step:last-child::after { display: none; }
+  .funnel-step.raw { background: #1e2230; }
+  .funnel-step.scored { background: #1a2040; }
+  .funnel-step.critical-bg { background: #1e1010; }
+  .funnel-step.high-bg { background: #1e1608; }
+  .funnel-step.analyst-bg { background: #0e1e12; }
+  .fn-num {
+    font-size: 2rem; font-weight: 800; line-height: 1;
+    margin-bottom: 0.25rem;
+  }
+  .fn-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .fn-sub { font-size: 0.75rem; margin-top: 0.3rem; }
+  .fn-reduction {
+    font-size: 0.7rem; font-weight: 700;
+    background: #3fb95022; color: var(--green);
+    border: 1px solid #3fb95055; border-radius: 10px;
+    padding: 0.15rem 0.5rem; margin-top: 0.4rem;
+  }
+
+  /* ── STATS ROW ── */
+  .stats-row {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem;
+    margin-bottom: 2rem;
+  }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1rem;
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+  }
+  .stat-num { font-size: 1.75rem; font-weight: 800; line-height: 1; }
+  .stat-label { font-size: 0.7rem; color: var(--muted); margin-top: 0.25rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-pct { font-size: 0.72rem; margin-top: 0.3rem; }
+
+  /* ── EVENT TABLE ── */
+  .event-table-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden; margin-bottom: 2rem;
+  }
+  .et-header {
+    background: var(--surface2); padding: 0.75rem 1.25rem;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .et-title { font-weight: 700; font-size: 0.9rem; }
+  .et-filters { display: flex; gap: 0.5rem; }
+  .filter-btn {
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px; border: 1px solid var(--border);
+    font-size: 0.72rem; cursor: pointer;
+    background: transparent; color: var(--muted);
+    transition: all 0.15s;
+  }
+  .filter-btn.active-c { background: #f8514922; border-color: #f8514955; color: var(--red); }
+  .filter-btn.active-h { background: #f0883e22; border-color: #f0883e55; color: var(--orange); }
+  .filter-btn.active-m { background: #d2992222; border-color: #d2992255; color: var(--yellow); }
+  .filter-btn.active-l { background: #3fb95022; border-color: #3fb95055; color: var(--green); }
+  .filter-btn.active-a { background: #58a6ff22; border-color: #58a6ff55; color: var(--accent); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    background: #12161f; padding: 0.5rem 0.85rem;
+    text-align: left; color: var(--muted);
+    font-size: 0.72rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td { padding: 0.6rem 0.85rem; border-bottom: 1px solid #21262d; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+
+  .event-row { cursor: pointer; transition: background 0.12s; }
+  .event-row:hover td { background: #ffffff08; }
+  .event-row.crit td { border-left: 3px solid var(--red); }
+  .event-row.high td { border-left: 3px solid var(--orange); }
+  .event-row.med  td { border-left: 3px solid var(--yellow); }
+  .event-row.low  td { border-left: 3px solid var(--green); }
+  .event-row.crit td:first-child { padding-left: 0.6rem; }
+  .event-row.high td:first-child { padding-left: 0.6rem; }
+  .event-row.med  td:first-child { padding-left: 0.6rem; }
+  .event-row.low  td:first-child { padding-left: 0.6rem; }
+
+  /* badges */
+  .badge {
+    display: inline-block; padding: 0.15rem 0.55rem;
+    border-radius: 20px; font-size: 0.7rem; font-weight: 700;
+    white-space: nowrap;
+  }
+  .b-critical { background: #f8514922; color: var(--red);    border: 1px solid #f8514955; }
+  .b-high     { background: #f0883e22; color: var(--orange); border: 1px solid #f0883e55; }
+  .b-medium   { background: #d2992222; color: var(--yellow); border: 1px solid #d2992255; }
+  .b-low      { background: #3fb95022; color: var(--green);  border: 1px solid #3fb95055; }
+  .b-blue     { background: #58a6ff22; color: var(--accent); border: 1px solid #58a6ff55; }
+  .b-purple   { background: #bc8cff22; color: var(--purple); border: 1px solid #bc8cff55; }
+  .b-gray     { background: #7d859022; color: var(--muted);  border: 1px solid #7d859055; }
+
+  /* score pill */
+  .score-pill {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 42px; height: 22px; border-radius: 11px;
+    font-size: 0.72rem; font-weight: 800;
+  }
+  .sp-c { background: #f8514933; color: var(--red); }
+  .sp-h { background: #f0883e33; color: var(--orange); }
+  .sp-m { background: #d2992233; color: var(--yellow); }
+  .sp-l { background: #3fb95033; color: var(--green); }
+
+  /* mini bar */
+  .mini-bar { width: 80px; height: 6px; background: #21262d; border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 6px; }
+  .mb-fill { height: 100%; border-radius: 3px; }
+
+  .action-tag {
+    display: inline-block; padding: 0.12rem 0.45rem;
+    border-radius: 4px; font-size: 0.7rem; font-weight: 700;
+    font-family: monospace;
+  }
+  .act-escalate  { background: #f8514922; color: var(--red); }
+  .act-investigate { background: #f0883e22; color: var(--orange); }
+  .act-monitor   { background: #d2992222; color: var(--yellow); }
+  .act-quiet     { background: #21262d;   color: var(--muted); }
+
+  .ioc-chip {
+    font-family: monospace; font-size: 0.75rem;
+    color: #a5d3ff; background: #0d2137;
+    border: 1px solid #1e4976; border-radius: 4px;
+    padding: 0.1rem 0.4rem; display: inline-block;
+  }
+
+  /* ── TIMELINE ── */
+  .timeline { margin-bottom: 2rem; }
+  .tl-item {
+    display: flex; gap: 1rem; align-items: flex-start;
+    margin-bottom: 1rem; position: relative;
+  }
+  .tl-item::before {
+    content: '';
+    position: absolute; left: 19px; top: 32px;
+    width: 2px; height: calc(100% + 0.5rem);
+    background: var(--border);
+  }
+  .tl-item:last-child::before { display: none; }
+  .tl-dot {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; flex-shrink: 0; z-index: 1;
+    border: 2px solid;
+  }
+  .tl-dot.c { background: #f8514922; border-color: var(--red); }
+  .tl-dot.h { background: #f0883e22; border-color: var(--orange); }
+  .tl-dot.m { background: #d2992222; border-color: var(--yellow); }
+  .tl-dot.s { background: #58a6ff22; border-color: var(--accent); }
+  .tl-content {
+    flex: 1; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 0.75rem 1rem;
+  }
+  .tl-time { font-size: 0.7rem; color: var(--muted); margin-bottom: 0.25rem; }
+  .tl-main { font-size: 0.88rem; font-weight: 600; }
+  .tl-detail { font-size: 0.78rem; color: var(--muted); margin-top: 0.2rem; }
+
+  /* ── BEFORE/AFTER ── */
+  .ba-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
+  .ba-card {
+    border-radius: 10px; padding: 1.25rem;
+    border: 1px solid; overflow: hidden;
+  }
+  .ba-before { background: #1e1010; border-color: #f8514933; }
+  .ba-after  { background: #0e1e12; border-color: #3fb95033; }
+  .ba-label  { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem; }
+  .ba-before .ba-label { color: var(--red); }
+  .ba-after  .ba-label { color: var(--green); }
+  .ba-item { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; font-size: 0.85rem; }
+  .ba-item .icon { font-size: 1rem; flex-shrink: 0; }
+
+  /* ── REDUCTION METER ── */
+  .meter-wrap { margin-bottom: 2rem; }
+  .meter-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.6rem; }
+  .meter-label { width: 160px; flex-shrink: 0; font-size: 0.82rem; }
+  .meter-track { flex: 1; height: 22px; background: #21262d; border-radius: 11px; overflow: hidden; position: relative; }
+  .meter-fill { height: 100%; border-radius: 11px; display: flex; align-items: center; padding-left: 0.5rem; font-size: 0.7rem; font-weight: 700; white-space: nowrap; overflow: hidden; }
+  .meter-val { width: 100px; text-align: right; font-size: 0.8rem; font-weight: 700; flex-shrink: 0; }
+
+  @media(max-width: 900px) {
+    .funnel { flex-direction: column; }
+    .funnel-step::after { display: none; }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+    .ba-grid { grid-template-columns: 1fr; }
+  }
+
+  code {
+    background: #21262d; padding: 0.1rem 0.3rem;
+    border-radius: 4px; font-family: monospace; font-size: 0.82em; color: #ffa657;
+  }
+
+  .section-sep { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+  .highlight-box {
+    background: #0e1e30; border: 1px solid #1e4060;
+    border-radius: 10px; padding: 1.25rem 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .highlight-box p { font-size: 0.88rem; color: #a5d3ff; margin: 0; }
+  .highlight-box p + p { margin-top: 0.4rem; }
+
+  .answer-box {
+    background: linear-gradient(135deg, #0d2010 0%, #0a1e28 100%);
+    border: 1px solid #3fb95044;
+    border-left: 4px solid var(--green);
+    border-radius: 10px;
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 2rem;
+  }
+  .answer-box h3 { color: var(--green); font-size: 0.95rem; margin-bottom: 0.75rem; }
+  .answer-box li { margin-bottom: 0.4rem; font-size: 0.88rem; color: #c9d1d9; }
+  .answer-box li::before { content: '→ '; color: var(--green); }
+  .answer-box ul { list-style: none; padding: 0; }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">CTI Platform — Vue Analyste SOC</span>
+  <span>Comment le scoring répond à l'alert fatigue</span>
+</nav>
+
+<div class="page">
+
+  <!-- QUESTION PIÈGE -->
+  <div class="trap-box">
+    <div class="trap-label">Question Piège — Jury / Soutenance</div>
+    <div class="trap-q">"Votre plateforme génère 769 800 IOC. Comment un analyste peut-il traiter ça ? N'est-ce pas vous qui créez de l'alert fatigue ?"</div>
+    <div class="trap-a">
+      <strong>Réponse :</strong> L'analyste ne voit jamais 769 800 IOC bruts. Le scoring réduit ce volume à <strong>quelques dizaines d'événements prioritaires</strong>.
+      Le reste est archivé, consultable à la demande, mais ne génère aucune alerte active.
+      Ce sont les pages suivantes qui le démontrent concrètement.
+    </div>
+  </div>
+
+  <!-- ── SECTION 1 : FUNNEL ── -->
+  <div class="funnel-section">
+    <h2><span class="dot"></span>Le Funnel de Réduction — De 769 800 IOC à la Vue Analyste</h2>
+
+    <div class="funnel">
+      <div class="funnel-step raw">
+        <div class="fn-num" style="color:#7d8590;">769 800</div>
+        <div class="fn-label">IOC bruts collectés</div>
+        <div class="fn-sub" style="color:var(--muted);">14 sources, toutes catégories</div>
+      </div>
+      <div class="funnel-step scored">
+        <div class="fn-num" style="color:var(--accent);">769 800</div>
+        <div class="fn-label">IOC scorés (0–100)</div>
+        <div class="fn-sub" style="color:var(--accent); font-size:0.72rem;">calcul automatique</div>
+      </div>
+      <div class="funnel-step critical-bg">
+        <div class="fn-num" style="color:var(--red);">~2 300</div>
+        <div class="fn-label">CRITICAL ≥ 80</div>
+        <div class="fn-reduction">−99.7%</div>
+      </div>
+      <div class="funnel-step high-bg">
+        <div class="fn-num" style="color:var(--orange);">~18 400</div>
+        <div class="fn-label">HIGH 60–79</div>
+        <div class="fn-reduction">−97.6%</div>
+      </div>
+      <div class="funnel-step analyst-bg">
+        <div class="fn-num" style="color:var(--green);">20 700</div>
+        <div class="fn-label">Actifs pour SOC</div>
+        <div class="fn-sub" style="color:var(--green); font-size:0.72rem;">CRITICAL + HIGH seulement</div>
+        <div class="fn-reduction">−97.3% du total</div>
+      </div>
+    </div>
+
+    <!-- METER -->
+    <div class="meter-wrap">
+      <div class="meter-row">
+        <span class="meter-label">IOC bruts</span>
+        <div class="meter-track">
+          <div class="meter-fill" style="width:100%; background:#30363d; color:#7d8590;">769 800 IOC — 100%</div>
+        </div>
+        <span class="meter-val" style="color:var(--muted);">769 800</span>
+      </div>
+      <div class="meter-row">
+        <span class="meter-label"><span class="badge b-low">LOW</span> &lt; 40</span>
+        <div class="meter-track">
+          <div class="meter-fill" style="width:55%; background:#3fb95033; color:var(--green);">~423 390 — archivés</div>
+        </div>
+        <span class="meter-val" style="color:var(--green);">~423 390</span>
+      </div>
+      <div class="meter-row">
+        <span class="meter-label"><span class="badge b-medium">MEDIUM</span> 40–59</span>
+        <div class="meter-track">
+          <div class="meter-fill" style="width:30%; background:#d2992233; color:var(--yellow);">~230 940 — surveillance</div>
+        </div>
+        <span class="meter-val" style="color:var(--yellow);">~230 940</span>
+      </div>
+      <div class="meter-row">
+        <span class="meter-label"><span class="badge b-high">HIGH</span> 60–79</span>
+        <div class="meter-track">
+          <div class="meter-fill" style="width:12%; background:#f0883e33; color:var(--orange);">~92 376 — investigate</div>
+        </div>
+        <span class="meter-val" style="color:var(--orange);">~92 376</span>
+      </div>
+      <div class="meter-row">
+        <span class="meter-label"><span class="badge b-critical">CRITICAL</span> ≥ 80</span>
+        <div class="meter-track">
+          <div class="meter-fill" style="width:3%; background:#f8514933; min-width:60px; color:var(--red);">~23 094</div>
+        </div>
+        <span class="meter-val" style="color:var(--red);">~23 094</span>
+      </div>
+    </div>
+
+    <div class="highlight-box">
+      <p>L'analyste SOC ne reçoit d'alerte <strong>active</strong> que pour les CRITICAL et HIGH. Les MEDIUM sont visibles dans l'Intelligence Explorer sur demande. Les LOW sont archivés — consultables mais silencieux.</p>
+      <p>Le scoring transforme un flux de <strong>769 800 IOC</strong> en une liste de travail de <strong>quelques dizaines d'événements par journée analytique</strong>, triés par priorité décroissante.</p>
+    </div>
+  </div>
+
+  <hr class="section-sep">
+
+  <!-- ── SECTION 2 : STATS ── -->
+  <h2><span class="dot"></span>Tableau de Bord — Résumé par Priorité</h2>
+
+  <div class="stats-row">
+    <div class="stat-card" style="border-color:#f8514955;">
+      <div class="stat-num" style="color:var(--red);">23 094</div>
+      <div class="stat-label">CRITICAL</div>
+      <div class="stat-pct" style="color:var(--red);">3.0% du total</div>
+    </div>
+    <div class="stat-card" style="border-color:#f0883e55;">
+      <div class="stat-num" style="color:var(--orange);">92 376</div>
+      <div class="stat-label">HIGH</div>
+      <div class="stat-pct" style="color:var(--orange);">12.0% du total</div>
+    </div>
+    <div class="stat-card" style="border-color:#d2992255;">
+      <div class="stat-num" style="color:var(--yellow);">230 940</div>
+      <div class="stat-label">MEDIUM</div>
+      <div class="stat-pct" style="color:var(--yellow);">30.0% du total</div>
+    </div>
+    <div class="stat-card" style="border-color:#3fb95055;">
+      <div class="stat-num" style="color:var(--green);">423 390</div>
+      <div class="stat-label">LOW</div>
+      <div class="stat-pct" style="color:var(--green);">55.0% du total</div>
+    </div>
+    <div class="stat-card" style="border-color:var(--accent)44;">
+      <div class="stat-num" style="color:var(--accent);">97.3%</div>
+      <div class="stat-label">Réduction bruit</div>
+      <div class="stat-pct" style="color:var(--accent);">hors CRITICAL+HIGH</div>
+    </div>
+  </div>
+
+  <hr class="section-sep">
+
+  <!-- ── SECTION 3 : VUE ÉVÉNEMENTS ── -->
+  <h2><span class="dot"></span>Ce que Voit l'Analyste — File d'Événements Priorisés</h2>
+
+  <div class="event-table-wrap">
+    <div class="et-header">
+      <span class="et-title">Intelligence Explorer — Événements SOC (triés par score)</span>
+      <div class="et-filters">
+        <button class="filter-btn active-c">CRITICAL</button>
+        <button class="filter-btn active-h">HIGH</button>
+        <button class="filter-btn active-m">MEDIUM</button>
+        <button class="filter-btn active-l">LOW</button>
+        <button class="filter-btn active-a">TOUT</button>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Priorité</th>
+          <th>Score</th>
+          <th>Menace</th>
+          <th>IOC</th>
+          <th>Source</th>
+          <th>Type</th>
+          <th>Action SOC</th>
+          <th>Signaux déclencheurs</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr class="event-row crit">
+          <td><span class="badge b-critical">CRITICAL</span></td>
+          <td>
+            <span class="score-pill sp-c">95.2</span>
+            <div class="mini-bar"><div class="mb-fill" style="width:95%; background:var(--red);"></div></div>
+          </td>
+          <td><strong>Emotet C2 actif</strong><br><span style="font-size:0.72rem; color:var(--muted);">Botnet / Dropper</span></td>
+          <td><span class="ioc-chip">185.220.101.47</span></td>
+          <td><span class="badge b-blue">feodotracker</span></td>
+          <td><span class="badge b-gray">IP</span></td>
+          <td><span class="action-tag act-escalate">escalate</span></td>
+          <td style="font-size:0.75rem; color:var(--muted);">VT 42/50 · abuse 97% · C2 online · reliability:high</td>
+        </tr>
+
+        <tr class="event-row crit">
+          <td><span class="badge b-critical">CRITICAL</span></td>
+          <td>
+            <span class="score-pill sp-c">92.1</span>
+            <div class="mini-bar"><div class="mb-fill" style="width:92%; background:var(--red);"></div></div>
+          </td>
+          <td><strong>RedLine Stealer</strong><br><span style="font-size:0.72rem; color:var(--muted);">Stealer</span></td>
+          <td><span class="ioc-chip">a3f2…9d1e (SHA256)</span></td>
+          <td><span class="badge b-blue">malwarebazaar</span></td>
+          <td><span class="badge b-gray">Hash</span></td>
+          <td><span class="action-tag act-escalate">escalate</span></td>
+          <td style="font-size:0.75rem; color:var(--muted);">VT 45/50 · 820 downloads · reliability:high</td>
+        </tr>
+
+        <tr class="event-row crit">
+          <td><span class="badge b-critical">CRITICAL</span></td>
+          <td>
+            <span class="score-pill sp-c">88.7</span>
+            <div class="mini-bar"><div class="mb-fill" style="width:88%; background:var(--red);"></div></div>
+          </td>
+          <td><strong>AsyncRAT payload</strong><br><span style="font-size:0.72rem; color:var(--muted);">RAT</span></td>
+          <td><span class="ioc-chip">91.121.87.33</span></td>
+          <td><span class="badge b-blue">threatfox</span></td>
+          <td><span class="badge b-gray">IP</span></td>
+          <td><span class="action-tag act-escalate">escalate</span></td>
+          <td style="font-size:0.75rem; color:var(--muted);">VT 38/50 · abuse 88% · tf_conf natif 95 · is_compromised</td>
+        </tr>
+
+        <tr class="event-row crit">
+          <td><span class="badge b-critical">CRITICAL</span></td>
+          <td>
+            <span class="score-pill sp-c">85.3</span>
+            <div class="mini-bar"><div class="mb-fill" style="width:85%; background:var(--red);"></div></div>
+          </td>
+          <td><strong>LockBit 3.0 dropper</strong><br><span style="font-size:0.72rem; color:var(--muted);">Ransomware</span></td>
+          <td><span class="ioc-chip">c7a1…3b9f (MD5)</span></td>
+          <td><span class="badge b-blue">malwarebazaar</span></td>
+          <td><span class="badge b-gray">Hash</span></td>
+          <td><span class="action-tag act-escalate">escalate</span></td>
+          <td style="font-size:0.75rem; color:var(--muted);">VT 40/50 · 1 240 downloads · reliability:high</td>
+        </tr>
+
+        <tr class="event-row crit">
+          <td><span class="badge b-critical">CRITICAL</span></td>
+          <td>
+            <span class="score-pill sp-c">82.0</span>
+            <div class="mini-bar"><div class="mb-fill" style="width:82%; background:var(--red);"></div></div>
+          </td>
+          <td><strong>CVE-2021-44228 Log4Shell</strong><br><span style="font-size:0.72rem; color:var(--muted);">Vulnerability / RCE</span></td>
+          <td><span class="ioc-chip">CVE-2021-44228</span></td>
+          <td><span class="badge b-blue">nvd</span></td>
+          <td><span class="badge b-gray">CVE</span></td>
+          <td><span class="action-tag act-escalate">escalate</span></td>
+          <td style="font-size:0.75rem; color:var(--muted);">CVSS 10.0 · EPSS 0.975 · In the wild</td>
+        </tr>
+
+        <tr class="event-row high">
+          <td><span class="badge b-high">HIGH</span></td>
+          <td>
+            <span class="score-pill sp-h">76.4</span>
+            <div class="mini-bar"><div class="mb-fill" style="width:76%; background:var(--orange);"></div></div>
+          </td>
+          <td><strong>Phishing Microsoft 365</strong><br><span style="font-size:0.72rem; color:var(--muted);">Credential Harvesting</span></td>
+          <td><span class="ioc-chip">micros0ft-login.tk</span></td>
+          <td><span class="badge b-purple">openphish</span></td>
+          <td><span class="badge b-gray">URL</span></td>
+          <td><span class="action-tag act-investigate">investigate</span></td>
+          <td style="font-size:0.75rem; color:var(--muted);">risk_flag:high · typosquat · keywords login/verify · online</td>
+        </tr>
+
+        <tr class="event-row high">
+          <td><span class="badge b-high">HIGH</span></td>
+          <td>
+            <span class="score-pill sp-h">71.8</span>
+            <div class="mini-bar"><div class="mb-fill" style="width:71%; background:var(--orange);"></div></div>
+          </td>
+          <td><strong>QakBot C2</strong><br><span style="font-size:0.72rem; color:var(--muted);">Botnet</span></td>
+          <td><span class="ioc-chip">45.153.204.129</span></td>
+          <td><span class="badge b-blue">feodotracker</span></td>
+          <td><span class="badge b-gray">IP</span></td>
+          <td><span class="action-tag act-investigate">investigate</span></td>
+          <td style="font-size:0.75rem; color:var(--muted);">VT 28/50 · abuse 74% · C2 online</td>
+        </tr>
+
+        <tr class="event-row high">
+          <td><span class="badge b-high">HIGH</span></td>
+          <td>
+            <span class="score-pill sp-h">68.5</span>
+            <div class="mini-bar"><div class="mb-fill" style="width:68%; background:var(--orange);"></div></div>
+          </td>
+          <td><strong>Lumma Stealer URL</strong><br><span style="font-size:0.72rem; color:var(--muted);">Stealer / Distribution</span></td>
+          <td><span class="ioc-chip">dl.lumma-c.ru/payload</span></td>
+          <td><span class="badge b-blue">urlhaus</span></td>
+          <td><span class="badge b-gray">URL</span></td>
+          <td><span class="action-tag act-investigate">investigate</span></td>
+          <td style="font-size:0.75rem; color:var(--muted);">VT 22/50 · risk_flag:high · online</td>
+        </tr>
+
+        <tr class="event-row high">
+          <td><span class="badge b-high">HIGH</span></td>
+          <td>
+            <span class="score-pill sp-h">63.2</span>
+            <div class="mini-bar"><div class="mb-fill" style="width:63%; background:var(--orange);"></div></div>
+          </td>
+          <td><strong>CVE-2023-23397 Outlook</strong><br><span style="font-size:0.72rem; color:var(--muted);">Vulnerability / NTLM</span></td>
+          <td><span class="ioc-chip">CVE-2023-23397</span></td>
+          <td><span class="badge b-blue">nvd</span></td>
+          <td><span class="badge b-gray">CVE</span></td>
+          <td><span class="action-tag act-investigate">investigate</span></td>
+          <td style="font-size:0.75rem; color:var(--muted);">CVSS 9.8 → HIGH (seuil CVE ≥ 7.0)</td>
+        </tr>
+
+        <tr class="event-row med">
+          <td><span class="badge b-medium">MEDIUM</span></td>
+          <td>
+            <span class="score-pill sp-m">54.1</span>
+            <div class="mini-bar"><div class="mb-fill" style="width:54%; background:var(--yellow);"></div></div>
+          </td>
+          <td><strong>IP suspecte AbuseIPDB</strong><br><span style="font-size:0.72rem; color:var(--muted);">Suspicious / Scanner</span></td>
+          <td><span class="ioc-chip">194.165.16.75</span></td>
+          <td><span class="badge b-gray">abuseipdb</span></td>
+          <td><span class="badge b-gray">IP</span></td>
+          <td><span class="action-tag act-monitor">monitor</span></td>
+          <td style="font-size:0.75rem; color:var(--muted);">abuse 58% · VT 5/50 · totalReports 120</td>
+        </tr>
+
+        <tr class="event-row med">
+          <td><span class="badge b-medium">MEDIUM</span></td>
+          <td>
+            <span class="score-pill sp-m">47.3</span>
+            <div class="mini-bar"><div class="mb-fill" style="width:47%; background:var(--yellow);"></div></div>
+          </td>
+          <td><strong>URL phishing faible signal</strong><br><span style="font-size:0.72rem; color:var(--muted);">Phishing</span></td>
+          <td><span class="ioc-chip">secure-paypa1.com</span></td>
+          <td><span class="badge b-gray">phishtank</span></td>
+          <td><span class="badge b-gray">URL</span></td>
+          <td><span class="action-tag act-monitor">monitor</span></td>
+          <td style="font-size:0.75rem; color:var(--muted);">typosquat · VT 4/50 · source reliability:low (70)</td>
+        </tr>
+
+        <tr class="event-row low">
+          <td><span class="badge b-low">LOW</span></td>
+          <td>
+            <span class="score-pill sp-l">12.8</span>
+            <div class="mini-bar"><div class="mb-fill" style="width:12%; background:var(--green);"></div></div>
+          </td>
+          <td><span style="color:var(--muted);">IP — bruit OTX communauté</span></td>
+          <td><span class="ioc-chip" style="opacity:0.5;">203.0.113.99</span></td>
+          <td><span class="badge b-gray">alienvault</span></td>
+          <td><span class="badge b-gray">IP</span></td>
+          <td><span class="action-tag act-quiet">monitor_quiet</span></td>
+          <td style="font-size:0.75rem; color:var(--muted);">VT 0/50 · abuse 10% · vt_harmless 32 → pénalité ×0.25</td>
+        </tr>
+
+        <tr class="event-row low">
+          <td><span class="badge b-low">LOW</span></td>
+          <td>
+            <span class="score-pill sp-l">8.5</span>
+            <div class="mini-bar"><div class="mb-fill" style="width:8%; background:var(--green);"></div></div>
+          </td>
+          <td><span style="color:var(--muted);">URL légitime — faux positif</span></td>
+          <td><span class="ioc-chip" style="opacity:0.5;">cdn.jquery.com/…</span></td>
+          <td><span class="badge b-gray">alienvault</span></td>
+          <td><span class="badge b-gray">URL</span></td>
+          <td><span class="action-tag act-quiet">monitor_quiet</span></td>
+          <td style="font-size:0.75rem; color:var(--muted);">VT 0/50 · vt_harmless 48 → pénalité ×0.25</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <hr class="section-sep">
+
+  <!-- ── SECTION 4 : TIMELINE ANALYSTE ── -->
+  <h2><span class="dot"></span>Journée Type d'un Analyste SOC avec le Système de Scoring</h2>
+
+  <div class="timeline">
+    <div class="tl-item">
+      <div class="tl-dot s">🌅</div>
+      <div class="tl-content">
+        <div class="tl-time">08h00 — Prise de poste</div>
+        <div class="tl-main">Ouverture du bulletin PDF + Intelligence Explorer</div>
+        <div class="tl-detail">Le système a tourné la nuit. L'analyste voit directement : 3 nouveaux CRITICAL, 7 HIGH. Pas 769 800 lignes.</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot c">🔴</div>
+      <div class="tl-content">
+        <div class="tl-time">08h10 — CRITICAL #1</div>
+        <div class="tl-main">Emotet C2 actif — IP 185.220.101.47 — score 95.2</div>
+        <div class="tl-detail">Signaux : VT 42/50 moteurs, AbuseIPDB 97%, status=online, feodotracker (reliability:high). Règle de blocage créée. Ticket IR ouvert.</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot c">🔴</div>
+      <div class="tl-content">
+        <div class="tl-time">08h35 — CRITICAL #2</div>
+        <div class="tl-main">RedLine Stealer SHA256 — score 92.1</div>
+        <div class="tl-detail">820 téléchargements MalwareBazaar, VT 45/50. Hash ajouté à la blacklist EDR. Recherche rétrospective lancée.</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot c">🔴</div>
+      <div class="tl-content">
+        <div class="tl-time">09h00 — CRITICAL #3</div>
+        <div class="tl-main">Log4Shell CVE-2021-44228 — CVSS 10.0 / EPSS 97.5%</div>
+        <div class="tl-detail">Branche vulnérabilité (CVSS prime). Patch status vérifié. Advisory envoyé aux équipes infra.</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot h">🟠</div>
+      <div class="tl-content">
+        <div class="tl-time">09h30 — HIGH batch</div>
+        <div class="tl-main">7 événements HIGH traités en 1h30</div>
+        <div class="tl-detail">QakBot C2, URL phishing Microsoft 365 typosquat, LummaC2 URL, CVE-2023-23397, 3 autres. Chaque événement a ses signaux détaillés — pas de recherche manuelle.</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot s">✅</div>
+      <div class="tl-content">
+        <div class="tl-time">11h15 — Fin de la session critique</div>
+        <div class="tl-main">Tous les CRITICAL et HIGH traités en 3h15</div>
+        <div class="tl-detail">Sans scoring : trier 769 800 IOC prendrait des semaines. Les MEDIUM et LOW restent consultables dans l'Explorer pour investigations ciblées.</div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="section-sep">
+
+  <!-- ── SECTION 5 : BEFORE / AFTER ── -->
+  <h2><span class="dot"></span>Avant / Après le Scoring</h2>
+
+  <div class="ba-grid">
+    <div class="ba-card ba-before">
+      <div class="ba-label">❌ Sans scoring — Alert Fatigue réelle</div>
+      <div class="ba-item"><span class="icon">📋</span>769 800 IOC à trier manuellement</div>
+      <div class="ba-item"><span class="icon">⏱️</span>Tri chronologique — le plus récent n'est pas le plus dangereux</div>
+      <div class="ba-item"><span class="icon">🔍</span>Pas de hiérarchie : un C2 Emotet = une URL légitime erronée</div>
+      <div class="ba-item"><span class="icon">😰</span>L'analyste est submergé — il ignore les vraies menaces par épuisement</div>
+      <div class="ba-item"><span class="icon">❓</span>Aucune explication du pourquoi c'est dangereux (signaux opaques)</div>
+      <div class="ba-item"><span class="icon">🔄</span>Faux positifs noyés dans le flux = perte de confiance dans les alerts</div>
+    </div>
+    <div class="ba-card ba-after">
+      <div class="ba-label">✅ Avec scoring CTI — Analyste efficace</div>
+      <div class="ba-item"><span class="icon">🎯</span>3–10 CRITICAL remontés automatiquement chaque matin</div>
+      <div class="ba-item"><span class="icon">📊</span>Score 0–100 + signaux explicites (VT x/50, abuse %, risk_flag…)</div>
+      <div class="ba-item"><span class="icon">⚡</span>L'analyste sait immédiatement POURQUOI c'est CRITICAL</div>
+      <div class="ba-item"><span class="icon">🛡️</span>Faux positifs pénalisés (×0.25) — ne polluent pas la file</div>
+      <div class="ba-item"><span class="icon">📁</span>LOW/MEDIUM archivés — consultables à la demande, silencieux</div>
+      <div class="ba-item"><span class="icon">⏰</span>CRITICAL + HIGH traités en 1 matinée au lieu de jamais</div>
+    </div>
+  </div>
+
+  <!-- RÉPONSE FINALE -->
+  <div class="answer-box">
+    <h3>Réponse complète à la question piège</h3>
+    <ul>
+      <li>769 800 IOC sont <strong>collectés et archivés</strong>, pas présentés à l'analyste.</li>
+      <li>Le scoring <strong>réduit de 97.3%</strong> le volume visible : seuls CRITICAL (≥80) et HIGH (60–79) génèrent des alertes actives.</li>
+      <li>Chaque événement porte ses <strong>signaux explicites</strong> : l'analyste sait en 10 secondes pourquoi un IOC est CRITICAL (VT 42/50 · abuse 97% · C2 online).</li>
+      <li>Les faux positifs sont automatiquement <strong>pénalisés ×0.25</strong> (vt=0 + vt_harmless>20) — ils n'atteignent pas la file d'alertes.</li>
+      <li>Le bulletin PDF et l'Intelligence Explorer permettent d'accéder aux MEDIUM/LOW <strong>sur demande</strong>, pour investigations ciblées.</li>
+      <li>L'alert fatigue vient de <em>trop d'alertes non qualifiées</em> — le scoring produit <strong>peu d'alertes, très qualifiées</strong>. C'est l'inverse du problème.</li>
+    </ul>
+  </div>
+
+</div>
+
+</body>
+</html>

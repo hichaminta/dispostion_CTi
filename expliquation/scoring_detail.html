@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scoring & Confidence CTI — Détail Technique</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2230;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #7d8590;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --orange: #f0883e;
+    --red: #f85149;
+    --purple: #bc8cff;
+    --critical: #f85149;
+    --high: #f0883e;
+    --medium: #d29922;
+    --low: #3fb950;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  /* NAV */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: #0d1117ee;
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex; align-items: center; gap: 2rem;
+    height: 52px;
+  }
+  nav .logo { font-weight: 700; font-size: 1rem; color: var(--accent); white-space: nowrap; }
+  nav a { color: var(--muted); text-decoration: none; font-size: 0.85rem; white-space: nowrap; }
+  nav a:hover { color: var(--text); }
+
+  /* LAYOUT */
+  .page { max-width: 1200px; margin: 0 auto; padding: 2.5rem 2rem 4rem; }
+
+  /* HERO */
+  .hero {
+    background: linear-gradient(135deg, #0d2137 0%, #1a1040 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2.5rem;
+    margin-bottom: 3rem;
+    position: relative; overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute; top: -60px; right: -60px;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, #58a6ff22 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero h1 { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; }
+  .hero h1 span { color: var(--accent); }
+  .hero p { color: var(--muted); max-width: 680px; }
+  .pipeline-flow {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin-top: 1.5rem; flex-wrap: wrap;
+  }
+  .pf-step {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 0.4rem 0.9rem;
+    font-size: 0.8rem; font-weight: 600;
+  }
+  .pf-arrow { color: var(--muted); font-size: 1.2rem; }
+
+  /* SECTIONS */
+  section { margin-bottom: 3rem; }
+  h2 {
+    font-size: 1.35rem; font-weight: 700;
+    color: var(--accent); margin-bottom: 1.25rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 0.6rem;
+  }
+  h2 .step-badge {
+    background: var(--accent); color: #000;
+    width: 26px; height: 26px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; font-weight: 800; flex-shrink: 0;
+  }
+  h3 {
+    font-size: 1.05rem; font-weight: 600; margin: 1.5rem 0 0.75rem;
+    color: var(--text);
+  }
+  p { margin-bottom: 0.75rem; color: #c9d1d9; }
+
+  /* CARDS GRID */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+  @media(max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+  }
+  .card-title { font-size: 0.85rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.6rem; }
+
+  /* TABLES */
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th {
+    background: var(--surface2);
+    padding: 0.6rem 0.85rem;
+    text-align: left; color: var(--muted);
+    font-weight: 600; font-size: 0.78rem;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+  }
+  td { padding: 0.55rem 0.85rem; border-bottom: 1px solid #21262d; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #ffffff07; }
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 1.25rem;
+  }
+
+  /* BADGES */
+  .badge {
+    display: inline-block;
+    padding: 0.18rem 0.55rem;
+    border-radius: 20px;
+    font-size: 0.72rem; font-weight: 700;
+  }
+  .badge-critical { background: #f8514922; color: var(--critical); border: 1px solid #f8514955; }
+  .badge-high     { background: #f0883e22; color: var(--high);     border: 1px solid #f0883e55; }
+  .badge-medium   { background: #d2992222; color: var(--yellow);   border: 1px solid #d2992255; }
+  .badge-low      { background: #3fb95022; color: var(--low);      border: 1px solid #3fb95055; }
+  .badge-blue     { background: #58a6ff22; color: var(--accent);   border: 1px solid #58a6ff55; }
+  .badge-purple   { background: #bc8cff22; color: var(--purple);   border: 1px solid #bc8cff55; }
+  .badge-gray     { background: #7d859022; color: var(--muted);    border: 1px solid #7d859055; }
+
+  /* FORMULA BOX */
+  .formula {
+    background: #0d2137;
+    border: 1px solid #1e4976;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin: 0.75rem 0;
+    font-family: 'Consolas', 'Fira Code', monospace;
+    font-size: 0.85rem;
+    color: #79c0ff;
+    line-height: 1.8;
+  }
+  .formula .comment { color: var(--muted); font-style: italic; }
+  .formula .var { color: #ffa657; }
+  .formula .op { color: #ff7b72; }
+  .formula .num { color: #79c0ff; }
+  .formula .fn { color: var(--green); }
+
+  /* IOC TYPE BLOCKS */
+  .ioc-block {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+  }
+  .ioc-header {
+    padding: 0.75rem 1.25rem;
+    font-weight: 700; font-size: 0.95rem;
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .ioc-hash { background: #21262d; border-bottom: 1px solid var(--border); }
+  .ioc-ip   { background: #1c2620; border-bottom: 1px solid #2e4a3c; }
+  .ioc-url  { background: #231c36; border-bottom: 1px solid #3d2b5e; }
+  .ioc-vuln { background: #1e2430; border-bottom: 1px solid #2a3850; }
+  .ioc-body { padding: 1.25rem; background: var(--surface); }
+
+  /* BAR CHART */
+  .bar-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; font-size: 0.82rem; }
+  .bar-label { width: 120px; flex-shrink: 0; color: var(--muted); }
+  .bar-track { flex: 1; height: 10px; background: #21262d; border-radius: 5px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 5px; transition: width 0.3s; }
+  .bar-val { width: 36px; text-align: right; font-weight: 600; flex-shrink: 0; }
+
+  /* SCORING MAP */
+  .score-map {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;
+    margin: 1rem 0;
+  }
+  @media(max-width: 700px) { .score-map { grid-template-columns: 1fr 1fr; } }
+  .score-card {
+    border-radius: 10px; padding: 1rem;
+    text-align: center; border: 1px solid;
+  }
+  .score-card .range { font-size: 1.5rem; font-weight: 800; }
+  .score-card .label { font-size: 0.75rem; margin-top: 0.2rem; opacity: 0.8; }
+  .score-card .action { font-size: 0.72rem; margin-top: 0.4rem; font-weight: 600; }
+  .sc-critical { background: #f8514914; border-color: #f8514955; color: var(--critical); }
+  .sc-high     { background: #f0883e14; border-color: #f0883e55; color: var(--high); }
+  .sc-medium   { background: #d2992214; border-color: #d2992255; color: var(--yellow); }
+  .sc-low      { background: #3fb95014; border-color: #3fb95055; color: var(--low); }
+
+  /* EXAMPLE SIMULATION */
+  .sim-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 1.25rem;
+  }
+  .sim-header {
+    background: var(--surface2);
+    padding: 0.7rem 1.25rem;
+    font-size: 0.82rem; color: var(--muted);
+    font-weight: 600;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .sim-body { padding: 1.25rem; }
+  .sim-step { margin-bottom: 1rem; }
+  .sim-step-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.3rem; }
+  .sim-value { font-family: monospace; font-size: 0.9rem; color: var(--green); }
+
+  /* PENALTY BOX */
+  .alert-box {
+    background: #f8514914;
+    border: 1px solid #f8514955;
+    border-radius: 8px;
+    padding: 0.85rem 1.1rem;
+    margin: 0.75rem 0;
+    font-size: 0.88rem;
+    color: #ffa8a3;
+  }
+  .alert-box strong { color: var(--critical); }
+
+  .info-box {
+    background: #58a6ff14;
+    border: 1px solid #58a6ff44;
+    border-radius: 8px;
+    padding: 0.85rem 1.1rem;
+    margin: 0.75rem 0;
+    font-size: 0.88rem;
+    color: #a5d3ff;
+  }
+
+  .success-box {
+    background: #3fb95014;
+    border: 1px solid #3fb95055;
+    border-radius: 8px;
+    padding: 0.85rem 1.1rem;
+    margin: 0.75rem 0;
+    font-size: 0.88rem;
+    color: #7ee787;
+  }
+
+  /* FLOW DIAGRAM */
+  .flow {
+    display: flex; flex-direction: column; gap: 0; align-items: flex-start;
+    margin: 1rem 0;
+  }
+  .flow-node {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 1.1rem;
+    font-size: 0.85rem;
+    position: relative;
+  }
+  .flow-arrow {
+    width: 2px; height: 24px;
+    background: var(--border);
+    margin-left: 20px;
+    position: relative;
+  }
+  .flow-arrow::after {
+    content: '▼';
+    position: absolute; bottom: -6px; left: 50%;
+    transform: translateX(-50%);
+    color: var(--muted); font-size: 0.7rem;
+  }
+
+  code {
+    background: #21262d;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-family: 'Consolas', monospace;
+    font-size: 0.85em;
+    color: #ffa657;
+  }
+
+  /* SOURCE LEGEND */
+  .src-tag {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem; font-weight: 600;
+    background: #21262d; border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .w100 { color: var(--critical); }
+  .w95  { color: var(--high); }
+  .w90  { color: var(--orange); }
+  .w85  { color: var(--yellow); }
+  .w80  { color: #b3d000; }
+  .w75  { color: var(--green); }
+  .w70  { color: var(--muted); }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">CTI — Scoring Détaillé</span>
+  <a href="#sources">Sources</a>
+  <a href="#ioc-types">IOC Types</a>
+  <a href="#formulas">Formules</a>
+  <a href="#priority">Priorité SOC</a>
+  <a href="#pipeline">Pipeline</a>
+  <a href="#examples">Exemples</a>
+</nav>
+
+<div class="page">
+
+  <!-- HERO -->
+  <div class="hero">
+    <h1>Scoring & Confidence <span>CTI</span></h1>
+    <p>Analyse complète du calcul de risque : comment la confiance source, les signaux d'enrichissement (VirusTotal, AbuseIPDB, URLScan…) et le type d'IOC se combinent pour produire un score 0–100 et une priorité SOC.</p>
+    <div class="pipeline-flow">
+      <div class="pf-step">Source Ingestion</div>
+      <div class="pf-arrow">→</div>
+      <div class="pf-step">Enrichissement APIs</div>
+      <div class="pf-arrow">→</div>
+      <div class="pf-step">Classification</div>
+      <div class="pf-arrow">→</div>
+      <div class="pf-step">Reliability Score</div>
+      <div class="pf-arrow">→</div>
+      <div class="pf-step">IOC Risk Score</div>
+      <div class="pf-arrow">→</div>
+      <div class="pf-step">Priority SOC</div>
+    </div>
+  </div>
+
+  <!-- ====================================================== -->
+  <!-- ÉTAPE 1 : SOURCE CONFIDENCE -->
+  <!-- ====================================================== -->
+  <section id="sources">
+    <h2><span class="step-badge">1</span> Confiance Source — <code>source_confidence</code></h2>
+    <p>
+      Avant tout calcul de risque, chaque source CTI reçoit un score de confiance fixe (0–100)
+      défini dans <code>reliability.py → SourceReliability.SOURCE_RELIABILITY</code>.
+      Ce score reflète la rigueur éditoriale, le taux de faux positifs connu et la réputation de la source.
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Source</th>
+            <th>Confiance</th>
+            <th>Tag Reliability</th>
+            <th>Label Confiance</th>
+            <th>Raison</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="src-tag">dfir_report</span></td>
+            <td><strong class="w100">100</strong></td>
+            <td><span class="badge badge-blue">reliability:high</span></td>
+            <td><span class="badge badge-blue">HIGH</span></td>
+            <td>Rapports DFIR profonds, analystes humains, très haute fiabilité</td>
+          </tr>
+          <tr>
+            <td><span class="src-tag">nvd</span></td>
+            <td><strong class="w100">100</strong></td>
+            <td><span class="badge badge-blue">reliability:high</span></td>
+            <td><span class="badge badge-blue">HIGH</span></td>
+            <td>NIST National Vulnerability Database — source officielle CVE</td>
+          </tr>
+          <tr>
+            <td><span class="src-tag">spamhaus</span></td>
+            <td><strong class="w95">95</strong></td>
+            <td><span class="badge badge-blue">reliability:high</span></td>
+            <td><span class="badge badge-blue">HIGH</span></td>
+            <td>Très haute réputation, peu de faux positifs historiquement</td>
+          </tr>
+          <tr>
+            <td><span class="src-tag">malwarebazaar</span></td>
+            <td><strong class="w95">95</strong></td>
+            <td><span class="badge badge-blue">reliability:high</span></td>
+            <td><span class="badge badge-blue">HIGH</span></td>
+            <td>Samples confirmés par analyse binaire — abuse.ch</td>
+          </tr>
+          <tr>
+            <td><span class="src-tag">threatfox</span></td>
+            <td><strong class="w90">90</strong></td>
+            <td><span class="badge badge-blue">reliability:high</span></td>
+            <td><span class="badge badge-blue">HIGH</span></td>
+            <td>Communauté abuse.ch bien modérée + confiance native par IOC</td>
+          </tr>
+          <tr>
+            <td><span class="src-tag">feodotracker</span></td>
+            <td><strong class="w90">90</strong></td>
+            <td><span class="badge badge-blue">reliability:high</span></td>
+            <td><span class="badge badge-blue">HIGH</span></td>
+            <td>Spécialisé C2 botnets, très précis</td>
+          </tr>
+          <tr>
+            <td><span class="src-tag">abuseipdb</span></td>
+            <td><strong class="w85">85</strong></td>
+            <td><span class="badge badge-blue">reliability:high</span></td>
+            <td><span class="badge badge-blue">HIGH</span></td>
+            <td>Fiable mais basé sur rapports utilisateurs — votes crowdsourcés</td>
+          </tr>
+          <tr>
+            <td><span class="src-tag">urlhaus</span></td>
+            <td><strong class="w80">80</strong></td>
+            <td><span class="badge badge-purple">reliability:medium</span></td>
+            <td><span class="badge badge-purple">MEDIUM</span></td>
+            <td>Très réactif aux nouvelles menaces, quelques faux positifs</td>
+          </tr>
+          <tr>
+            <td><span class="src-tag">alienvault</span></td>
+            <td><strong class="w75">75</strong></td>
+            <td><span class="badge badge-purple">reliability:medium</span></td>
+            <td><span class="badge badge-purple">MEDIUM</span></td>
+            <td>OTX — communauté ouverte, bruit possible</td>
+          </tr>
+          <tr>
+            <td><span class="src-tag">cins / cins_army</span></td>
+            <td><strong class="w75">75</strong></td>
+            <td><span class="badge badge-purple">reliability:medium</span></td>
+            <td><span class="badge badge-purple">MEDIUM</span></td>
+            <td>Listes de blocage IP, qualité variable</td>
+          </tr>
+          <tr>
+            <td><span class="src-tag">phishtank</span></td>
+            <td><strong class="w70">70</strong></td>
+            <td><span class="badge badge-gray">reliability:low</span></td>
+            <td><span class="badge badge-gray">LOW</span></td>
+            <td>Votes communautaires, faux positifs possibles</td>
+          </tr>
+          <tr>
+            <td><span class="src-tag">openphish</span></td>
+            <td><strong class="w70">70</strong></td>
+            <td><span class="badge badge-gray">reliability:low</span></td>
+            <td><span class="badge badge-gray">LOW</span></td>
+            <td>Feed automatique, moins vérifié manuellement</td>
+          </tr>
+          <tr>
+            <td><span class="src-tag">pulsedive</span></td>
+            <td><strong class="w70">70</strong></td>
+            <td><span class="badge badge-gray">reliability:low</span></td>
+            <td><span class="badge badge-gray">LOW</span></td>
+            <td>Agrégateur multi-sources, qualité variable</td>
+          </tr>
+          <tr>
+            <td><span class="src-tag">inconnue</span></td>
+            <td><strong style="color:var(--muted)">50</strong></td>
+            <td><span class="badge badge-gray">reliability:low</span></td>
+            <td><span class="badge badge-gray">UNVERIFIED</span></td>
+            <td>Fallback — source non répertoriée</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="info-box">
+      <strong>Cas ThreatFox spécial :</strong> ThreatFox fournit une confiance <em>native par IOC</em> (<code>ioc_enrichment.confidence</code>).
+      Le scoring utilise alors <code>base_conf = max(source_confidence, tf_conf)</code>, ce qui permet à un IOC très confirmé d'avoir une base plus haute que la moyenne de la source.
+    </div>
+
+    <h3>Logique de mapping</h3>
+    <div class="formula">
+<span class="comment"># reliability.py — apply_reliability_tag()</span>
+<span class="var">conf</span> <span class="op">=</span> <span class="fn">get_confidence</span>(source_name)   <span class="comment"># lookup ou partial-match</span>
+
+<span class="keyword">if</span> <span class="var">conf</span> <span class="op">>=</span> <span class="num">90</span>  → tag <span class="op">=</span> <span class="fn">"reliability:high"</span>
+<span class="keyword">elif</span> <span class="var">conf</span> <span class="op">>=</span> <span class="num">75</span>  → tag <span class="op">=</span> <span class="fn">"reliability:medium"</span>
+<span class="keyword">else</span>           → tag <span class="op">=</span> <span class="fn">"reliability:low"</span>
+
+record[<span class="fn">"source_confidence"</span>] <span class="op">=</span> <span class="var">conf</span>   <span class="comment"># injecté dans le record JSON</span>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- ÉTAPE 2 : SCORING PAR TYPE D'IOC -->
+  <!-- ====================================================== -->
+  <section id="ioc-types">
+    <h2><span class="step-badge">2</span> Score de Risque par Type d'IOC — <code>calculate_ioc_risk()</code></h2>
+    <p>
+      Le cœur du moteur : chaque IOC est scoré individuellement (0–100) selon son type.
+      Les formules sont différentes pour les hash, les IP et les URL/domaines car les signaux disponibles varient.
+    </p>
+
+    <!-- ---- HASH ---- -->
+    <div class="ioc-block">
+      <div class="ioc-header ioc-hash">
+        <span class="badge badge-blue">HASH</span>
+        <span>Types : <code>sha256</code> / <code>sha1</code> / <code>md5</code></span>
+        <span style="margin-left:auto; color:var(--muted); font-size:0.8rem;">Sources : MalwareBazaar, ThreatFox, DFIR</span>
+      </div>
+      <div class="ioc-body">
+        <p>Pour les fichiers malveillants, la formule distingue deux chemins selon la présence de téléchargements (<code>intel_downloads</code>) qui indique MalwareBazaar.</p>
+
+        <div class="grid-2">
+          <div>
+            <h3>Chemin A — MalwareBazaar (<code>intel_downloads > 0</code>)</h3>
+            <div class="formula">
+<span class="comment"># Budget total : 40 + 40 + 20 = 100</span>
+
+<span class="comment"># 1. Confiance source (40%)</span>
+<span class="var">score</span> += (base_conf / <span class="num">100</span>) <span class="op">*</span> <span class="num">40.0</span>
+
+<span class="comment"># 2. VirusTotal (40%) — progressif sur 50 moteurs</span>
+<span class="keyword">if</span> vt <span class="op">></span> <span class="num">0</span>:
+    <span class="var">score</span> += <span class="num">20.0</span> <span class="op">+</span> <span class="fn">min</span>(<span class="num">20.0</span>, ((vt<span class="op">-</span><span class="num">1</span>)<span class="op">/</span><span class="num">49.0</span>) <span class="op">*</span> <span class="num">20.0</span>)
+<span class="comment"># → vt=1 : +20.0   |   vt=25 : +30.2   |   vt=50 : +40.0</span>
+
+<span class="comment"># 3. Volumétrie downloads (20%)</span>
+<span class="keyword">if</span>   dl <span class="op">>=</span> <span class="num">500</span>  → <span class="var">score</span> <span class="op">+=</span> <span class="num">20</span>
+<span class="keyword">elif</span> dl <span class="op">>=</span> <span class="num">100</span>  → <span class="var">score</span> <span class="op">+=</span> <span class="num">15</span>
+<span class="keyword">elif</span> dl <span class="op">>=</span> <span class="num">10</span>   → <span class="var">score</span> <span class="op">+=</span> <span class="num">10</span>
+<span class="keyword">else</span>           → <span class="var">score</span> <span class="op">+=</span> <span class="num">5</span>
+            </div>
+          </div>
+          <div>
+            <h3>Chemin B — Autres sources ThreatFox / DFIR</h3>
+            <div class="formula">
+<span class="comment"># Budget total : 40 + 60 = 100</span>
+
+<span class="comment"># 1. Confiance source (40%)</span>
+<span class="var">score</span> += (base_conf / <span class="num">100</span>) <span class="op">*</span> <span class="num">40.0</span>
+
+<span class="comment"># 2. VirusTotal (60%) — progressif sur 50 moteurs</span>
+<span class="keyword">if</span> vt <span class="op">></span> <span class="num">0</span>:
+    <span class="var">score</span> += <span class="num">30.0</span> <span class="op">+</span> <span class="fn">min</span>(<span class="num">30.0</span>, ((vt<span class="op">-</span><span class="num">1</span>)<span class="op">/</span><span class="num">49.0</span>) <span class="op">*</span> <span class="num">30.0</span>)
+<span class="comment"># → vt=1 : +30.0   |   vt=25 : +45.3   |   vt=50 : +60.0</span>
+
+<span class="comment"># (pas de signal intel_downloads)</span>
+            </div>
+          </div>
+        </div>
+
+        <h3>Visualisation contribution par composante (Hash — MalwareBazaar)</h3>
+        <div class="bar-row">
+          <span class="bar-label">Confiance src</span>
+          <div class="bar-track"><div class="bar-fill" style="width:40%; background:var(--accent);"></div></div>
+          <span class="bar-val">40%</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">VirusTotal</span>
+          <div class="bar-track"><div class="bar-fill" style="width:40%; background:var(--green);"></div></div>
+          <span class="bar-val">40%</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Downloads</span>
+          <div class="bar-track"><div class="bar-fill" style="width:20%; background:var(--yellow);"></div></div>
+          <span class="bar-val">20%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- IP ---- -->
+    <div class="ioc-block">
+      <div class="ioc-header ioc-ip">
+        <span class="badge badge-low">IP</span>
+        <span>Types : <code>ip</code> / <code>ipv4</code> / <code>ipv6</code></span>
+        <span style="margin-left:auto; color:var(--muted); font-size:0.8rem;">Sources : AbuseIPDB, FeodoTracker, CINS, Spamhaus, ThreatFox</span>
+      </div>
+      <div class="ioc-body">
+        <p>Les adresses IP cumulent trois signaux majeurs : la fiabilité source, VirusTotal et AbuseIPDB, plus deux bonus comportementaux.</p>
+
+        <div class="formula">
+<span class="comment"># Budget total : 30 + 30 + 30 + 10 = 100</span>
+
+<span class="comment"># 1. Confiance source (30%)</span>
+<span class="var">score</span> += (<span class="var">base_conf</span> / <span class="num">100.0</span>) <span class="op">*</span> <span class="num">30.0</span>
+
+<span class="comment"># 2. VirusTotal (max 30%) — progressif</span>
+<span class="keyword">if</span> vt <span class="op">></span> <span class="num">0</span>:
+    <span class="var">score</span> += <span class="num">15.0</span> <span class="op">+</span> <span class="fn">min</span>(<span class="num">15.0</span>, ((vt<span class="op">-</span><span class="num">1</span>)<span class="op">/</span><span class="num">49.0</span>) <span class="op">*</span> <span class="num">15.0</span>)
+<span class="comment"># → vt=1 : +15.0   |   vt=25 : +22.6   |   vt=50 : +30.0</span>
+
+<span class="comment"># 3. AbuseIPDB (30%) — score 0-100 → 0-30 pts</span>
+<span class="var">score</span> += (<span class="var">abuse</span> / <span class="num">100.0</span>) <span class="op">*</span> <span class="num">30.0</span>
+<span class="comment"># abuse=50 → +15   |   abuse=100 → +30</span>
+
+<span class="comment"># 4. Bonus comportementaux (max 10%)</span>
+<span class="keyword">if</span> status <span class="op">==</span> <span class="fn">"online"</span>        → <span class="var">score</span> <span class="op">+=</span> <span class="num">5</span>   <span class="comment"># C2 actif maintenant</span>
+<span class="keyword">if</span> is_compromised <span class="op">==</span> True   → <span class="var">score</span> <span class="op">+=</span> <span class="num">5</span>   <span class="comment"># hôte compromis confirmé</span>
+        </div>
+
+        <h3>Visualisation contribution (IP)</h3>
+        <div class="bar-row">
+          <span class="bar-label">Confiance src</span>
+          <div class="bar-track"><div class="bar-fill" style="width:30%; background:var(--accent);"></div></div>
+          <span class="bar-val">30%</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">VirusTotal</span>
+          <div class="bar-track"><div class="bar-fill" style="width:30%; background:var(--green);"></div></div>
+          <span class="bar-val">30%</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">AbuseIPDB</span>
+          <div class="bar-track"><div class="bar-fill" style="width:30%; background:var(--orange);"></div></div>
+          <span class="bar-val">30%</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Bonus online/C2</span>
+          <div class="bar-track"><div class="bar-fill" style="width:10%; background:var(--red);"></div></div>
+          <span class="bar-val">10%</span>
+        </div>
+
+        <div class="info-box" style="margin-top:1rem;">
+          <strong>Signaux spécifiques IP :</strong><br>
+          • <code>abuseConfidenceScore</code> : score 0–100 fourni par AbuseIPDB (basé sur le nombre de rapports)<br>
+          • <code>totalReports</code> : utilisé dans le signal global mais pas dans le calcul IOC individuel<br>
+          • <code>status = "online"</code> : FeodoTracker confirme que le C2 répond actuellement
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- URL / DOMAINE ---- -->
+    <div class="ioc-block">
+      <div class="ioc-header ioc-url">
+        <span class="badge badge-purple">URL / DOMAINE</span>
+        <span>Types : <code>url</code> / <code>domain</code> / <code>domaine</code></span>
+        <span style="margin-left:auto; color:var(--muted); font-size:0.8rem;">Sources : URLScan, URLHaus, OpenPhish, PhishTank, PulseDive</span>
+      </div>
+      <div class="ioc-body">
+        <p>Les URLs et domaines utilisent URLScan comme troisième pilier à la place d'AbuseIPDB. URLScan fournit des signaux comportementaux spécifiques au web.</p>
+
+        <div class="formula">
+<span class="comment"># Budget total : 30 + 30 + 30 + 10 = 100</span>
+
+<span class="comment"># 1. Confiance source (30%)</span>
+<span class="var">score</span> += (<span class="var">base_conf</span> / <span class="num">100.0</span>) <span class="op">*</span> <span class="num">30.0</span>
+
+<span class="comment"># 2. VirusTotal (max 30%) — progressif</span>
+<span class="keyword">if</span> vt <span class="op">></span> <span class="num">0</span>:
+    <span class="var">score</span> += <span class="num">15.0</span> <span class="op">+</span> <span class="fn">min</span>(<span class="num">15.0</span>, ((vt<span class="op">-</span><span class="num">1</span>)<span class="op">/</span><span class="num">49.0</span>) <span class="op">*</span> <span class="num">15.0</span>)
+
+<span class="comment"># 3. URLScan (max 30%) — signaux comportementaux</span>
+<span class="var">urlscan_score</span> = <span class="num">0</span>
+<span class="keyword">if</span>   risk_flag <span class="op">==</span> <span class="fn">"high"</span>       → <span class="var">urlscan_score</span> <span class="op">+=</span> <span class="num">15</span>
+<span class="keyword">elif</span> risk_flag <span class="op">==</span> <span class="fn">"medium"</span>     → <span class="var">urlscan_score</span> <span class="op">+=</span> <span class="num">5</span>
+<span class="keyword">if</span>   typosquat_flag <span class="op">==</span> True    → <span class="var">urlscan_score</span> <span class="op">+=</span> <span class="num">10</span>
+<span class="keyword">if</span>   suspicious_keywords        → <span class="var">urlscan_score</span> <span class="op">+=</span> <span class="num">5</span>
+<span class="var">score</span> += <span class="fn">min</span>(<span class="num">30.0</span>, urlscan_score)   <span class="comment"># plafonné à 30</span>
+
+<span class="comment"># 4. Bonus : URL encore en ligne (10%)</span>
+<span class="keyword">if</span> status <span class="op">==</span> <span class="fn">"online"</span> → <span class="var">score</span> <span class="op">+=</span> <span class="num">10</span>
+        </div>
+
+        <h3>Décomposition des signaux URLScan</h3>
+        <div class="table-wrap" style="margin-top:0.5rem;">
+          <table>
+            <thead>
+              <tr><th>Champ</th><th>Condition</th><th>Points URLScan</th><th>Signification</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>risk_flag</code></td>
+                <td><code>"high"</code></td>
+                <td><strong style="color:var(--red)">+15</strong></td>
+                <td>Comportement malveillant détecté lors du scan de la page</td>
+              </tr>
+              <tr>
+                <td><code>risk_flag</code></td>
+                <td><code>"medium"</code></td>
+                <td><strong style="color:var(--yellow)">+5</strong></td>
+                <td>Comportement suspect mais non confirmé</td>
+              </tr>
+              <tr>
+                <td><code>typosquat_flag</code></td>
+                <td><code>True</code></td>
+                <td><strong style="color:var(--orange)">+10</strong></td>
+                <td>Domaine imite un domaine légitime connu (amazon vs amaz0n)</td>
+              </tr>
+              <tr>
+                <td><code>suspicious_keywords</code></td>
+                <td>liste non vide</td>
+                <td><strong style="color:var(--yellow)">+5</strong></td>
+                <td>Mots-clés suspects dans le contenu de la page</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="bar-row" style="margin-top:1rem;">
+          <span class="bar-label">Confiance src</span>
+          <div class="bar-track"><div class="bar-fill" style="width:30%; background:var(--accent);"></div></div>
+          <span class="bar-val">30%</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">VirusTotal</span>
+          <div class="bar-track"><div class="bar-fill" style="width:30%; background:var(--green);"></div></div>
+          <span class="bar-val">30%</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">URLScan</span>
+          <div class="bar-track"><div class="bar-fill" style="width:30%; background:var(--purple);"></div></div>
+          <span class="bar-val">30%</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">Bonus online</span>
+          <div class="bar-track"><div class="bar-fill" style="width:10%; background:var(--red);"></div></div>
+          <span class="bar-val">10%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- VULNÉRABILITÉS ---- -->
+    <div class="ioc-block">
+      <div class="ioc-header ioc-vuln">
+        <span class="badge badge-high">VULNÉRABILITÉ</span>
+        <span>Types : CVE (<code>threat_type = "vulnerability"</code>)</span>
+        <span style="margin-left:auto; color:var(--muted); font-size:0.8rem;">Source : NVD (source_confidence = 100)</span>
+      </div>
+      <div class="ioc-body">
+        <p>Les vulnérabilités suivent un chemin entièrement différent dans <code>calculate_priority()</code> : le CVSS et l'EPSS priment sur le score additif.</p>
+
+        <div class="formula">
+<span class="comment"># calculate_priority() — branche "vulnerability"</span>
+<span class="var">cvss</span> = float(attrs[<span class="fn">"cvss_score"</span>])   <span class="comment"># ex: 9.8 (Log4Shell)</span>
+<span class="var">epss</span> = float(attrs[<span class="fn">"epss"</span>])           <span class="comment"># probabilité exploitation 30j (0-1)</span>
+
+<span class="keyword">if</span>   cvss <span class="op">>=</span> <span class="num">9.0</span> <span class="keyword">or</span> epss <span class="op">>=</span> <span class="num">0.9</span>  → CRITICAL, <span class="fn">"escalate"</span>
+<span class="keyword">elif</span> cvss <span class="op">>=</span> <span class="num">7.0</span>                  → HIGH,     <span class="fn">"investigate"</span>
+<span class="keyword">elif</span> cvss <span class="op">>=</span> <span class="num">4.0</span>                  → MEDIUM,   <span class="fn">"monitor"</span>
+<span class="keyword">else</span>                              → LOW,      <span class="fn">"monitor_quiet"</span>
+        </div>
+
+        <div class="grid-3" style="margin-top:1rem;">
+          <div class="card">
+            <div class="card-title">CVSS ≥ 9.0 ou EPSS ≥ 90%</div>
+            <div style="font-size:1.3rem; font-weight:800; color:var(--critical);">CRITICAL</div>
+            <div style="font-size:0.8rem; margin-top:0.3rem; color:var(--muted);">Action: escalate immédiat</div>
+            <div style="font-size:0.75rem; margin-top:0.5rem;">Ex: CVE-2021-44228 (Log4j = 10.0)</div>
+          </div>
+          <div class="card">
+            <div class="card-title">CVSS 7.0–8.9</div>
+            <div style="font-size:1.3rem; font-weight:800; color:var(--high);">HIGH</div>
+            <div style="font-size:0.8rem; margin-top:0.3rem; color:var(--muted);">Action: investigate</div>
+            <div style="font-size:0.75rem; margin-top:0.5rem;">RCE exploitables avec authentification</div>
+          </div>
+          <div class="card">
+            <div class="card-title">CVSS 4.0–6.9</div>
+            <div style="font-size:1.3rem; font-weight:800; color:var(--yellow);">MEDIUM</div>
+            <div style="font-size:0.8rem; margin-top:0.3rem; color:var(--muted);">Action: monitor</div>
+            <div style="font-size:0.75rem; margin-top:0.5rem;">XSS, SSRF, LFI locaux</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- FALLBACK ---- -->
+    <div class="card" style="margin-bottom:1.25rem;">
+      <div class="card-title">Fallback — Types non reconnus</div>
+      <p style="font-size:0.88rem; margin-bottom:0.75rem;">Pour tout IOC de type inconnu (ex: email, certificate), la formule simplifie à deux composantes :</p>
+      <div class="formula">
+<span class="comment"># Fallback — type non reconnu</span>
+<span class="var">score</span>  = (base_conf / <span class="num">100</span>) <span class="op">*</span> <span class="num">50.0</span>    <span class="comment"># 50% confiance source</span>
+<span class="keyword">if</span> vt <span class="op">></span> <span class="num">0</span>:
+    <span class="var">score</span> += <span class="num">25.0</span> <span class="op">+</span> <span class="fn">min</span>(<span class="num">25.0</span>, ((vt<span class="op">-</span><span class="num">1</span>)<span class="op">/</span><span class="num">49.0</span>) <span class="op">*</span> <span class="num">25.0</span>)   <span class="comment"># 50% VT</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- ÉTAPE 3 : PÉNALITÉ FAUX POSITIFS -->
+  <!-- ====================================================== -->
+  <section id="formulas">
+    <h2><span class="step-badge">3</span> Pénalité Faux Positifs & Score Global</h2>
+
+    <div class="alert-box">
+      <strong>Pénalité faux positifs (×0.25) :</strong><br>
+      Si <code>vt_malicious_count == 0</code> ET <code>vt_harmless_count > 20</code>, le score est divisé par 4.<br>
+      Cas typique : URLs Malpedia ou ressources légitimes passant dans un feed. Un score de 30 devient 7.5.
+    </div>
+
+    <div class="formula">
+<span class="comment"># Appliqué APRÈS tous les calculs, AVANT le min(100)</span>
+<span class="var">vt_harmless</span> = e.get(<span class="fn">"vt_harmless_count"</span>, <span class="num">0</span>)
+
+<span class="keyword">if</span> vt <span class="op">==</span> <span class="num">0</span> <span class="keyword">and</span> vt_harmless <span class="op">></span> <span class="num">20</span>:
+    <span class="var">score</span> = <span class="var">score</span> <span class="op">*</span> <span class="num">0.25</span>   <span class="comment"># ex: 30 → 7.5 (plus dans la zone MEDIUM)</span>
+
+<span class="keyword">return</span> <span class="fn">round</span>(<span class="fn">min</span>(<span class="num">100.0</span>, <span class="var">score</span>), <span class="num">1</span>)
+    </div>
+
+    <h3>Agrégation du score global : règle du maximum</h3>
+    <p>
+      Un record peut contenir plusieurs IOCs de types différents (ex: une IP C2 + un hash de payload + une URL de distribution).
+      Le score de risque global du record est le <strong>maximum</strong> des scores IOC individuels — pas une moyenne.
+    </p>
+
+    <div class="formula">
+<span class="comment"># calculate_additive_risk() — score global 0-100</span>
+<span class="var">source_conf</span> = record.get(<span class="fn">"source_confidence"</span>, <span class="num">50</span>)
+<span class="var">iocs</span> = record.get(<span class="fn">"iocs"</span>, [])
+
+<span class="keyword">if not</span> iocs:
+    <span class="keyword">return</span> <span class="fn">round</span>(<span class="fn">min</span>(<span class="num">100.0</span>, source_conf <span class="op">*</span> <span class="num">0.5</span>), <span class="num">1</span>)   <span class="comment"># fallback sans IOC</span>
+
+<span class="var">scores</span> = [<span class="fn">calculate_ioc_risk</span>(ioc, source_conf) <span class="keyword">for</span> ioc <span class="keyword">in</span> iocs]
+<span class="keyword">return</span> <span class="fn">max</span>(scores)   <span class="comment"># ← règle du maximum : l'IOC le plus risqué détermine le record</span>
+    </div>
+
+    <div class="info-box">
+      <strong>Pourquoi le maximum et pas la moyenne ?</strong><br>
+      Un seul IOC confirmé malveillant suffit à classer une campagne. Une moyenne diluerait le signal : si un record a un hash à 90 et deux URLs bénignes à 10, la moyenne (37) cacherait la menace réelle.
+    </div>
+
+    <h3>Score individuel par IOC — stocké dans le record</h3>
+    <div class="formula">
+<span class="comment"># enrichir.py — après calculate_additive_risk</span>
+<span class="var">src_conf</span> = record.get(<span class="fn">"source_confidence"</span>, <span class="num">50</span>)
+<span class="keyword">for</span> ioc <span class="keyword">in</span> record[<span class="fn">"iocs"</span>]:
+    ioc[<span class="fn">"risk_score"</span>] = <span class="fn">calculate_ioc_risk</span>(ioc, src_conf)
+
+    <span class="comment"># Action SOC au niveau IOC</span>
+    <span class="keyword">if</span>   ioc[<span class="fn">"risk_score"</span>] <span class="op">>=</span> <span class="num">70</span>  → ioc[<span class="fn">"soc_action"</span>] = <span class="fn">"investigate"</span>
+    <span class="keyword">elif</span> ioc[<span class="fn">"risk_score"</span>] <span class="op">>=</span> <span class="num">40</span>  → ioc[<span class="fn">"soc_action"</span>] = <span class="fn">"monitor"</span>
+    <span class="keyword">else</span>                           → ioc[<span class="fn">"soc_action"</span>] = <span class="fn">"monitor_quiet"</span>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- ÉTAPE 4 : PRIORITÉ SOC -->
+  <!-- ====================================================== -->
+  <section id="priority">
+    <h2><span class="step-badge">4</span> Priorité SOC — <code>calculate_priority()</code></h2>
+    <p>Le score de risque global (0–100) est traduit en priorité et action SOC selon ce mapping :</p>
+
+    <div class="score-map">
+      <div class="score-card sc-critical">
+        <div class="range">≥ 80</div>
+        <div style="font-size:1.1rem; font-weight:800;">CRITICAL</div>
+        <div class="action">escalate</div>
+        <div class="label">Alerte immédiate — IR requise</div>
+      </div>
+      <div class="score-card sc-high">
+        <div class="range">60–79</div>
+        <div style="font-size:1.1rem; font-weight:800;">HIGH</div>
+        <div class="action">investigate</div>
+        <div class="label">Analyse SOC sous 4h</div>
+      </div>
+      <div class="score-card sc-medium">
+        <div class="range">40–59</div>
+        <div style="font-size:1.1rem; font-weight:800;">MEDIUM</div>
+        <div class="action">monitor</div>
+        <div class="label">Surveillance active</div>
+      </div>
+      <div class="score-card sc-low">
+        <div class="range">&lt; 40</div>
+        <div style="font-size:1.1rem; font-weight:800;">LOW</div>
+        <div class="action">monitor_quiet</div>
+        <div class="label">Log, pas d'alerte</div>
+      </div>
+    </div>
+
+    <h3>Actions SOC par priorité</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Priorité</th><th>Action</th><th>Score</th><th>Déclencheurs typiques</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge badge-critical">CRITICAL</span></td>
+            <td><code>escalate</code></td>
+            <td>≥ 80</td>
+            <td>Hash détecté par 40+ moteurs VT + source fiable / C2 FeodoTracker online + abuse 90%+</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-high">HIGH</span></td>
+            <td><code>investigate</code></td>
+            <td>60–79</td>
+            <td>IP ThreatFox + VT 25 moteurs + abuse 60% / URL phishing confirmed + typosquat</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-medium">MEDIUM</span></td>
+            <td><code>monitor</code></td>
+            <td>40–59</td>
+            <td>URL URLHaus peu détectée VT + risk medium / hash MalwareBazaar faibles downloads</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-low">LOW</span></td>
+            <td><code>monitor_quiet</code></td>
+            <td>&lt; 40</td>
+            <td>Source peu fiable (pulsedive 70) + aucun signal VT/AbuseIPDB</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Cas des vulnérabilités — CVSS prime</h3>
+    <p>Pour les records de type <code>threat_type = "vulnerability"</code>, le score additif est ignoré. La priorité dépend directement du CVSS et de l'EPSS :</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Condition</th><th>Priorité</th><th>Action</th><th>Exemple</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>CVSS ≥ 9.0 ou EPSS ≥ 0.9</td>
+            <td><span class="badge badge-critical">CRITICAL</span></td>
+            <td><code>escalate</code></td>
+            <td>CVE-2021-44228 (Log4j) = 10.0</td>
+          </tr>
+          <tr>
+            <td>CVSS ≥ 7.0</td>
+            <td><span class="badge badge-high">HIGH</span></td>
+            <td><code>investigate</code></td>
+            <td>CVE-2023-23397 (Outlook) = 9.8 → CRITICAL</td>
+          </tr>
+          <tr>
+            <td>CVSS ≥ 4.0</td>
+            <td><span class="badge badge-medium">MEDIUM</span></td>
+            <td><code>monitor</code></td>
+            <td>XSS stocké = 6.1</td>
+          </tr>
+          <tr>
+            <td>CVSS &lt; 4.0</td>
+            <td><span class="badge badge-low">LOW</span></td>
+            <td><code>monitor_quiet</code></td>
+            <td>Info disclosure = 2.0</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- PIPELINE COMPLET -->
+  <!-- ====================================================== -->
+  <section id="pipeline">
+    <h2><span class="step-badge">5</span> Pipeline Complet — <code>enrichir.py</code></h2>
+    <p>L'orchestrateur <code>IntelligenceOrchestrator.run()</code> applique les 4 étapes dans l'ordre sur chaque record JSON enrichi :</p>
+
+    <div class="grid-2">
+      <div>
+        <div class="flow">
+          <div class="flow-node"><strong>1. Classification</strong> — <code>ThreatClassifier.infer_threat_type()</code><br><small style="color:var(--muted)">→ malware | phishing | vulnerability | suspicious</small></div>
+          <div class="flow-arrow"></div>
+          <div class="flow-node"><strong>2. Fiabilité</strong> — <code>SourceReliability.apply_reliability_tag()</code><br><small style="color:var(--muted)">→ source_confidence + reliability:high/medium/low</small></div>
+          <div class="flow-arrow"></div>
+          <div class="flow-node"><strong>2.5 MITRE ATT&CK</strong> — <code>map_record()</code><br><small style="color:var(--muted)">→ technique_id, tactic (optionnel)</small></div>
+          <div class="flow-arrow"></div>
+          <div class="flow-node"><strong>3. Scoring</strong> — <code>PriorityScorer.calculate_priority()</code><br><small style="color:var(--muted)">→ priority_score + soc_action + risk_score_additive</small></div>
+          <div class="flow-arrow"></div>
+          <div class="flow-node"><strong>4. Marquage</strong> — tag <code>soc_enriched</code><br><small style="color:var(--muted)">→ évite le double-traitement (idempotent)</small></div>
+        </div>
+      </div>
+      <div>
+        <h3>Champs produits dans le JSON final</h3>
+        <div class="formula">
+{
+  <span class="comment">// Ajoutés par Classification</span>
+  <span class="fn">"threat_type"</span>: <span class="fn">"malware"</span>,
+  <span class="fn">"attack_type"</span>: <span class="fn">"RAT"</span>,
+
+  <span class="comment">// Ajoutés par Reliability</span>
+  <span class="fn">"source_confidence"</span>: <span class="num">90</span>,
+  <span class="fn">"confidence_label"</span>: <span class="fn">"HIGH"</span>,
+  <span class="fn">"tags"</span>: [<span class="fn">"reliability:high"</span>, <span class="fn">"soc_enriched"</span>],
+
+  <span class="comment">// Ajoutés par MITRE</span>
+  <span class="fn">"technique_id"</span>: <span class="fn">"T1071.001"</span>,
+  <span class="fn">"tactic"</span>: <span class="fn">"command-and-control"</span>,
+
+  <span class="comment">// Ajoutés par Scoring</span>
+  <span class="fn">"priority_score"</span>: <span class="fn">"CRITICAL"</span>,
+  <span class="fn">"soc_action"</span>: <span class="fn">"escalate"</span>,
+  <span class="fn">"risk_score_additive"</span>: <span class="num">87.3</span>,
+
+  <span class="comment">// Ajouté par IOC individuel</span>
+  <span class="fn">"iocs"</span>: [{
+    <span class="fn">"type"</span>: <span class="fn">"ip"</span>, <span class="fn">"value"</span>: <span class="fn">"185.x.x.x"</span>,
+    <span class="fn">"risk_score"</span>: <span class="num">87.3</span>,
+    <span class="fn">"soc_action"</span>: <span class="fn">"investigate"</span>
+  }]
+}
+        </div>
+      </div>
+    </div>
+
+    <div class="success-box" style="margin-top:1rem;">
+      <strong>Idempotence :</strong> Les flags <code>passer_par_callasifcation</code>, <code>paser_reliablity</code>, <code>passser_par_scoring</code> évitent le recalcul si le script est relancé. L'option <code>--skip-enriched</code> ajoute un deuxième filtre sur le tag <code>soc_enriched</code>.
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- EXEMPLES CONCRETS -->
+  <!-- ====================================================== -->
+  <section id="examples">
+    <h2><span class="step-badge">6</span> Exemples Simulés Pas-à-Pas</h2>
+
+    <!-- EX 1 : IP FeodoTracker C2 -->
+    <div class="sim-box">
+      <div class="sim-header">
+        <span>Exemple 1 — IP C2 FeodoTracker (Emotet botnet)</span>
+        <span class="badge badge-critical">CRITICAL</span>
+      </div>
+      <div class="sim-body">
+        <div class="grid-2">
+          <div>
+            <div class="sim-step">
+              <div class="sim-step-label">Données d'entrée</div>
+              <div class="formula" style="font-size:0.82rem;">
+source: feodotracker
+IOC type: ip, value: 185.220.101.47
+ioc_enrichment:
+  vt_malicious_count: 32
+  abuseConfidenceScore: 94
+  status: "online"
+  is_compromised: false
+  malware_family: "emotet"
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="sim-step">
+              <div class="sim-step-label">Étape 1 — Source Confidence</div>
+              <div class="sim-value">source_confidence = 90 (feodotracker → reliability:high)</div>
+            </div>
+            <div class="sim-step">
+              <div class="sim-step-label">Étape 2 — base_conf</div>
+              <div class="sim-value">base_conf = max(90, 0) = 90   [pas de tf_conf native]</div>
+            </div>
+            <div class="sim-step">
+              <div class="sim-step-label">Étape 3 — calculate_ioc_risk (IP)</div>
+              <div class="formula" style="font-size:0.82rem;">
+<span class="comment"># 1. Confiance source (30%)</span>
+(90/100) × 30 = <span class="num">27.0</span>
+
+<span class="comment"># 2. VirusTotal : vt=32 (progressif)</span>
+15.0 + min(15.0, (31/49)×15.0) = 15.0 + <span class="num">9.49</span> = <span class="num">24.49</span>
+
+<span class="comment"># 3. AbuseIPDB : abuse=94</span>
+(94/100) × 30 = <span class="num">28.2</span>
+
+<span class="comment"># 4. Bonus : status="online" → +5</span>
++<span class="num">5.0</span>
+
+<span class="comment"># Total : 27 + 24.49 + 28.2 + 5 = 84.69</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="grid-3" style="margin-top:1rem;">
+          <div class="card">
+            <div class="card-title">risk_score IOC</div>
+            <div style="font-size:2rem; font-weight:800; color:var(--critical);">84.7</div>
+          </div>
+          <div class="card">
+            <div class="card-title">risk_score_additive</div>
+            <div style="font-size:2rem; font-weight:800; color:var(--critical);">84.7</div>
+            <div style="font-size:0.75rem; color:var(--muted);">max([84.7]) = 84.7</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Priorité + Action SOC</div>
+            <span class="badge badge-critical">CRITICAL</span>
+            <span style="margin-left:0.5rem; font-family:monospace; font-size:0.85rem;">escalate</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EX 2 : Hash MalwareBazaar -->
+    <div class="sim-box">
+      <div class="sim-header">
+        <span>Exemple 2 — Hash SHA256 MalwareBazaar (RedLine Stealer)</span>
+        <span class="badge badge-high">HIGH</span>
+      </div>
+      <div class="sim-body">
+        <div class="grid-2">
+          <div>
+            <div class="sim-step">
+              <div class="sim-step-label">Données d'entrée</div>
+              <div class="formula" style="font-size:0.82rem;">
+source: malwarebazaar
+IOC type: sha256
+ioc_enrichment:
+  vt_malicious_count: 18
+  intel_downloads: 45
+  malware_family: "redline"
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="sim-step">
+              <div class="sim-step-label">Étape 1 — Source Confidence</div>
+              <div class="sim-value">source_confidence = 95 (malwarebazaar → reliability:high)</div>
+            </div>
+            <div class="sim-step">
+              <div class="sim-step-label">Étape 3 — calculate_ioc_risk (HASH, chemin A)</div>
+              <div class="formula" style="font-size:0.82rem;">
+<span class="comment"># intel_downloads=45 > 0 → chemin MalwareBazaar</span>
+
+<span class="comment"># 1. Confiance source (40%)</span>
+(95/100) × 40 = <span class="num">38.0</span>
+
+<span class="comment"># 2. VT : vt=18 (progressif)</span>
+20.0 + min(20.0, (17/49)×20.0) = 20.0 + <span class="num">6.94</span> = <span class="num">26.94</span>
+
+<span class="comment"># 3. Downloads : 45 → 10 < dl < 100 → +10</span>
++<span class="num">10.0</span>
+
+<span class="comment"># Total : 38 + 26.94 + 10 = 74.94</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="grid-3" style="margin-top:1rem;">
+          <div class="card">
+            <div class="card-title">risk_score IOC</div>
+            <div style="font-size:2rem; font-weight:800; color:var(--high);">74.9</div>
+          </div>
+          <div class="card">
+            <div class="card-title">risk_score_additive</div>
+            <div style="font-size:2rem; font-weight:800; color:var(--high);">74.9</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Priorité + Action SOC</div>
+            <span class="badge badge-high">HIGH</span>
+            <span style="margin-left:0.5rem; font-family:monospace; font-size:0.85rem;">investigate</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EX 3 : URL phishing URLScan -->
+    <div class="sim-box">
+      <div class="sim-header">
+        <span>Exemple 3 — URL Phishing OpenPhish + URLScan signals</span>
+        <span class="badge badge-high">HIGH</span>
+      </div>
+      <div class="sim-body">
+        <div class="grid-2">
+          <div>
+            <div class="sim-step">
+              <div class="sim-step-label">Données d'entrée</div>
+              <div class="formula" style="font-size:0.82rem;">
+source: openphish
+IOC type: url
+ioc_enrichment:
+  vt_malicious_count: 8
+  risk_flag: "high"
+  typosquat_flag: true
+  suspicious_keywords: ["login", "verify"]
+  status: "online"
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="sim-step">
+              <div class="sim-step-label">Étape 1 — Source Confidence</div>
+              <div class="sim-value">source_confidence = 70 (openphish → reliability:low)</div>
+            </div>
+            <div class="sim-step">
+              <div class="sim-step-label">Étape 3 — calculate_ioc_risk (URL)</div>
+              <div class="formula" style="font-size:0.82rem;">
+<span class="comment"># 1. Confiance source (30%)</span>
+(70/100) × 30 = <span class="num">21.0</span>
+
+<span class="comment"># 2. VT : vt=8</span>
+15.0 + min(15.0, (7/49)×15.0) = 15.0 + <span class="num">2.14</span> = <span class="num">17.14</span>
+
+<span class="comment"># 3. URLScan</span>
+risk_flag=high  → +15
+typosquat_flag  → +10
+susp_keywords   → +5
+urlscan_score = <span class="num">30</span> → min(30, 30) = <span class="num">30.0</span>
+
+<span class="comment"># 4. Bonus : status=online → +10</span>
++<span class="num">10.0</span>
+
+<span class="comment"># Total : 21 + 17.14 + 30 + 10 = 78.14</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="grid-3" style="margin-top:1rem;">
+          <div class="card">
+            <div class="card-title">risk_score IOC</div>
+            <div style="font-size:2rem; font-weight:800; color:var(--high);">78.1</div>
+            <div style="font-size:0.75rem; color:var(--muted); margin-top:0.3rem;">Malgré source à 70%</div>
+          </div>
+          <div class="card">
+            <div class="card-title">risk_score_additive</div>
+            <div style="font-size:2rem; font-weight:800; color:var(--high);">78.1</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Priorité + Action SOC</div>
+            <span class="badge badge-high">HIGH</span>
+            <span style="margin-left:0.5rem; font-family:monospace; font-size:0.85rem;">investigate</span>
+            <div style="font-size:0.73rem; color:var(--muted); margin-top:0.4rem;">Presque CRITICAL (seuil 80)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EX 4 : Faux positif -->
+    <div class="sim-box">
+      <div class="sim-header">
+        <span>Exemple 4 — Faux positif (URL légitime détectée par erreur)</span>
+        <span class="badge badge-low">LOW après pénalité</span>
+      </div>
+      <div class="sim-body">
+        <div class="grid-2">
+          <div>
+            <div class="sim-step">
+              <div class="sim-step-label">Données d'entrée</div>
+              <div class="formula" style="font-size:0.82rem;">
+source: alienvault
+IOC type: url
+ioc_enrichment:
+  vt_malicious_count: 0      ← aucun détection
+  vt_harmless_count: 48      ← 48 moteurs OK
+  risk_flag: null
+  typosquat_flag: false
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="sim-step">
+              <div class="sim-step-label">Calcul avant pénalité</div>
+              <div class="formula" style="font-size:0.82rem;">
+<span class="comment"># source_confidence = 75 (alienvault)</span>
+
+<span class="comment"># 1. Confiance source</span>
+(75/100) × 30 = <span class="num">22.5</span>
+
+<span class="comment"># 2. VT = 0 → pas de points VT</span>
+
+<span class="comment"># 3. URLScan = 0 (aucun signal)</span>
+
+score avant pénalité = <span class="num">22.5</span>
+              </div>
+            </div>
+            <div class="sim-step">
+              <div class="sim-step-label">Pénalité faux positif</div>
+              <div class="formula" style="font-size:0.82rem;">
+<span class="comment"># vt == 0 AND vt_harmless > 20 → ×0.25</span>
+<span class="num">22.5</span> × <span class="num">0.25</span> = <span class="num">5.6</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="grid-3" style="margin-top:1rem;">
+          <div class="card">
+            <div class="card-title">risk_score IOC</div>
+            <div style="font-size:2rem; font-weight:800; color:var(--low);">5.6</div>
+            <div style="font-size:0.75rem; color:var(--muted);">Réduit de 22.5 → 5.6</div>
+          </div>
+          <div class="card">
+            <div class="card-title">risk_score_additive</div>
+            <div style="font-size:2rem; font-weight:800; color:var(--low);">5.6</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Priorité + Action SOC</div>
+            <span class="badge badge-low">LOW</span>
+            <span style="margin-left:0.5rem; font-family:monospace; font-size:0.85rem;">monitor_quiet</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EX 5 : Multi-IOC -->
+    <div class="sim-box">
+      <div class="sim-header">
+        <span>Exemple 5 — Record multi-IOC (IP C2 + Hash payload)</span>
+        <span class="badge badge-critical">CRITICAL via max()</span>
+      </div>
+      <div class="sim-body">
+        <p style="font-size:0.88rem; margin-bottom:1rem;">Un seul record ThreatFox contient deux IOCs : une IP C2 à risque moyen et un hash très détecté.</p>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">IOC #1 — IP (C2)</div>
+            <div class="formula" style="font-size:0.82rem; margin:0.5rem 0;">
+vt=5, abuse=40, no online
+score IP = (90/100)×30 + (15+1.63) + (40/100)×30
+         = 27 + 16.63 + 12 = <span class="num">55.6</span>
+            </div>
+            <span class="badge badge-medium">MEDIUM 55.6</span>
+            <span style="margin-left:0.5rem; font-size:0.8rem; color:var(--muted);">soc_action: monitor</span>
+          </div>
+          <div class="card">
+            <div class="card-title">IOC #2 — SHA256 (payload)</div>
+            <div class="formula" style="font-size:0.82rem; margin:0.5rem 0;">
+vt=45, no dl → chemin B
+score = (90/100)×40 + 30+min(30,(44/49)×30)
+      = 36 + 30+26.94 = <span class="num">92.9</span>
+            </div>
+            <span class="badge badge-critical">CRITICAL 92.9</span>
+            <span style="margin-left:0.5rem; font-size:0.8rem; color:var(--muted);">soc_action: investigate</span>
+          </div>
+        </div>
+        <div class="success-box" style="margin-top:1rem;">
+          <strong>risk_score_additive = max(55.6, 92.9) = 92.9</strong><br>
+          Priorité record = <strong>CRITICAL</strong> / soc_action = <strong>escalate</strong><br>
+          Le hash très détecté fait monter tout le record en CRITICAL, même si l'IP seule serait MEDIUM.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RÉSUMÉ FORMULES -->
+  <section>
+    <h2><span class="step-badge">7</span> Résumé des Formules</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Type IOC</th><th>Composante 1</th><th>Composante 2</th><th>Composante 3</th><th>Bonus</th><th>Max théorique</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge badge-blue">HASH (MalwareBazaar)</span></td>
+            <td>Source × 40%</td>
+            <td>VT progressif × 40%</td>
+            <td>Downloads × 20%</td>
+            <td>—</td>
+            <td><strong>100</strong></td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-blue">HASH (autres)</span></td>
+            <td>Source × 40%</td>
+            <td>VT progressif × 60%</td>
+            <td>—</td>
+            <td>—</td>
+            <td><strong>100</strong></td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-low">IP</span></td>
+            <td>Source × 30%</td>
+            <td>VT progressif × 30%</td>
+            <td>AbuseIPDB × 30%</td>
+            <td>online +5, compromised +5</td>
+            <td><strong>100</strong></td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-purple">URL/Domaine</span></td>
+            <td>Source × 30%</td>
+            <td>VT progressif × 30%</td>
+            <td>URLScan (plaf. 30)</td>
+            <td>online +10</td>
+            <td><strong>100</strong></td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-gray">Fallback</span></td>
+            <td>Source × 50%</td>
+            <td>VT progressif × 50%</td>
+            <td>—</td>
+            <td>—</td>
+            <td><strong>100</strong></td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-high">Vulnérabilité</span></td>
+            <td colspan="3">CVSS / EPSS (hors score additif)</td>
+            <td>—</td>
+            <td><strong>CRITICAL directe</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>VT progressif — formule générique</h3>
+    <div class="formula">
+<span class="comment"># Garantit un minimum (floor) à la première détection</span>
+<span class="comment"># puis monte vers le max sur 50 moteurs</span>
+
+VT_score = <span class="var">floor</span> + <span class="fn">min</span>(<span class="var">cap</span>, ((vt<span class="op">-</span><span class="num">1</span>) / <span class="num">49.0</span>) <span class="op">×</span> <span class="var">cap</span>)
+
+<span class="comment"># Hash (autres)  → floor=30, cap=30  → range [30..60]</span>
+<span class="comment"># Hash (MB)      → floor=20, cap=20  → range [20..40]</span>
+<span class="comment"># IP / URL       → floor=15, cap=15  → range [15..30]</span>
+<span class="comment"># Fallback       → floor=25, cap=25  → range [25..50]</span>
+
+<span class="comment"># vt=1  → floor + 0         (minimum garanti)</span>
+<span class="comment"># vt=25 → floor + cap×0.49  (mi-chemin)</span>
+<span class="comment"># vt=50 → floor + cap       (maximum)</span>
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>
