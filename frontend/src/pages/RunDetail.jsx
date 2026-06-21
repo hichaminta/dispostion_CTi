@@ -48,7 +48,6 @@ const SRC_LOGO = {
 const PIPELINE_STEPS = [
   { name: "Collecte",              icon: Database,       color: "blue"    },
   { name: "Extraction CVE / IOC",  icon: Cpu,            color: "violet"  },
-  { name: "AbuseIPDB Enrichment",  icon: Shield,         color: "cyan"    },
   { name: "VirusTotal Enrichment", icon: Bug,            color: "indigo"  },
   { name: "Geolocalisation",       icon: Globe,          color: "emerald" },
   { name: "URLScan",               icon: ScanEye,        color: "pink"    },
@@ -492,7 +491,7 @@ const RunDetail = ({ runId, onBack, onExploreSource }) => {
                       const isF = activeStep === step.name;
                       const shortLabel = {
                         "Collecte": "COL", "Extraction CVE / IOC": "EXT",
-                        "AbuseIPDB Enrichment": "ABU", "VirusTotal Enrichment": "VT",
+                        "VirusTotal Enrichment": "VT",
                         "Geolocalisation": "GEO", "URLScan": "URL",
                         "Enrichissement CVE": "CVE", "Classification": "CLASS",
                         "MITRE Mapping": "MITRE", "Corrélation SOC": "COR",

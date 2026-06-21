@@ -162,6 +162,7 @@
     <a href="#prompt2" class="hl">Prompt LLM #2</a>
     <a href="#pdf">PDF Bulletin</a>
     <a href="#api">API Backend</a>
+    <a href="#misp" class="hl">MISP / STIX</a>
   </div>
 </nav>
 
@@ -833,6 +834,403 @@ reports/fuite/Bulletin_Fuite_INTEL-20260408-CNO-51.pdf</div>
 
 <span style="color:#63b3ed;">backend/app/</span>
 └── leaks_router.py               <span style="color:var(--m);">← FastAPI /api/leaks/* (18 routes)</span>
+</div>
+
+
+<hr class="divider">
+
+<!-- ══ MISP INTEGRATION ══ -->
+<div class="section-title" id="misp"><span class="dot"></span>Intégration MISP — Partage &amp; Export STIX 2.1</div>
+
+<p style="font-size:.85rem;color:#c9d1d9;margin-bottom:1.5rem;">
+  Chaque incident consolidé dans <code>leaks_intel.json</code> est transféré vers <strong>MISP</strong> (Malware Information Sharing Platform) pour enrichissement collaboratif et partage inter-CERT. Le module d'export traduit ensuite les événements MISP en objets <strong>STIX 2.1</strong> pour interopérabilité maximale.
+</p>
+
+<!-- Flow global -->
+<div class="pipe" style="flex-direction:row;flex-wrap:wrap;gap:.75rem;margin-bottom:2rem;">
+  <div class="pipe-step" style="border-left:3px solid var(--y);flex:1;min-width:160px;">
+    <div style="font-size:.8rem;"><strong style="color:var(--y);">leaks_intel.json</strong><br><small style="color:var(--m);">Incidents locaux</small></div>
+  </div>
+  <div style="align-self:center;color:var(--m);font-size:1.2rem;">→</div>
+  <div class="pipe-step" style="border-left:3px solid var(--tg);flex:1;min-width:160px;">
+    <div style="font-size:.8rem;"><strong style="color:var(--tg);">MISP Event</strong><br><small style="color:var(--m);">PyMISP API Push</small></div>
+  </div>
+  <div style="align-self:center;color:var(--m);font-size:1.2rem;">→</div>
+  <div class="pipe-step" style="border-left:3px solid var(--p);flex:1;min-width:160px;">
+    <div style="font-size:.8rem;"><strong style="color:var(--p);">MISP Attributes</strong><br><small style="color:var(--m);">IOCs &amp; Metadata</small></div>
+  </div>
+  <div style="align-self:center;color:var(--m);font-size:1.2rem;">→</div>
+  <div class="pipe-step" style="border-left:3px solid var(--o);flex:1;min-width:160px;">
+    <div style="font-size:.8rem;"><strong style="color:var(--o);">STIX 2.1 Bundle</strong><br><small style="color:var(--m);">Export / Partage TAXII</small></div>
+  </div>
+</div>
+
+<!-- PARTIE 1 — MAPPING CHAMPS -->
+<div class="stage st5">
+  <div class="stage-hdr">
+    <div class="sn st5">A</div>
+    <div><div class="stage-t">Mapping Champs Intel → MISP Event</div><div style="font-size:.76rem;color:var(--m);">core/misp_pusher.py · PyMISP</div></div>
+    <div class="stage-sub"><span class="ba ba-y">push_to_misp()</span></div>
+  </div>
+  <div class="stage-body">
+    <p style="font-size:.84rem;color:#c9d1d9;margin-bottom:1rem;">
+      Chaque champ du record <code>leaks_intel.json</code> se traduit en un élément MISP précis. Le tableau ci-dessous détaille la correspondance, le rôle de chaque champ dans MISP et pourquoi ce mapping a été choisi.
+    </p>
+
+    <div class="tw"><table>
+      <thead><tr><th>Champ Intel JSON</th><th>→ MISP Field / Attribute</th><th>Type MISP</th><th>Rôle &amp; Raison</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>intel_id</code><br><small style="color:var(--m);">INTEL-20260408-CNO-51</small></td>
+          <td><strong>event.info</strong><br><small style="color:var(--m);">Titre de l'événement</small></td>
+          <td><span class="ba ba-b">Event Title</span></td>
+          <td>Identifiant unique lisible par l'humain — permet de retrouver l'incident dans MISP sans ambiguïté. Préfixe <code>INTEL-</code> = namespace interne BlueSec.</td>
+        </tr>
+        <tr>
+          <td><code>leak_date</code><br><small style="color:var(--m);">2026-04-08</small></td>
+          <td><strong>event.date</strong></td>
+          <td><span class="ba ba-b">Event Date</span></td>
+          <td>Date à laquelle la fuite a été observée sur Telegram — pas la date de push MISP. Permet les corrélations temporelles cross-organisations.</td>
+        </tr>
+        <tr>
+          <td><code>leak_metadata.severity</code><br><small style="color:var(--m);">"high"</small></td>
+          <td><strong>event.threat_level_id</strong><br><small style="color:var(--m);">1=High 2=Med 3=Low 4=Undef</small></td>
+          <td><span class="ba ba-r">Threat Level</span></td>
+          <td>Convertit la sévérité LLM en niveau de menace MISP standard. Conditionne les alertes automatiques des abonnés MISP (feeds).</td>
+        </tr>
+        <tr>
+          <td><code>leak_metadata.confidence_score</code><br><small style="color:var(--m);">0.95 (95%)</small></td>
+          <td><strong>event.distribution</strong> + tag <code>tlp:red</code></td>
+          <td><span class="ba ba-p">Distribution</span></td>
+          <td>Score ≥ 0.8 → distribution restreinte (org only + TLP:RED). Score &lt; 0.8 → communauté fermée. Évite la diffusion d'IOCs peu fiables.</td>
+        </tr>
+        <tr>
+          <td><code>leak_metadata.target_organization</code><br><small style="color:var(--m);">["CNOPS"]</small></td>
+          <td>Attribute <strong>target-org</strong></td>
+          <td><span class="ba ba-o">target-org</span></td>
+          <td>Organisation victime de la fuite. Permet le filtrage "tous les incidents concernant CNOPS" dans MISP et la notification automatique si l'organisation est dans l'annuaire.</td>
+        </tr>
+        <tr>
+          <td><code>leak_metadata.leak_type</code><br><small style="color:var(--m);">"Database"</small></td>
+          <td>Tag <strong>leak-type:database</strong></td>
+          <td><span class="ba ba-p">Tag (taxonomie)</span></td>
+          <td>Tag de taxonomie custom BlueSec. Facilite les recherches par type ("tous les credential leaks de la semaine"). S'ajoute aussi en Galaxy <em>data-classification</em>.</td>
+        </tr>
+        <tr>
+          <td><code>source_channel</code><br><small style="color:var(--m);">"Jabaroot DZ"</small></td>
+          <td>Attribute <strong>threat-actor</strong><br>+ Galaxy <em>Threat Actor</em></td>
+          <td><span class="ba ba-r">threat-actor</span></td>
+          <td>Nom du canal Telegram source = acteur de menace. Lié au profil dans settings.yaml (catégorie, pays, description). La Galaxy Threat Actor permet de cluster plusieurs incidents du même groupe.</td>
+        </tr>
+        <tr>
+          <td><code>extracted_data.emails</code><br><small style="color:var(--m);">["x@cnops.ma"]</small></td>
+          <td>Attribute <strong>email-src</strong> (IDS flag = false)</td>
+          <td><span class="ba ba-g">email-src</span></td>
+          <td>Adresses email extraites = IOCs confirmés. Flag IDS=false car ce sont des victimes, pas des sources malveillantes. Utiles pour notifier les personnes exposées.</td>
+        </tr>
+        <tr>
+          <td><code>extracted_data.ips</code><br><small style="color:var(--m);">["192.168.1.1"]</small></td>
+          <td>Attribute <strong>ip-dst</strong> (IDS flag = true)</td>
+          <td><span class="ba ba-r">ip-dst</span></td>
+          <td>IPs extraites des fichiers = potentiels C2 ou serveurs compromis. IDS=true → bloqués automatiquement par les sondes réseau des abonnés MISP.</td>
+        </tr>
+        <tr>
+          <td><code>extracted_data.credentials</code><br><small style="color:var(--m);">["admin:P@ss"]</small></td>
+          <td>Attribute <strong>credential</strong></td>
+          <td><span class="ba ba-o">credential</span></td>
+          <td>Paires login:password confirmées. Marquées To-IDS=false (pas de blocage réseau) mais déclenchent un workflow de notification aux équipes IAM concernées.</td>
+        </tr>
+        <tr>
+          <td><code>extracted_files</code><br><small style="color:var(--m);">["cnops.zip"]</small></td>
+          <td>Attribute <strong>filename</strong> + <strong>attachment</strong></td>
+          <td><span class="ba ba-b">filename / attachment</span></td>
+          <td>Nom du fichier comme IOC de contexte. Si l'archive &lt; 10MB, elle est attachée en binaire au MISP event pour analyse sandbox. Sinon → hash SHA-256 uniquement.</td>
+        </tr>
+        <tr>
+          <td><code>summary_fr</code><br><small style="color:var(--m);">"Fuite BDD CNOPS..."</small></td>
+          <td><strong>event.comment</strong></td>
+          <td><span class="ba ba-p">Free Text</span></td>
+          <td>Résumé LLM en français — champ libre visible par les analystes. Seule information en langage naturel dans l'event MISP, tout le reste est structuré.</td>
+        </tr>
+      </tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- PARTIE 2 — EXEMPLE CONCRET -->
+<div class="stage st2" style="margin-top:1.75rem;">
+  <div class="stage-hdr">
+    <div class="sn st2">B</div>
+    <div><div class="stage-t">Exemple Complet — CNOPS : du JSON Intel au MISP Event</div><div style="font-size:.76rem;color:var(--m);">Trace pas-à-pas d'un incident réel</div></div>
+    <div class="stage-sub"><span class="ba ba-p">INTEL-20260408-CNO-51</span></div>
+  </div>
+  <div class="stage-body">
+    <div class="g2">
+      <div>
+        <div class="sub-title">1. Record source — leaks_intel.json</div>
+        <div class="box box-json" style="font-size:.74rem;">{
+  <span class="k">"intel_id"</span>:      <span class="s">"INTEL-20260408-CNO-51"</span>,
+  <span class="k">"timestamp"</span>:      <span class="s">"2026-04-08T10:23:00"</span>,
+  <span class="k">"leak_date"</span>:      <span class="s">"2026-04-08"</span>,
+  <span class="k">"source_channel"</span>: <span class="s">"Jabaroot DZ"</span>,
+  <span class="k">"leak_metadata"</span>: {
+    <span class="k">"target_organization"</span>: [<span class="s">"CNOPS"</span>],
+    <span class="k">"leak_type"</span>:          <span class="s">"Database"</span>,
+    <span class="k">"severity"</span>:           <span class="s">"high"</span>,
+    <span class="k">"confidence_score"</span>:    <span class="n">0.95</span>
+  },
+  <span class="k">"extracted_data"</span>: {
+    <span class="k">"emails"</span>:      [<span class="s">"admin@cnops.ma"</span>, <span class="s">"dsi@cnops.ma"</span>],
+    <span class="k">"ips"</span>:         [<span class="s">"10.0.50.12"</span>],
+    <span class="k">"credentials"</span>: [<span class="s">"admin@cnops.ma:Cnops2024!"</span>]
+  },
+  <span class="k">"extracted_files"</span>: [<span class="s">"Jabaroot_DZ/2026-04-08/cnops.zip"</span>],
+  <span class="k">"summary_fr"</span>:    <span class="s">"Fuite BDD CNOPS ~120k dossiers assurés..."</span>
+}</div>
+      </div>
+      <div>
+        <div class="sub-title">2. MISP Event créé — push_to_misp()</div>
+        <div class="box box-code" style="font-size:.74rem;"><span style="color:var(--m);"># Création de l'event</span>
+event = MISPEvent()
+event.info = <span style="color:#68d391;">"INTEL-20260408-CNO-51"</span>
+event.date = <span style="color:#68d391;">"2026-04-08"</span>
+event.threat_level_id = <span style="color:#93c5fd;">1</span>  <span style="color:var(--m);"># high</span>
+event.distribution   = <span style="color:#93c5fd;">0</span>  <span style="color:var(--m);"># org only (conf≥0.8)</span>
+
+<span style="color:var(--m);"># Tags</span>
+event.add_tag(<span style="color:#68d391;">"tlp:red"</span>)
+event.add_tag(<span style="color:#68d391;">"leak-type:database"</span>)
+event.add_tag(<span style="color:#68d391;">"source:telegram"</span>)
+
+<span style="color:var(--m);"># Attributs</span>
+event.add_attribute(<span style="color:#68d391;">"target-org"</span>, <span style="color:#68d391;">"CNOPS"</span>)
+event.add_attribute(<span style="color:#68d391;">"threat-actor"</span>, <span style="color:#68d391;">"Jabaroot DZ"</span>)
+event.add_attribute(<span style="color:#68d391;">"email-src"</span>, <span style="color:#68d391;">"admin@cnops.ma"</span>,
+                   to_ids=<span style="color:#93c5fd;">False</span>)
+event.add_attribute(<span style="color:#68d391;">"email-src"</span>, <span style="color:#68d391;">"dsi@cnops.ma"</span>,
+                   to_ids=<span style="color:#93c5fd;">False</span>)
+event.add_attribute(<span style="color:#68d391;">"ip-dst"</span>, <span style="color:#68d391;">"10.0.50.12"</span>,
+                   to_ids=<span style="color:#93c5fd;">True</span>)
+event.add_attribute(<span style="color:#68d391;">"credential"</span>,
+                   <span style="color:#68d391;">"admin@cnops.ma:Cnops2024!"</span>,
+                   to_ids=<span style="color:#93c5fd;">False</span>)
+event.add_attribute(<span style="color:#68d391;">"filename"</span>, <span style="color:#68d391;">"cnops.zip"</span>)
+event.comment = <span style="color:#68d391;">"Fuite BDD CNOPS ~120k dossiers..."</span>
+
+<span style="color:var(--m);"># Push vers instance MISP</span>
+misp.add_event(event)</div>
+      </div>
+    </div>
+
+    <div class="sub-title" style="margin-top:1rem;">3. Vue MISP Event — Ce que voit l'analyste</div>
+    <div style="background:#06080f;border:1px solid #1a3060;border-radius:10px;padding:1.1rem;font-family:'Consolas',monospace;font-size:.77rem;line-height:1.9;color:#c9d1d9;overflow-x:auto;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:.6rem;padding-bottom:.5rem;border-bottom:1px solid #1a3060;">
+        <span style="color:var(--tg);font-weight:700;font-size:.88rem;">Event #1042 — INTEL-20260408-CNO-51</span>
+        <span style="background:#2a0d0d;color:var(--r);border:1px solid #6e2020;padding:.1rem .5rem;border-radius:4px;font-size:.7rem;font-weight:700;">TLP:RED</span>
+      </div>
+      <div style="display:grid;grid-template-columns:160px 1fr;gap:.25rem .75rem;">
+        <span style="color:var(--m);">Date</span>       <span>2026-04-08</span>
+        <span style="color:var(--m);">Threat Level</span><span style="color:var(--r);font-weight:700;">HIGH (1)</span>
+        <span style="color:var(--m);">Distribution</span><span>Organisation only</span>
+        <span style="color:var(--m);">Tags</span>        <span><span class="ba ba-r">tlp:red</span> <span class="ba ba-b">leak-type:database</span> <span class="ba ba-b">source:telegram</span></span>
+        <span style="color:var(--m);">Comment</span>     <span style="color:#b0cce8;font-style:italic;">Fuite BDD CNOPS ~120k dossiers assurés...</span>
+      </div>
+      <div style="margin-top:.75rem;border-top:1px solid #1a3060;padding-top:.6rem;">
+        <div style="color:var(--m);font-size:.7rem;font-weight:700;text-transform:uppercase;margin-bottom:.4rem;">Attributes (7)</div>
+        <div style="display:grid;grid-template-columns:110px 130px 1fr 60px;gap:.2rem .5rem;font-size:.74rem;">
+          <span style="color:#7dd3b8;">target-org</span>    <span>—</span>                          <span>CNOPS</span>                              <span style="color:var(--m);">IDS:off</span>
+          <span style="color:#7dd3b8;">threat-actor</span>  <span>—</span>                          <span>Jabaroot DZ</span>                        <span style="color:var(--m);">IDS:off</span>
+          <span style="color:#7dd3b8;">email-src</span>     <span>—</span>                          <span style="color:#a5f3c8;">admin@cnops.ma</span>                     <span style="color:var(--m);">IDS:off</span>
+          <span style="color:#7dd3b8;">email-src</span>     <span>—</span>                          <span style="color:#a5f3c8;">dsi@cnops.ma</span>                       <span style="color:var(--m);">IDS:off</span>
+          <span style="color:#fc8181;">ip-dst</span>        <span>—</span>                          <span style="color:#fc8181;">10.0.50.12</span>                         <span style="color:var(--r);font-weight:700;">IDS:ON</span>
+          <span style="color:#f6ad55;">credential</span>    <span>—</span>                          <span style="color:#f6ad55;">admin@cnops.ma:Cnops2024!</span>           <span style="color:var(--m);">IDS:off</span>
+          <span style="color:#7dd3b8;">filename</span>      <span>—</span>                          <span>cnops.zip</span>                           <span style="color:var(--m);">IDS:off</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PARTIE 3 — EXPORT STIX 2.1 -->
+<div class="stage st6" style="margin-top:1.75rem;">
+  <div class="stage-hdr">
+    <div class="sn st6">C</div>
+    <div><div class="stage-t">Export STIX 2.1 — Du MISP Event au Bundle STIX</div><div style="font-size:.76rem;color:var(--m);">MISP → misp-stix · export REST API</div></div>
+    <div class="stage-sub"><span class="ba ba-b">STIX 2.1 · TAXII 2.1</span></div>
+  </div>
+  <div class="stage-body">
+    <p style="font-size:.84rem;color:#c9d1d9;margin-bottom:1rem;">
+      MISP convertit automatiquement chaque event en bundle STIX 2.1 via la bibliothèque <code>misp-stix</code>. Chaque type d'attribute MISP devient un objet STIX spécifique selon une table de correspondance standardisée.
+    </p>
+
+    <div class="sub-title">Table de correspondance MISP Attribute → STIX 2.1 Object</div>
+    <div class="tw"><table>
+      <thead><tr><th>MISP Attribute type</th><th>→ Objet STIX 2.1</th><th>Champ STIX</th><th>Rôle dans la menace</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="ba ba-b">target-org</span> "CNOPS"</td>
+          <td><strong>identity</strong></td>
+          <td><code>identity_class: "organization"</code><br><code>name: "CNOPS"</code></td>
+          <td>Victime de la fuite — l'objet <code>identity</code> représente toute entité (org, individu, système). Relié par une relation <code>targets</code> depuis l'acteur de menace.</td>
+        </tr>
+        <tr>
+          <td><span class="ba ba-r">threat-actor</span> "Jabaroot DZ"</td>
+          <td><strong>threat-actor</strong></td>
+          <td><code>name: "Jabaroot DZ"</code><br><code>threat_actor_types: ["activist"]</code></td>
+          <td>Acteur offensif à l'origine de la fuite. Le type <code>activist</code> = hacktiviste. Peut être enrichi avec aliases, sophistication, motivations.</td>
+        </tr>
+        <tr>
+          <td><span class="ba ba-g">email-src</span> (IDS=false)</td>
+          <td><strong>observed-data</strong> + <strong>email-addr</strong> SCO</td>
+          <td><code>value: "admin@cnops.ma"</code></td>
+          <td>Cyber Observable (SCO) — adresse email observée dans la fuite. IDS=false → pas de blocage, juste observation contextuelle.</td>
+        </tr>
+        <tr>
+          <td><span class="ba ba-r">ip-dst</span> (IDS=true)</td>
+          <td><strong>indicator</strong></td>
+          <td><code>pattern: "[ipv4-addr:value = '10.0.50.12']"</code><br><code>indicator_types: ["malicious-activity"]</code></td>
+          <td>IDS=true → STIX <code>indicator</code> (pas un simple observable). Les sondes IDS/SIEM abonnées au TAXII feed bloquent cette IP automatiquement.</td>
+        </tr>
+        <tr>
+          <td><span class="ba ba-o">credential</span> "admin:P@ss"</td>
+          <td><strong>observed-data</strong> + <strong>user-account</strong> SCO</td>
+          <td><code>user_id: "admin@cnops.ma"</code><br><code>credential: "Cnops2024!"</code></td>
+          <td>Credential compromis — stocké comme observable, pas indicateur (pas bloquable réseau). Alimente les workflows de rotation de mots de passe.</td>
+        </tr>
+        <tr>
+          <td><span class="ba ba-b">filename</span> "cnops.zip"</td>
+          <td><strong>observed-data</strong> + <strong>file</strong> SCO</td>
+          <td><code>name: "cnops.zip"</code><br><code>hashes: {"SHA-256": "..."}</code></td>
+          <td>Fichier de la fuite avec hash. Le hash est le vrai IOC — le nom peut changer, le hash identifie le fichier de manière unique même renommé.</td>
+        </tr>
+        <tr>
+          <td>Event MISP complet</td>
+          <td><strong>report</strong></td>
+          <td><code>name: "INTEL-20260408-CNO-51"</code><br><code>object_refs: [...]</code></td>
+          <td>L'objet <code>report</code> est le conteneur STIX — il regroupe tous les objets de l'incident et sert de point d'entrée pour les analystes qui reçoivent le bundle.</td>
+        </tr>
+      </tbody>
+    </table></div>
+
+    <div class="sub-title" style="margin-top:1.25rem;">Bundle STIX 2.1 — Exemple JSON complet (CNOPS)</div>
+    <div class="g2">
+      <div>
+        <div class="box box-json" style="font-size:.73rem;">{
+  <span class="k">"type"</span>: <span class="s">"bundle"</span>,
+  <span class="k">"id"</span>: <span class="s">"bundle--a3f2...c9d1"</span>,
+  <span class="k">"spec_version"</span>: <span class="s">"2.1"</span>,
+  <span class="k">"objects"</span>: [
+
+    <span class="c">// 1. Acteur de menace</span>
+    {
+      <span class="k">"type"</span>: <span class="s">"threat-actor"</span>,
+      <span class="k">"id"</span>: <span class="s">"threat-actor--b1e2...f4a5"</span>,
+      <span class="k">"name"</span>: <span class="s">"Jabaroot DZ"</span>,
+      <span class="k">"threat_actor_types"</span>: [<span class="s">"activist"</span>],
+      <span class="k">"aliases"</span>: [<span class="s">"@jabaroot_1"</span>],
+      <span class="k">"sophistication"</span>: <span class="s">"intermediate"</span>,
+      <span class="k">"primary_motivation"</span>: <span class="s">"ideology"</span>
+    },
+
+    <span class="c">// 2. Organisation victime</span>
+    {
+      <span class="k">"type"</span>: <span class="s">"identity"</span>,
+      <span class="k">"id"</span>: <span class="s">"identity--c3d4...e5f6"</span>,
+      <span class="k">"name"</span>: <span class="s">"CNOPS"</span>,
+      <span class="k">"identity_class"</span>: <span class="s">"organization"</span>,
+      <span class="k">"sectors"</span>: [<span class="s">"healthcare"</span>]
+    },
+
+    <span class="c">// 3. Relation attaquant→victime</span>
+    {
+      <span class="k">"type"</span>: <span class="s">"relationship"</span>,
+      <span class="k">"relationship_type"</span>: <span class="s">"targets"</span>,
+      <span class="k">"source_ref"</span>: <span class="s">"threat-actor--b1e2..."</span>,
+      <span class="k">"target_ref"</span>: <span class="s">"identity--c3d4..."</span>
+    },
+    <span class="c">// ...</span>
+  ]
+}</div>
+      </div>
+      <div>
+        <div class="box box-json" style="font-size:.73rem;">    <span class="c">// 4. Indicateur IP (IDS=ON)</span>
+    {
+      <span class="k">"type"</span>: <span class="s">"indicator"</span>,
+      <span class="k">"id"</span>: <span class="s">"indicator--d5e6...f7a8"</span>,
+      <span class="k">"indicator_types"</span>: [<span class="s">"malicious-activity"</span>],
+      <span class="k">"pattern"</span>: <span class="s">"[ipv4-addr:value = '10.0.50.12']"</span>,
+      <span class="k">"pattern_type"</span>: <span class="s">"stix"</span>,
+      <span class="k">"valid_from"</span>: <span class="s">"2026-04-08T10:23:00Z"</span>
+    },
+
+    <span class="c">// 5. Observable email (IDS=OFF)</span>
+    {
+      <span class="k">"type"</span>: <span class="s">"observed-data"</span>,
+      <span class="k">"first_observed"</span>: <span class="s">"2026-04-08T10:23:00Z"</span>,
+      <span class="k">"last_observed"</span>:  <span class="s">"2026-04-08T10:23:00Z"</span>,
+      <span class="k">"number_observed"</span>: <span class="n">1</span>,
+      <span class="k">"object_refs"</span>: [<span class="s">"email-addr--e7f8..."</span>]
+    },
+    {
+      <span class="k">"type"</span>: <span class="s">"email-addr"</span>,
+      <span class="k">"id"</span>: <span class="s">"email-addr--e7f8..."</span>,
+      <span class="k">"value"</span>: <span class="s">"admin@cnops.ma"</span>
+    },
+
+    <span class="c">// 6. Report = conteneur global</span>
+    {
+      <span class="k">"type"</span>: <span class="s">"report"</span>,
+      <span class="k">"name"</span>: <span class="s">"INTEL-20260408-CNO-51"</span>,
+      <span class="k">"published"</span>: <span class="s">"2026-04-08T12:00:00Z"</span>,
+      <span class="k">"report_types"</span>: [<span class="s">"threat-report"</span>],
+      <span class="k">"object_refs"</span>: [
+        <span class="s">"threat-actor--b1e2..."</span>,
+        <span class="s">"identity--c3d4..."</span>,
+        <span class="s">"indicator--d5e6..."</span>,
+        <span class="s">"observed-data--..."</span>
+      ]
+    }
+  ]
+}</div>
+
+        <div class="ib ib-b" style="margin-top:.65rem;font-size:.82rem;">
+          <strong>Distribution TAXII :</strong> Le bundle STIX est poussé vers un serveur TAXII 2.1 (<code>POST /collections/{id}/objects</code>). Les organisations abonnées le récupèrent automatiquement via <code>GET</code> et l'ingèrent dans leur SIEM/EDR.
+        </div>
+      </div>
+    </div>
+
+    <!-- Règles clés IDS -->
+    <div class="sub-title" style="margin-top:1.25rem;">Règle IDS flag — Indicateur vs Observable</div>
+    <div class="g3">
+      <div class="card">
+        <div class="card-t" style="color:var(--r);">IDS = true → Indicateur STIX</div>
+        <ul class="sl" style="margin-top:.3rem;">
+          <li>IP, domaine, hash de malware</li>
+          <li>Bloqué par sondes IDS/firewall automatiquement</li>
+          <li>Objet STIX : <code>indicator</code> avec <code>pattern</code></li>
+          <li>Nécessite validation humaine avant activation</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-t" style="color:var(--g);">IDS = false → Observable STIX</div>
+        <ul class="sl" style="margin-top:.3rem;">
+          <li>Email victime, credential, nom de fichier</li>
+          <li>Contexte uniquement — pas de blocage automatique</li>
+          <li>Objet STIX : <code>observed-data</code> + SCO</li>
+          <li>Alimente enquêtes et notifications</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-t" style="color:var(--y);">Relation STIX = contexte</div>
+        <ul class="sl" style="margin-top:.3rem;">
+          <li><code>targets</code> : acteur → victime</li>
+          <li><code>uses</code> : acteur → technique</li>
+          <li><code>indicates</code> : indicator → threat-actor</li>
+          <li>Permet graphe de menace complet</li>
+        </ul>
+      </div>
+    </div>
+  </div>
 </div>
 
 </div>
