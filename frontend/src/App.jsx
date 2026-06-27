@@ -8,8 +8,9 @@ import CorrelatedEvents from './pages/CorrelatedEvents';
 import Planifications from './pages/Planifications';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
+import Tracking from './pages/Tracking';
 import SettingsModal from './components/SettingsModal';
-import { Settings, Activity, MessageSquare, BarChart2, FileText, ChevronLeft, Shield, Clock, Users } from 'lucide-react';
+import { Settings, Activity, MessageSquare, BarChart2, FileText, ChevronLeft, Shield, Clock, Users, Database } from 'lucide-react';
 import logo from './assets/logo.png';
 import { logout, getUserInfo, checkSession } from './auth.js';
 
@@ -18,6 +19,7 @@ const NAV_BASE = [
   { id: 'events',         label: 'Events',   icon: Shield        },
   { id: 'leaks',          label: 'Leaks',    icon: MessageSquare },
   { id: 'planifications', label: 'Planif.',  icon: Clock         },
+  { id: 'tracking',       label: 'Tracking', icon: Database      },
   { id: 'results',        label: 'Results',  icon: BarChart2     },
   { id: 'csv_analyzer',   label: 'CSV AI',   icon: FileText, accent: true },
 ];
@@ -151,6 +153,8 @@ function App() {
           <Leaks onBack={() => setView('monitor')} />
         ) : view === 'planifications' ? (
           <Planifications onBack={() => setView('monitor')} />
+        ) : view === 'tracking' ? (
+          <Tracking />
         ) : view === 'csv_analyzer' ? (
           <CSVAnalyzer onBack={() => setView('monitor')} />
         ) : view === 'admin' && isAdmin ? (

@@ -256,6 +256,17 @@ def get_misp_status():
     except Exception as e:
         return {"error": str(e)}
 
+@app.get("/api/tracking")
+def get_tracking_status():
+    tracking_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "utils", "local_tracking.json"))
+    if not os.path.exists(tracking_file):
+        return {}
+    try:
+        with open(tracking_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/api/stats/countries")
 def get_country_stats():
     global GEO_STATS_CACHE
@@ -826,48 +837,29 @@ SCHEDULES_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "
 schedules_db = {}
 # Format: { "id": { "id", "source_name", "step_name", "interval_minutes", "active", "next_run", "task" } }
 
-def _migrate_schedules_if_needed():
-    col = db.db["schedules"]
-    if col.count_documents({}) == 0:
-        if os.path.exists(SCHEDULES_FILE):
-            try:
-                with open(SCHEDULES_FILE, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                if data:
-                    docs = []
-                    for sid, j in data.items():
-                        j["_id"] = sid
-                        docs.append(j)
-                    if docs:
-                        col.insert_many(docs)
-                        print(f"Migrated {len(docs)} schedules from {SCHEDULES_FILE} to MongoDB.")
-            except Exception as e:
-                print(f"Error migrating schedules: {e}")
-
 def load_schedules():
     global schedules_db
-    _migrate_schedules_if_needed()
     try:
-        col = db.db["schedules"]
-        docs = col.find({})
-        for j in docs:
-            sid = j.get("id") or str(j["_id"])
-            schedules_db[sid] = {
-                "id": sid,
-                "source_name": j["source_name"],
-                "step_name": j["step_name"],
-                "interval_minutes": j["interval_minutes"],
-                "active": j["active"],
-                # Au démarrage, le "next_run" est calculé à partir de maintenant + interval, comme demandé
-                "next_run": datetime.now() + timedelta(minutes=j["interval_minutes"]) if j["active"] else None,
-                "task": None
-            }
+        if os.path.exists(SCHEDULES_FILE):
+            with open(SCHEDULES_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    for j in data:
+                        sid = str(j.get("id"))
+                        schedules_db[sid] = {
+                            "id": sid,
+                            "source_name": j["source_name"],
+                            "step_name": j["step_name"],
+                            "interval_minutes": j["interval_minutes"],
+                            "active": j["active"],
+                            "next_run": datetime.now() + timedelta(minutes=j["interval_minutes"]) if j["active"] else None,
+                            "task": None
+                        }
     except Exception as e:
         print(f"Error loading schedules: {e}")
 
 def save_schedules():
     try:
-        col = db.db["schedules"]
         docs = []
         for sid, j in schedules_db.items():
             docs.append({
@@ -877,9 +869,8 @@ def save_schedules():
                 "interval_minutes": j["interval_minutes"],
                 "active": j["active"]
             })
-        col.delete_many({})
-        if docs:
-            col.insert_many(docs)
+        with open(SCHEDULES_FILE, "w", encoding="utf-8") as f:
+            json.dump(docs, f, indent=4)
     except Exception as e:
         print(f"Error saving schedules: {e}")
 
