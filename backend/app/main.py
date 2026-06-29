@@ -833,7 +833,7 @@ async def save_integration_settings(body: dict):
 # SCHEDULER ENDPOINTS (MULTIPLE)
 # ──────────────────────────────────────────────────────────────────────────────
 
-SCHEDULES_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "schedules.json"))
+SCHEDULES_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "store", "schedules.json"))
 schedules_db = {}
 # Format: { "id": { "id", "source_name", "step_name", "interval_minutes", "active", "next_run", "task" } }
 

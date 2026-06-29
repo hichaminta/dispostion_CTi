@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import List, Dict, Optional
 import uuid
 
-DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "runs.json")
+DATA_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "store", "runs.json")
 INTEL_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "leak_data_integration", "results", "leaks_intel.json"))
 
 class LocalDB:

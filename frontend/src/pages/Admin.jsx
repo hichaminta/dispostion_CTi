@@ -3,7 +3,7 @@ import { Shield, Users, UserPlus, Trash2, ShieldAlert, RefreshCw } from 'lucide-
 import { motion } from 'framer-motion';
 import { getValidToken, logout } from '../auth.js';
 
-const API = 'http://localhost:8000/api/admin';
+const API = `http://${window.location.hostname}:8000/api/admin`;
 
 async function authHeaders() {
   const token = await getValidToken();

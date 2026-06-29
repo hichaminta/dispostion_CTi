@@ -6,4 +6,10 @@ python-multipart
 websockets
 python-dotenv
 python-keycloak
+python-jose[cryptography]
 pymongo
+pandas
+telethon
+fpdf
+aiohttp
+requests

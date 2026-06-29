@@ -1,4 +1,4 @@
-const KEYCLOAK_URL = 'http://localhost:8080';
+const KEYCLOAK_URL = `http://${window.location.hostname}:8080`;
 const REALM = 'cti-realm';
 const CLIENT_ID = 'cti-client';
 const TOKEN_URL = `${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token`;
