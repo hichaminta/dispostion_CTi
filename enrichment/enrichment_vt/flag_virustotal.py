@@ -22,7 +22,7 @@ logging.basicConfig(encoding="utf-8", level=logging.INFO, format='%(asctime)s - 
 logger = logging.getLogger("FlagVirusTotal")
 
 BASE_DIR     = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUTPUT_DIR   = os.path.join(BASE_DIR, "output_enrichment")
+OUTPUT_DIR   = os.path.join(BASE_DIR, "__TEMP__/global_output/output_enrichment")
 
 # Champs qui prouvent qu'un scan VirusTotal a déjà eu lieu
 VT_INDICATOR_FIELDS = [

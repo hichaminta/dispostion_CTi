@@ -45,7 +45,7 @@ class MISPClient:
                 logger.error(f"Erreur de connexion à MISP : {e}")
                 self.misp = None
 
-        self.tracking_file = os.path.join(BASE_DIR, "misp_integration", "misp_tracking.json")
+        self.tracking_file = os.path.join(BASE_DIR, "tracking", "misp_tracking.json")
 
     def _load_tracking(self):
         if os.path.exists(self.tracking_file):
@@ -62,7 +62,7 @@ class MISPClient:
 
     def _load_stix_tracking(self):
         """Charge le tracking STIX pour la détection de doublons par report."""
-        stix_tracking_file = os.path.join(BASE_DIR, "misp_integration", "stix_tracking.json")
+        stix_tracking_file = os.path.join(BASE_DIR, "tracking", "stix_tracking.json")
         if os.path.exists(stix_tracking_file):
             try:
                 with open(stix_tracking_file, "r") as f:
@@ -73,7 +73,7 @@ class MISPClient:
 
     def _save_stix_tracking(self, data):
         """Sauvegarde le tracking STIX."""
-        stix_tracking_file = os.path.join(BASE_DIR, "misp_integration", "stix_tracking.json")
+        stix_tracking_file = os.path.join(BASE_DIR, "tracking", "stix_tracking.json")
         with open(stix_tracking_file, "w") as f:
             json.dump(data, f, indent=4)
 
@@ -579,7 +579,7 @@ class MISPClient:
         Cherche tous les fichiers stix_export_*.json et les importe avec tracking.
         Détecte automatiquement les fichiers et reports déjà intégrés.
         """
-        corr_dir = os.path.join(BASE_DIR, "output_correlation")
+        corr_dir = os.path.join(BASE_DIR, "global_output", "output_correlation")
         if not os.path.exists(corr_dir):
             logger.error(f"Dossier introuvable : {corr_dir}")
             return

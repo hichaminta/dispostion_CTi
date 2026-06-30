@@ -12,7 +12,7 @@ logging.basicConfig(encoding="utf-8", level=logging.INFO, format='%(asctime)s - 
 logger = logging.getLogger("DemoSelectiveEnrichment")
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-OUTPUT_DIR = os.path.join(BASE_DIR, "output_enrichment")
+OUTPUT_DIR = os.path.join(BASE_DIR, "__TEMP__/global_output/output_enrichment")
 ALIENVAULT_FILE = os.path.join(OUTPUT_DIR, "alienvault_enriched.json")
 
 def score_record(record):

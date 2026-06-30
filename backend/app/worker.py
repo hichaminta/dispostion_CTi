@@ -57,10 +57,10 @@ def _is_run_cancelled(run_id: str) -> bool:
 
 # Répertoire racine du projet
 PROJECT_ROOT      = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-SOURCES_DATA_DIR  = os.path.join(PROJECT_ROOT, "Sources_data")
+COLLECTION_DIR  = os.path.join(PROJECT_ROOT, "collection")
 EXTRACTORS_DIR    = os.path.join(PROJECT_ROOT, "extraction_ioc_cve")
 SCRIPTS_DIR       = os.path.join(PROJECT_ROOT, "scripts")
-OUTPUT_DIR        = os.path.join(PROJECT_ROOT, "output_cve_ioc")
+GLOBAL_SOURCES_DIR = os.path.join(PROJECT_ROOT, "global_output", "sources")
 COLLECTION_SCRIPT = os.path.join(SCRIPTS_DIR, "run_collection_all.py")
 LEAK_INTEGRATION_SCRIPT = os.path.join(PROJECT_ROOT, "leak_data_integration", "main.py")
 ENRICHMENT_DIR    = os.path.join(PROJECT_ROOT, "enrichment")
@@ -70,7 +70,7 @@ STIX_EXPORT_SCRIPT = os.path.join(PROJECT_ROOT, "misp_integration", "stix_export
 # Sources CVE-only (pas d'IOCs)
 CVE_ONLY_SOURCES = {"NVD", "NVd"}
 
-# Mapping nom affiché → dossier Sources_data + fichier extracteur
+# Mapping nom affiché → dossier collection + fichier extracteur
 SOURCE_MAP = {
     "AlienVault OTX":  {"id": "alienvault",    "folder": "Otx alienvault",               "extractor": "alienvault_extractor.py",     "output": "alienvault_extracted.json"},
     "CINS Army":       {"id": "cins_army",     "folder": "CINS Army",                    "extractor": "cins_army_extractor.py",      "output": "cins_army_extracted.json"},
@@ -263,7 +263,7 @@ def _count_ioc_cve(source_name: str):
     is_cve_only = source_name in CVE_ONLY_SOURCES
 
     if info:
-        filepath = os.path.join(OUTPUT_DIR, info["output"])
+        filepath = os.path.join(GLOBAL_SOURCES_DIR, source_name, "extraction", info["output"])
         if os.path.exists(filepath):
             raw_ioc, raw_cve = _count_file(filepath)
             return (0 if is_cve_only else raw_ioc), raw_cve
@@ -271,9 +271,9 @@ def _count_ioc_cve(source_name: str):
     else:
         # Pipeline unifié : somme de tous les fichiers
         total_ioc = total_cve = 0
-        if os.path.exists(OUTPUT_DIR):
+        if os.path.exists(GLOBAL_SOURCES_DIR):
             for src_name, src_info in SOURCE_MAP.items():
-                fp = os.path.join(OUTPUT_DIR, src_info["output"])
+                fp = os.path.join(GLOBAL_SOURCES_DIR, src_name, "extraction", src_info["output"])
                 if os.path.exists(fp):
                     raw_ioc, raw_cve = _count_file(fp)
                     total_ioc += 0 if src_name in CVE_ONLY_SOURCES else raw_ioc
@@ -319,7 +319,7 @@ async def execute_pipeline_task(run_id: str, source_name: str):
 
                 info = SOURCE_MAP.get(src)
 
-                src_folder = os.path.join(SOURCES_DATA_DIR, info["folder"])
+                src_folder = os.path.join(COLLECTION_DIR, info["folder"])
                 script_path = os.path.join(src_folder, "script.py")
 
                 if not os.path.exists(script_path):
@@ -531,7 +531,7 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
                         continue
                     info = SOURCE_MAP.get(src)
                     if not info: continue
-                    src_folder = os.path.join(SOURCES_DATA_DIR, info["folder"])
+                    src_folder = os.path.join(COLLECTION_DIR, info["folder"])
                     script_path = os.path.join(src_folder, "script.py")
                     if not os.path.exists(script_path): continue
                     await _ws_log(run_id, step_name, f"[{ts()}] ── Collecte : {src} ──")

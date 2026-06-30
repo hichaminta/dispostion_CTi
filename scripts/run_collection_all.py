@@ -14,17 +14,17 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger("GlobalCollection")
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-SOURCES_DATA_DIR = os.path.join(PROJECT_ROOT, "Sources_data")
+COLLECTION_DIR = os.path.join(PROJECT_ROOT, "collection")
 
 
 def run_collection():
-    if not os.path.exists(SOURCES_DATA_DIR):
-        logger.error(f"Sources_data directory not found at {SOURCES_DATA_DIR}")
+    if not os.path.exists(COLLECTION_DIR):
+        logger.error(f"collection directory not found at {COLLECTION_DIR}")
         return False
 
     source_folders = sorted([
-        f for f in os.listdir(SOURCES_DATA_DIR)
-        if os.path.isdir(os.path.join(SOURCES_DATA_DIR, f)) and f != "Otx alienvault"
+        f for f in os.listdir(COLLECTION_DIR)
+        if os.path.isdir(os.path.join(COLLECTION_DIR, f)) and f != "Otx alienvault"
     ])
 
     logger.info(f"### PLATFORM STATUS: STARTING COLLECTION PIPELINE ###")
@@ -35,7 +35,7 @@ def run_collection():
     failed_sources = []
 
     for folder_name in source_folders:
-        source_dir = os.path.join(SOURCES_DATA_DIR, folder_name)
+        source_dir = os.path.join(COLLECTION_DIR, folder_name)
         script_path = os.path.join(source_dir, "script.py")
 
         if not os.path.exists(script_path):

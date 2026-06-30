@@ -169,7 +169,7 @@ def _extract_nlp_context(text):
 
 SOURCE_NAME   = "DFIR Report"
 BASE_DIR      = os.path.dirname(EXTRACTORS_DIR)
-SOURCE_DIR    = os.path.join(BASE_DIR, "Sources_data", "The DFIR Report")
+SOURCE_DIR = os.path.join(BASE_DIR, "global_output", "sources", "The DFIR Report", "collection")
 INPUT_FILE    = os.path.join(SOURCE_DIR, "dfir_report_data.json")
 
 # Extensions de fichier supplémentaires à rejeter comme domaines (faux positifs blog)
@@ -246,7 +246,7 @@ TECH_NAMESPACE_PATTERN = re.compile(
 
 # Les articles avec IOCs → dfir_report_extracted.json
 # Les articles avec uniquement CVEs (sans IOCs) → dfir_report_vuln_extracted.json
-OUTPUT_DIR  = os.path.join(BASE_DIR, "output_cve_ioc")
+OUTPUT_DIR = os.path.join(BASE_DIR, "global_output", "sources", "The DFIR Report", "extraction")
 IOC_OUTPUT_FILE = os.path.join(OUTPUT_DIR, "dfir_report_extracted.json")
 VULN_OUTPUT_FILE = os.path.join(OUTPUT_DIR, "dfir_report_vuln_extracted.json")
 
@@ -261,10 +261,10 @@ def _get_mongo_tracker():
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
     try:
-        from utils.mongo_tracking import ExtractionTracker
+        from utils.tracking import ExtractionTracker
         return ExtractionTracker(SOURCE_NAME)
     except Exception as e:
-        print(f"Failed to load MongoTracker: {e}")
+        print(f"Failed to load Tracker: {e}")
         return None
 
 def _load_tracking():
@@ -437,7 +437,7 @@ def _build_threat_summary(article: dict, iocs: list, cves: list, tags: list) -> 
 
 
 def _make_ioc_record(article: dict, iocs: list, cves: list, tags: list, nlp_analysis: dict = None) -> dict:
-    """Format pour output_cve_ioc — sera traité par l'enrichissement IOC normal.
+    """Format pour __TEMP__/global_output/output_cve_ioc — sera traité par l'enrichissement IOC normal.
     Pas d'ioc_enrichment ici : c'est le rôle de l'étape enrichissement."""
     record = {
         "source":     SOURCE_NAME,
@@ -458,9 +458,9 @@ def _make_ioc_record(article: dict, iocs: list, cves: list, tags: list, nlp_anal
 
 def _make_vuln_record(article: dict, cves: list, tags: list, nlp_analysis: dict = None) -> dict:
     """
-    Format pour output_enrichment — bypass enrichissement IOC.
+    Format pour __TEMP__/global_output/output_enrichment — bypass enrichissement IOC.
     Aucun IOC, uniquement CVE + contexte article.
-    La corrélation le lira directement depuis output_enrichment/.
+    La corrélation le lira directement depuis __TEMP__/global_output/output_enrichment/.
     """
     now = datetime.now(timezone.utc).isoformat()
     title = article.get("title", "Unknown Vulnerability Threat")

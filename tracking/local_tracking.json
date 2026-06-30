@@ -1,0 +1,130 @@
+{
+    "collection_CINS Army": {
+        "earliest_modified": "2026-06-20T00:00:00+00:00",
+        "latest_modified": "2026-06-23T14:32:45.541273+00:00",
+        "last_sync_attempt": "2026-06-23T14:33:12.568059+00:00",
+        "last_run": "2026-06-23T14:34:13.794021+00:00",
+        "last_sync_success": "2026-06-23T14:34:13.794021+00:00"
+    },
+    "extraction_CINS Army": {
+        "oldest_extracted_at": "2026-06-20T00:00:00+00:00",
+        "recent_extracted_at": "2026-06-20T00:00:00+00:00"
+    },
+    "collection_MalwareBazaar Community API": {
+        "latest_indicator_date": "2026-06-23 14:23:23",
+        "last_run": "2026-06-23T14:34:22.880274+00:00",
+        "last_sync_success": "2026-06-23T14:34:22.880274+00:00"
+    },
+    "extraction_MalwareBazaar Community API": {
+        "oldest_extracted_at": "2026-06-20T00:00:00+00:00",
+        "recent_extracted_at": "2026-06-20T00:00:00+00:00"
+    },
+    "collection_NVd": {
+        "last_run": "2026-06-23T14:34:25.000"
+    },
+    "extraction_NVd": {
+        "oldest_extracted_at": "2011-05-13T22:55:01.580",
+        "recent_extracted_at": "2026-06-30T20:17:32.183"
+    },
+    "collection_OpenPhish": {
+        "earliest_modified": "2026-06-20T00:00:00+00:00",
+        "latest_modified": "2026-06-23T14:35:39.048688+00:00",
+        "last_sync_attempt": "2026-06-23T14:35:39.129788+00:00",
+        "last_run": "2026-06-23T14:35:39.152538+00:00",
+        "last_sync_success": "2026-06-23T14:35:39.152538+00:00"
+    },
+    "extraction_OpenPhish": {
+        "oldest_extracted_at": "2026-06-20T00:00:00+00:00",
+        "recent_extracted_at": "2026-06-30T20:16:44.000854+00:00"
+    },
+    "collection_PhishTank": {
+        "last_run": "2026-06-20T00:00:00+00:00",
+        "last_sync_success": "2026-06-20T00:00:00+00:00",
+        "earliest_modified": "2024-12-12T15:26:51+00:00",
+        "latest_modified": "2026-06-23T13:55:24+00:00",
+        "total_collected": 76935,
+        "sources_used": [
+            "OpenPhish"
+        ],
+        "last_sync_attempt": "2026-06-23T14:42:46.302365+00:00"
+    },
+    "collection_Spamhaus": {
+        "last_run": "2026-06-20T00:00:00+00:00",
+        "last_sync_success": "2026-06-20T00:00:00+00:00",
+        "earliest_modified": null,
+        "latest_modified": null
+    },
+    "extraction_Spamhaus": {
+        "oldest_extracted_at": "2026-06-20T00:00:00+00:00",
+        "recent_extracted_at": "2026-06-20T00:00:00+00:00",
+        "last_run": "2026-06-20T00:00:00+00:00"
+    },
+    "collection_The DFIR Report": {
+        "earliest_modified": "2026-06-20T00:00:00+00:00",
+        "latest_modified": "2026-06-20T00:00:00+00:00",
+        "last_sync_success": "2026-06-20T00:00:00+00:00",
+        "last_sync_attempt": "2026-06-20T00:00:00+00:00",
+        "last_run": "2026-06-20T00:00:00+00:00"
+    },
+    "collection_ThreatFox": {
+        "earliest_modified": "2026-06-20T00:00:00+00:00",
+        "latest_modified": "2026-06-20T00:00:00+00:00",
+        "last_run": "2026-06-20T00:00:00+00:00",
+        "last_sync_success": "2026-06-20T00:00:00+00:00",
+        "last_sync_attempt": "2026-06-20T00:00:00+00:00"
+    },
+    "extraction_ThreatFox": {
+        "oldest_extracted_at": "2026-06-20T00:00:00+00:00",
+        "recent_extracted_at": "2026-06-20T00:00:00+00:00",
+        "last_run": "2026-06-20T00:00:00+00:00"
+    },
+    "collection_feodotracker": {
+        "earliest_modified": null,
+        "latest_modified": null,
+        "last_run": "2026-06-20T00:00:00+00:00",
+        "last_sync_success": "2026-06-20T00:00:00+00:00"
+    },
+    "extraction_feodotracker": {
+        "oldest_extracted_at": "2026-06-20T00:00:00+00:00",
+        "recent_extracted_at": "2026-06-20T00:00:00+00:00",
+        "last_run": "2026-06-20T00:00:00+00:00"
+    },
+    "collection_pulsedive": {
+        "earliest_modified": "2026-06-20T00:00:00+00:00",
+        "latest_modified": "2026-06-20T00:00:00+00:00",
+        "last_run": "2026-06-20T00:00:00+00:00",
+        "last_sync_success": "2026-06-20T00:00:00+00:00"
+    },
+    "extraction_pulsedive": {
+        "oldest_extracted_at": "2026-06-20T00:00:00+00:00",
+        "recent_extracted_at": "2026-06-20T00:00:00+00:00",
+        "last_run": "2026-06-20T00:00:00+00:00"
+    },
+    "collection_url": {
+        "earliest_modified": "2026-06-20T00:00:00+00:00",
+        "latest_modified": "2026-06-20T00:00:00+00:00",
+        "last_sync_attempt": "2026-06-20T00:00:00+00:00",
+        "last_run": "2026-06-20T00:00:00+00:00",
+        "last_sync_success": "2026-06-20T00:00:00+00:00"
+    },
+    "extraction_URLHaus": {
+        "oldest_extracted_at": "2026-06-20T00:00:00+00:00",
+        "recent_extracted_at": "2026-06-20T00:00:00+00:00",
+        "last_run": "2026-06-20T00:00:00+00:00"
+    },
+    "extraction_OTX AlienVault": {
+        "oldest_extracted_at": "2026-06-23T15:00:00+00:00",
+        "recent_extracted_at": "2026-06-23T15:00:00+00:00",
+        "last_run": "2026-06-23T15:00:00+00:00"
+    },
+    "extraction_DFIR Report": {
+        "oldest_extracted_at": "2026-06-20T00:00:00+00:00",
+        "recent_extracted_at": "2026-06-20T00:00:00+00:00",
+        "last_run": "2026-06-20T00:00:00+00:00"
+    },
+    "extraction_PhishTank": {
+        "oldest_extracted_at": "2026-06-20T00:00:00+00:00",
+        "recent_extracted_at": "2026-06-20T00:00:00+00:00",
+        "last_run": "2026-06-20T00:00:00+00:00"
+    }
+}

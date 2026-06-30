@@ -15,7 +15,8 @@ logging.basicConfig(encoding="utf-8", level=logging.INFO, format='%(asctime)s - 
 logger = logging.getLogger("CVEEnrichment")
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-ENRICHMENT_DIR = os.path.join(BASE_DIR, "output_enrichment")
+GLOBAL_SOURCES_DIR = os.path.join(BASE_DIR, "global_output", "sources")
+
 DOTENV_PATH = os.path.join(BASE_DIR, ".env")
 
 def get_nvd_api_key():
@@ -31,7 +32,7 @@ def get_nvd_api_key():
 
 NVD_API_KEY = get_nvd_api_key()
 NVD_API_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
-TRACKING_DIR = os.path.join(BASE_DIR, "enrichment", "tracking")
+TRACKING_DIR = os.path.join(BASE_DIR, "tracking", "tracking_enrichment")
 
 def get_tracking_file(source):
     return os.path.join(TRACKING_DIR, f"{source}_tracking.json")
@@ -57,6 +58,7 @@ def fetch_cve_details(cve_id):
     headers = {}
     if NVD_API_KEY:
         headers["apiKey"] = NVD_API_KEY
+
     
     params = {"cveId": cve_id}
     try:
@@ -117,23 +119,19 @@ def fetch_cve_details(cve_id):
     return None
 
 def enrich_cves():
-    if not os.path.exists(ENRICHMENT_DIR):
-        logger.error(f"Le dossier {ENRICHMENT_DIR} n'existe pas.")
-        return
-
-    # On parcourt tous les fichiers JSON du dossier d'enrichissement
-    json_files = [f for f in os.listdir(ENRICHMENT_DIR) if f.endswith(".json")]
-
     cve_cache = {}
-
-    for filename in json_files:
-        source = filename.replace("_enriched.json", "")
-        filepath = os.path.join(ENRICHMENT_DIR, filename)
+    
+    # On parcourt tous les fichiers JSON du dossier d'enrichissement
+    import glob
+    json_files = glob.glob(os.path.join(BASE_DIR, "global_output", "sources", "*", "enrichment", "*.json"))
+    for filepath in json_files:
+        filename = os.path.basename(filepath)
         if not os.path.exists(filepath):
-            logger.warning(f"Fichier {filename} introuvable dans {ENRICHMENT_DIR}")
+            logger.warning(f"Fichier {filename} introuvable dans extraction/enrichment")
             continue
             
         logger.info(f"Enrichissement CVE du fichier : {filename}")
+        source = os.path.basename(os.path.dirname(os.path.dirname(filepath)))
         
         # Tracking logic
         source_data = load_source_tracking(source)

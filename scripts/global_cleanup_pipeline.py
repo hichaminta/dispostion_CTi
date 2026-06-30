@@ -12,25 +12,25 @@ from datetime import datetime
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from extraction_ioc_cve.base_extractor import BaseExtractor
 
-EXTRACTION_DIR = "output_cve_ioc"
-ENRICHMENT_DIR = "output_enrichment"
+GLOBAL_SOURCES_DIR = os.path.join(os.path.dirname(__file__), "..", "global_output", "sources")
 
-def cleanup_files(directory, is_enrichment=False):
+def cleanup_files(stage_name, is_enrichment=False):
     extractor = BaseExtractor()
     total_files = 0
     total_removed_iocs = 0
     total_removed_records = 0
     total_updated_fields = 0
 
-    if not os.path.exists(directory):
-        print(f"Directory not found: {directory}")
-        return
+    import glob
+    pattern = os.path.join(GLOBAL_SOURCES_DIR, "*", stage_name, "*.json")
+    files = sorted(glob.glob(pattern))
 
-    # Sort files to process in a predictable order
-    files = sorted([f for f in os.listdir(directory) if f.endswith(".json")])
+    if not files:
+        print(f"No files found for stage: {stage_name}")
+        return 0, 0, 0, 0
     
-    for fn in files:
-        filepath = os.path.join(directory, fn)
+    for filepath in files:
+        fn = os.path.basename(filepath)
         size_mb = os.path.getsize(filepath) / (1024 * 1024)
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Processing {fn} ({size_mb:.1f} MB)...")
         
@@ -107,11 +107,11 @@ def main():
     
     # 1. Extraction Layer
     print("\n[STEP 1] Cleaning Extraction Layer...")
-    e_files, e_iocs, e_recs, _ = cleanup_files(EXTRACTION_DIR, is_enrichment=False)
+    e_files, e_iocs, e_recs, _ = cleanup_files("extraction", is_enrichment=False)
     
     # 2. Enrichment Layer
     print("\n[STEP 2] Cleaning & Standardizing Enrichment Layer...")
-    r_files, r_iocs, r_recs, r_fields = cleanup_files(ENRICHMENT_DIR, is_enrichment=True)
+    r_files, r_iocs, r_recs, r_fields = cleanup_files("enrichment", is_enrichment=True)
     
     print("\n" + "="*60)
     print("PIPELINE EXECUTION COMPLETE")

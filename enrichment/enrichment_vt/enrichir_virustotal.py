@@ -37,7 +37,7 @@ load_dotenv(find_dotenv())
 API_KEY = os.getenv("VIRUSTOTAL_API_KEY")
 
 BASE_DIR       = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUTPUT_DIR     = os.path.join(BASE_DIR, "output_enrichment")
+OUTPUT_DIR     = os.path.join(BASE_DIR, "__TEMP__/global_output/output_enrichment")
 DB_PATH        = os.path.join(os.path.dirname(__file__), "virustotal_data.json")
 
 VT_API_BASE    = "https://www.virustotal.com/api/v3"

@@ -33,16 +33,22 @@ if sys.platform == 'win32':
 from datetime import datetime, timedelta
 from . import schemas, database, websockets, worker, leaks_router
 from .admin import router as admin_router
+from .auth import router as auth_router
+from app.mysql_db import get_db, init_db, User, hash_password, verify_password
+from sqlalchemy.orm import Session
 from .database import db
 
-OUTPUT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_cve_ioc"))
-ENRICHMENT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_enrichment"))
-MITRE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_correlation")) # Use correlation output for some stats too
-CORRELATION_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "output_correlation"))
+GLOBAL_SOURCES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "global_output", "sources"))
+CORRELATION_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "global_output", "output_correlation"))
 
 app = FastAPI(title="CTI Pipeline Tracker API")
 app.include_router(leaks_router.router)
 app.include_router(admin_router)
+app.include_router(auth_router)
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
 
 class ChangePasswordRequest(schemas.BaseModel):
     username: str
@@ -50,35 +56,14 @@ class ChangePasswordRequest(schemas.BaseModel):
     new_password: str
 
 @app.post("/api/auth/change-password")
-def change_password(req: ChangePasswordRequest):
-    # Local import to avoid circular dependency issues if any
-    from .auth import keycloak_openid, get_keycloak_admin
-    # Use get_keycloak_admin directly
-    admin_client = get_keycloak_admin()
-    
-    try:
-        keycloak_openid.token(req.username, req.old_password)
-    except Exception as e:
-        err_str = str(e)
-        if "Account is not fully set up" in err_str:
-            pass # Expected if password change is required
-        elif "Invalid user credentials" in err_str:
-            raise HTTPException(status_code=400, detail="Ancien mot de passe incorrect")
-        elif "invalid_grant" in err_str:
-             raise HTTPException(status_code=400, detail="Ancien mot de passe incorrect")
-
-    users = admin_client.get_users({"username": req.username})
-    if not users:
-        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
-    user_id = users[0]["id"]
-    
-    admin_client.set_user_password(user_id=user_id, password=req.new_password, temporary=False)
-    
-    # Explicitly clear ALL required actions (including UPDATE_PASSWORD)
-    # We send only the requiredActions field to avoid Keycloak rejecting read-only fields
-    admin_client.update_user(user_id, {"requiredActions": []})
+def change_password(req: ChangePasswordRequest, db_session: Session = Depends(get_db)):
+    user = db_session.query(User).filter(User.username == req.username).first()
+    if not user or not verify_password(req.old_password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Ancien mot de passe incorrect")
         
-    return {"status": "success"}
+    user.hashed_password = hash_password(req.new_password)
+    db_session.commit()
+    return {"message": "Mot de passe modifié avec succès"}
 
 app.mount("/data", StaticFiles(directory=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))), name="data")
 app.mount("/bulletins", StaticFiles(directory=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "bultein_de_security"))), name="bulletins")
@@ -227,7 +212,7 @@ def get_stats():
             except: pass
 
     # MISP Sync Status
-    misp_tracking_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "misp_integration", "tracking", "misp_tracking.json"))
+    misp_tracking_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tracking", "misp_tracking.json"))
     misp_status = None
     if os.path.exists(misp_tracking_path):
         try:
@@ -247,7 +232,7 @@ def get_stats():
 
 @app.get("/api/misp/status")
 def get_misp_status():
-    misp_tracking_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "misp_integration", "tracking", "misp_tracking.json"))
+    misp_tracking_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tracking", "misp_tracking.json"))
     if not os.path.exists(misp_tracking_path):
         return {"error": "Tracking file not found"}
     try:
@@ -258,14 +243,126 @@ def get_misp_status():
 
 @app.get("/api/tracking")
 def get_tracking_status():
-    tracking_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "utils", "local_tracking.json"))
-    if not os.path.exists(tracking_file):
-        return {}
-    try:
-        with open(tracking_file, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        return {"error": str(e)}
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    tracking_file = os.path.join(base_dir, "tracking", "local_tracking.json")
+    enrichment_dir = os.path.join(base_dir, "tracking", "tracking_enrichment")
+    misp_dir = os.path.join(base_dir, "misp_integration")
+    
+    combined_tracking = {}
+    
+    # 1. Local Tracking (Collection / Extraction)
+    if os.path.exists(tracking_file):
+        try:
+            with open(tracking_file, "r", encoding="utf-8") as f:
+                combined_tracking.update(json.load(f))
+        except: pass
+        
+    # 2. Enrichment Tracking
+    source_map = {
+        "cins_army": "CINS Army",
+        "dfir_report": "The DFIR Report",
+        "feodotracker": "feodotracker",
+        "malwarebazaar": "MalwareBazaar Community API",
+        "nvd": "NVd",
+        "openphish": "OpenPhish",
+        "phishtank": "PhishTank",
+        "pulsedive": "pulsedive",
+        "spamhaus": "Spamhaus",
+        "threatfox": "ThreatFox",
+        "urlhaus": "URLHaus",
+        "alienvault": "OTX AlienVault"
+    }
+    if os.path.exists(enrichment_dir):
+        for fn in os.listdir(enrichment_dir):
+            if fn.endswith("_tracking.json"):
+                src_key = fn.replace("_tracking.json", "")
+                mapped_name = source_map.get(src_key, src_key)
+                try:
+                    with open(os.path.join(enrichment_dir, fn), "r", encoding="utf-8") as f:
+                        combined_tracking[f"enrichment_{mapped_name}"] = json.load(f)
+                except: pass
+                
+    # 3. Correlation / STIX / MISP Tracking
+    stix_tracking = os.path.join(base_dir, "tracking", "stix_tracking.json")
+    if os.path.exists(stix_tracking):
+        try:
+            with open(stix_tracking, "r", encoding="utf-8") as f:
+                stix_data = json.load(f)
+                # Group STIX & Correlation under "Pipeline Global"
+                combined_tracking["stix_Pipeline Global"] = {"integrated_reports": len(stix_data.get("integrated_reports", {}))}
+                # Find correlation file
+                for k, v in stix_data.items():
+                    if k.startswith("correlation_file"):
+                        combined_tracking["correlation_Pipeline Global"] = {"last_correlation": k, "timestamp": v}
+        except: pass
+        
+    misp_tracking = os.path.join(base_dir, "tracking", "misp_tracking.json")
+    if os.path.exists(misp_tracking):
+        try:
+            with open(misp_tracking, "r", encoding="utf-8") as f:
+                combined_tracking["misp_Pipeline Global"] = json.load(f)
+        except: pass
+
+    return combined_tracking
+
+@app.post("/api/tracking")
+def update_tracking_status(body: dict):
+    key = body.get("key")
+    data = body.get("data")
+    if not key or data is None:
+        return {"status": "error", "message": "Invalid payload"}
+
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    
+    if key.startswith("collection_") or key.startswith("extraction_"):
+        tracking_file = os.path.join(base_dir, "tracking", "local_tracking.json")
+        try:
+            local_tracking = {}
+            if os.path.exists(tracking_file):
+                with open(tracking_file, "r", encoding="utf-8") as f:
+                    local_tracking = json.load(f)
+            local_tracking[key] = data
+            with open(tracking_file, "w", encoding="utf-8") as f:
+                json.dump(local_tracking, f, indent=4)
+            return {"status": "success"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+            
+    elif key.startswith("enrichment_"):
+        source = key.replace("enrichment_", "")
+        source_map = {
+            "CINS Army": "cins_army",
+            "The DFIR Report": "dfir_report",
+            "feodotracker": "feodotracker",
+            "MalwareBazaar Community API": "malwarebazaar",
+            "NVd": "nvd",
+            "OpenPhish": "openphish",
+            "PhishTank": "phishtank",
+            "pulsedive": "pulsedive",
+            "Spamhaus": "spamhaus",
+            "ThreatFox": "threatfox",
+            "URLHaus": "urlhaus",
+            "OTX AlienVault": "alienvault"
+        }
+        file_prefix = source_map.get(source, source.lower().replace(" ", "_"))
+        filepath = os.path.join(base_dir, "enrichment", "tracking", f"{file_prefix}_tracking.json")
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4)
+            return {"status": "success"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+            
+    elif key.startswith("misp_"):
+        filepath = os.path.join(base_dir, "tracking", "misp_tracking.json")
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4)
+            return {"status": "success"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+            
+    return {"status": "error", "message": "Modification de ce type non supportée (ex: STIX/Correlation sont générés dynamiquement)"}
 
 @app.get("/api/stats/countries")
 def get_country_stats():
@@ -275,10 +372,11 @@ def get_country_stats():
         return GEO_STATS_CACHE["data"]
 
     country_counts = {}
-    if os.path.exists(ENRICHMENT_DIR):
-        for fn in os.listdir(ENRICHMENT_DIR):
+    if os.path.exists(GLOBAL_SOURCES_DIR):
+        import glob
+        for filepath in glob.glob(os.path.join(GLOBAL_SOURCES_DIR, "*", "enrichment", "*_enriched.json")):
+            fn = os.path.basename(filepath)
             if not fn.endswith("_enriched.json"): continue
-            filepath = os.path.join(ENRICHMENT_DIR, fn)
             try:
                 with open(filepath, "r", encoding="utf-8") as f:
                     records = json.load(f)
@@ -317,9 +415,9 @@ def get_country_stats():
 @app.get("/api/extracted/sources")
 def get_extracted_sources():
     sources = []
-    if os.path.exists(OUTPUT_DIR):
+    if os.path.exists(GLOBAL_SOURCES_DIR):
         for src_name, info in worker.SOURCE_MAP.items():
-            filepath = os.path.join(OUTPUT_DIR, info["output"])
+            filepath = os.path.join(GLOBAL_SOURCES_DIR, src_name, "extraction", info["output"])
             if os.path.exists(filepath):
                 stats = os.stat(filepath)
                 sources.append({
@@ -342,7 +440,7 @@ def get_extracted_data(source_id: str, page: int = 1, limit: int = 50, search: s
     if not info:
         raise HTTPException(status_code=404, detail="Source not found")
         
-    filepath = os.path.join(OUTPUT_DIR, info["output"])
+    filepath = os.path.join(GLOBAL_SOURCES_DIR, src_name, "extraction", info["output"])
     if not os.path.exists(filepath):
         return {"data": [], "total": 0, "page": page, "limit": limit}
 
@@ -394,10 +492,10 @@ def get_extracted_data(source_id: str, page: int = 1, limit: int = 50, search: s
 @app.get("/api/enriched/sources")
 def get_enriched_sources():
     sources = []
-    if os.path.exists(ENRICHMENT_DIR):
+    if os.path.exists(GLOBAL_SOURCES_DIR):
         for src_name, info in worker.SOURCE_MAP.items():
             enriched_fn = info["output"].replace("_extracted.json", "_enriched.json")
-            filepath = os.path.join(ENRICHMENT_DIR, enriched_fn)
+            filepath = os.path.join(GLOBAL_SOURCES_DIR, src_name, "enrichment", enriched_fn)
             if os.path.exists(filepath):
                 stats = os.stat(filepath)
                 sources.append({
@@ -421,7 +519,7 @@ def get_enriched_data(source_id: str, page: int = 1, limit: int = 50, search: st
         raise HTTPException(status_code=404, detail="Source not found")
 
     enriched_fn = info["output"].replace("_extracted.json", "_enriched.json")
-    filepath = os.path.join(ENRICHMENT_DIR, enriched_fn)
+    filepath = os.path.join(GLOBAL_SOURCES_DIR, src_name, "enrichment", enriched_fn)
 
     if not os.path.exists(filepath):
         return {"data": [], "total": 0, "page": page, "limit": limit}
@@ -497,10 +595,10 @@ def get_enriched_data(source_id: str, page: int = 1, limit: int = 50, search: st
 @app.get("/api/mitre/sources")
 def get_mitre_sources():
     sources = []
-    if os.path.exists(MITRE_DIR):
+    if os.path.exists(GLOBAL_SOURCES_DIR):
         for src_name, info in worker.SOURCE_MAP.items():
             mitre_fn = info["output"].replace("_extracted.json", "_mitre.json")
-            filepath = os.path.join(MITRE_DIR, mitre_fn)
+            filepath = os.path.join(GLOBAL_SOURCES_DIR, src_name, "enrichment", mitre_fn)
             if os.path.exists(filepath):
                 stats = os.stat(filepath)
                 sources.append({
@@ -524,7 +622,7 @@ def get_mitre_data(source_id: str, page: int = 1, limit: int = 50, search: str =
         raise HTTPException(status_code=404, detail="Source not found")
         
     mitre_fn = info["output"].replace("_extracted.json", "_mitre.json")
-    filepath = os.path.join(MITRE_DIR, mitre_fn)
+    filepath = os.path.join(GLOBAL_SOURCES_DIR, src_name, "enrichment", mitre_fn)
     
     if not os.path.exists(filepath):
         return {"data": [], "total": 0, "page": page, "limit": limit}
@@ -626,10 +724,11 @@ def get_mitre_matrix_stats():
     Returns a dictionary of {technique_id: count}.
     """
     tech_counts = {}
-    if os.path.exists(MITRE_DIR):
-        for fn in os.listdir(MITRE_DIR):
+    if os.path.exists(GLOBAL_SOURCES_DIR):
+        import glob
+        for filepath in glob.glob(os.path.join(GLOBAL_SOURCES_DIR, "*", "enrichment", "*_mitre.json")):
+            fn = os.path.basename(filepath)
             if not fn.endswith("_mitre.json"): continue
-            filepath = os.path.join(MITRE_DIR, fn)
             try:
                 with open(filepath, "r", encoding="utf-8") as f:
                     records = json.load(f)
@@ -1093,7 +1192,7 @@ async def get_stix_data():
     """
     Retourne le contenu du bundle STIX exporté.
     """
-    out_dir = os.path.join(os.path.dirname(__file__), "..", "..", "output_correlation")
+    out_dir = os.path.join(os.path.dirname(__file__), "..", "..", "__TEMP__/global_output/output_correlation")
     try:
         files = [f for f in os.listdir(out_dir) if f.startswith("stix_export_") and f.endswith(".json")]
         if not files:

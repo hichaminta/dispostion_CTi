@@ -13,8 +13,8 @@ logging.basicConfig(encoding="utf-8", level=logging.INFO, format='%(asctime)s - 
 logger = logging.getLogger("InitNVD")
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-INPUT_FILE = os.path.join(BASE_DIR, "output_cve_ioc", "nvd_extracted.json")
-OUTPUT_DIR = os.path.join(BASE_DIR, "output_enrichment")
+INPUT_FILE = os.path.join(BASE_DIR, "__TEMP__/global_output/output_cve_ioc", "nvd_extracted.json")
+OUTPUT_DIR = os.path.join(BASE_DIR, "__TEMP__/global_output/output_enrichment")
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "nvd_enriched.json")
 
 def initialize_nvd_only():

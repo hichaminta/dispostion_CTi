@@ -21,9 +21,22 @@ def get_local_ip():
 
 def run_platform():
     local_ip = get_local_ip()
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # 0. Start MySQL via Docker Compose
+    print("Starting MySQL (via Docker Compose)...")
+    subprocess.run(
+        ["docker-compose", "up", "-d", "mysql", "adminer"],
+        cwd=base_dir,
+        shell=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+    print("Waiting for MySQL to be ready...")
+    time.sleep(5)
+
     # 1. Start Backend
     print(f"Starting Backend (app.main on 0.0.0.0)...")
-    base_dir = os.path.dirname(os.path.abspath(__file__))
     backend_process = subprocess.Popen(
         [sys.executable, "-m", "app.main"],
         cwd=os.path.join(base_dir, "backend")

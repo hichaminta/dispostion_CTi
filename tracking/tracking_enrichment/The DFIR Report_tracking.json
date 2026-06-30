@@ -1,0 +1,20 @@
+{
+    "cve_enrichment": {
+        "first_cve_date": null,
+        "last_cve_date": null,
+        "total_cves": 0,
+        "last_run": "2026-06-30T20:42:18.848499",
+        "files_processed": [
+            "dfir_report_enriched.json",
+            "dfir_report_vuln_enriched.json"
+        ]
+    },
+    "nlp_enrichment_cve": {
+        "last_run": "2026-06-30T20:40:33.898778",
+        "files_processed": [
+            "dfir_report_enriched.json",
+            "dfir_report_vuln_enriched.json"
+        ],
+        "entities_extracted": 0
+    }
+}

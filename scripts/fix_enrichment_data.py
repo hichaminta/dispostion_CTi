@@ -11,7 +11,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from extraction_ioc_cve.base_extractor import BaseExtractor
 
-ENRICHMENT_DIR = "output_enrichment"
+ENRICHMENT_DIR = "__TEMP__/global_output/output_enrichment"
 
 def fix_data():
     extractor = BaseExtractor()

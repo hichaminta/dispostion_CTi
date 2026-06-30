@@ -207,6 +207,6 @@ class GeoManager:
 if __name__ == "__main__":
     # Self-test / sync
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    enr_dir = os.path.join(base_dir, "output_enrichment")
+    enr_dir = os.path.join(base_dir, "__TEMP__/global_output/output_enrichment")
     gm = GeoManager()
     gm.sync_from_existing_data(enr_dir)

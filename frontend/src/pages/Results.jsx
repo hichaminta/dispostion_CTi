@@ -8,7 +8,7 @@ import {
   PlayCircle, Loader2, Sparkles
 } from 'lucide-react';
 
-const API_BASE = `http://${window.location.hostname}:8000`;
+const API_BASE = ``;
 
 const gf = (domain) => `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
 

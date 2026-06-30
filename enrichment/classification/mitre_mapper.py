@@ -14,8 +14,8 @@ logging.basicConfig(encoding="utf-8", level=logging.INFO, format='%(asctime)s - 
 logger = logging.getLogger("MITRE_Mapper")
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-INPUT_DIR = os.path.join(BASE_DIR, "output_enrichment")
-OUTPUT_DIR = INPUT_DIR  # Update in place in output_enrichment
+INPUT_DIR = os.path.join(BASE_DIR, "__TEMP__/global_output/output_enrichment")
+OUTPUT_DIR = INPUT_DIR  # Update in place in __TEMP__/global_output/output_enrichment
 
 # Simplified MITRE ATT&CK Mapping
 # Key: keyword or regex, Value: list of (Technique ID, Technique Name)
@@ -150,7 +150,8 @@ def process_files(source_filter=None, skip_mapped=False):
         logger.error(f"Input directory not found: {INPUT_DIR}")
         return
 
-    all_files = [f for f in os.listdir(INPUT_DIR) if f.endswith("_enriched.json")]
+    import glob
+    all_files = glob.glob(os.path.join(BASE_DIR, "global_output", "sources", "*", "enrichment", "*.json"))
     
     if source_filter:
         if source_filter.lower() == "unified extraction":

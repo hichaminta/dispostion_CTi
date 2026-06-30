@@ -6,7 +6,7 @@ import {
   Sparkles, Shield, Database, Link2, Send, ToggleLeft, ToggleRight
 } from 'lucide-react';
 
-const API_BASE = `http://${window.location.hostname}:8000`;
+const API_BASE = ``;
 
 const PROVIDERS = [
   { id: 'gemini',     name: 'Google Gemini', description: 'Gemini 1.5 Flash — Gratuit', color: 'from-blue-500/20 to-indigo-500/10 border-blue-500/30', activeColor: 'from-blue-500/30 to-indigo-500/20 border-blue-400/60 shadow-[0_0_20px_rgba(59,130,246,0.15)]', dot: 'bg-blue-400',   icon: '✦' },

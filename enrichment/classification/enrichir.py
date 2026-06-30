@@ -17,9 +17,10 @@ except ImportError:
 
 logging.basicConfig(encoding="utf-8", level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("Intelligence_Orchestrator")
-
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-ENRICHMENT_DIR = os.path.join(BASE_DIR, "output_enrichment")
+GLOBAL_SOURCES_DIR = os.path.join(BASE_DIR, "global_output", "sources")
+
+
 
 
 class IntelligenceOrchestrator:
@@ -29,11 +30,8 @@ class IntelligenceOrchestrator:
         self.enrichment_dir = enrichment_dir
 
     def run(self, source_filter=None, skip_enriched=False):
-        if not os.path.exists(self.enrichment_dir):
-            logger.error(f"Répertoire introuvable : {self.enrichment_dir}")
-            return
-
-        json_files = [f for f in os.listdir(self.enrichment_dir) if f.endswith("_enriched.json")]
+        import glob
+        json_files = glob.glob(os.path.join(self.enrichment_dir, "*", "enrichment", "*_enriched.json"))
         if source_filter:
             json_files = [f for f in json_files if source_filter.lower() in f.lower()]
 
@@ -43,8 +41,8 @@ class IntelligenceOrchestrator:
 
         stats = {"total": 0, "CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
 
-        for filename in json_files:
-            filepath = os.path.join(self.enrichment_dir, filename)
+        for filepath in json_files:
+            filename = os.path.basename(filepath)
             logger.info(f"Traitement : {filename}")
 
             with open(filepath, "r", encoding="utf-8") as f:
@@ -138,6 +136,6 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--dir",           help="Répertoire custom (override ENRICHMENT_DIR)")
     args = parser.parse_args()
 
-    enrichment_dir = args.dir if args.dir else ENRICHMENT_DIR
+    enrichment_dir = args.dir if args.dir else GLOBAL_SOURCES_DIR
     orch = IntelligenceOrchestrator(enrichment_dir)
     orch.run(source_filter=args.source, skip_enriched=args.skip_enriched)

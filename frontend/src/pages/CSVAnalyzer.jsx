@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Upload, FileText, Cpu, AlertCircle, Loader2, CheckCircle, ShieldAlert, TableProperties } from 'lucide-react';
 import CSVReader from './CSVReader';
 
-const API_BASE = `http://${window.location.hostname}:8000`;
+const API_BASE = ``;
 
 const CSVAnalyzer = ({ onBack }) => {
   const [file, setFile] = useState(null);

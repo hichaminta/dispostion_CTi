@@ -55,7 +55,7 @@ export default function Login({ onLogin }) {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`http://${window.location.hostname}:8000/api/auth/change-password`, {
+      const res = await fetch(`/api/auth/change-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

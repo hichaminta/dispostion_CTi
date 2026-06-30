@@ -8,8 +8,8 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 
-const API_BASE = `http://${window.location.hostname}:8000`;
-const WS_BASE  = `ws://${window.location.hostname}:8000/ws`;
+const API_BASE = ``;
+const WS_BASE  = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
 
 const SOURCES = [
   { id: 'alienvault',   name: 'AlienVault OTX',  type: 'Threat Feeds',     color: 'purple' },

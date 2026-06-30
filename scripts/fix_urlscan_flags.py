@@ -16,7 +16,7 @@ logging.basicConfig(encoding="utf-8",
 logger = logging.getLogger("FixURLScanFlags")
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-ENRICHMENT_DIR = os.path.join(BASE_DIR, "output_enrichment")
+ENRICHMENT_DIR = os.path.join(BASE_DIR, "__TEMP__/global_output/output_enrichment")
 
 def fix_flags():
     if not os.path.exists(ENRICHMENT_DIR):

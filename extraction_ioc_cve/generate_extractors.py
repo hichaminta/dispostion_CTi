@@ -35,9 +35,9 @@ from base_extractor import BaseExtractor
 SOURCE_NAME = "{source_name}"
 # BASE_DIR is one level above EXTRACTORS_DIR
 BASE_DIR = os.path.dirname(EXTRACTORS_DIR)
-SOURCE_DIR = os.path.join(BASE_DIR, "Sources_data", "{source_dir}")
+SOURCE_DIR = os.path.join(BASE_DIR, "collection", "{source_dir}")
 INPUT_FILE = os.path.join(SOURCE_DIR, "{json_file}")
-OUTPUT_DIR = os.path.join(BASE_DIR, "output_cve_ioc")
+OUTPUT_DIR = os.path.join(BASE_DIR, "__TEMP__/global_output/output_cve_ioc")
 TRACKING_DIR = os.path.join(EXTRACTORS_DIR, "tracking")
 TRACKING_FILE = os.path.join(TRACKING_DIR, "{source_filename_no_ext}_tracking.json")
 

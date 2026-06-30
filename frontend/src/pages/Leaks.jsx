@@ -98,7 +98,7 @@ const DonutRing = ({ segments, size = 80 }) => {
   );
 };
 
-const API_BASE = `http://${window.location.hostname}:8000`;
+const API_BASE = ``;
 
 const SeverityBadge = ({ severity }) => {
   const styles = {

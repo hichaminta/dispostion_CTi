@@ -5,7 +5,9 @@ pydantic-settings
 python-multipart
 websockets
 python-dotenv
-python-keycloak
+sqlalchemy
+pymysql
+bcrypt
 python-jose[cryptography]
 pymongo
 pandas

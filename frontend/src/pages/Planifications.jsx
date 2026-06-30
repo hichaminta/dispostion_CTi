@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Clock, Plus, Trash2, Play, Square, Loader2, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 
-const API_BASE = `http://${window.location.hostname}:8000`;
+const API_BASE = ``;
 
 const SOURCES = [
   { id: 'unified',      name: 'Pipeline Complet', label: 'Toutes les sources (Unified)' },

@@ -21,9 +21,9 @@ logger = logging.getLogger("InitializeEnrichment")
 
 # Chemins
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-INPUT_DIR = os.path.join(BASE_DIR, "output_cve_ioc")
-OUTPUT_DIR = os.path.join(BASE_DIR, "output_enrichment")
-TRACKING_DIR = os.path.join(BASE_DIR, "enrichment", "tracking")
+GLOBAL_SOURCES_DIR = os.path.join(BASE_DIR, "global_output", "sources")
+
+TRACKING_DIR = os.path.join(BASE_DIR, "tracking", "tracking_enrichment")
 TRACKING_FILE = os.path.join(TRACKING_DIR, "enrichment_initialization.json")
 
 def load_tracking():
@@ -47,22 +47,15 @@ def initialize_enrichment_files(source_filter=None, force=False, demo=False):
     en les renommant de *_extracted.json vers *_enriched.json.
     Utilise un fichier de tracking pour ne mettre à jour que si nécessaire.
     """
-    if not os.path.exists(INPUT_DIR):
-        logger.error(f"Dossier d'entrée introuvable : {INPUT_DIR}")
-        return
-
-    if not os.path.exists(OUTPUT_DIR):
-        os.makedirs(OUTPUT_DIR)
-        logger.info(f"Création du dossier de sortie : {OUTPUT_DIR}")
-
-    files = [f for f in os.listdir(INPUT_DIR) if f.endswith(".json")]
+    import glob
+    files = glob.glob(os.path.join(GLOBAL_SOURCES_DIR, "*", "extraction", "*.json"))
     
     if source_filter:
         files = [f for f in files if source_filter.lower() in f.lower()]
         logger.info(f"Filtrage pour la source : {source_filter}")
     
     if not files:
-        logger.warning(f"Aucun fichier JSON trouvé dans {INPUT_DIR}")
+        logger.warning(f"Aucun fichier JSON trouve dans extraction")
         return
 
     logger.info(f"Initialisation de l'enrichissement pour {len(files)} fichiers...")
@@ -71,8 +64,11 @@ def initialize_enrichment_files(source_filter=None, force=False, demo=False):
     any_updated = False
 
     count = 0
-    for filename in files:
-        src_path = os.path.join(INPUT_DIR, filename)
+    for src_path in files:
+        filename = os.path.basename(src_path)
+        source_name = os.path.basename(os.path.dirname(os.path.dirname(src_path)))
+        OUTPUT_DIR = os.path.join(GLOBAL_SOURCES_DIR, source_name, "enrichment")
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
 
         try:
             with open(src_path, "r", encoding="utf-8") as f:

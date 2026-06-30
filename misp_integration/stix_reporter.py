@@ -85,7 +85,7 @@ class STIXReporter:
         if input_file:
             self.input_file = input_file
         else:
-            out_dir = os.path.join(self.base_dir, "output_correlation")
+            out_dir = os.path.join(self.base_dir, "global_output", "output_correlation")
             try:
                 files = [f for f in os.listdir(out_dir) if f.startswith("stix_export_") and f.endswith(".json")]
                 if not files:

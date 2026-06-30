@@ -48,7 +48,7 @@ logger = logging.getLogger("FallbackEnrichment")
 
 # Base directory and paths
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUTPUT_DIR = os.path.join(BASE_DIR, "output_enrichment")
+OUTPUT_DIR = os.path.join(BASE_DIR, "__TEMP__/global_output/output_enrichment")
 GEO_BASE_FILE = os.path.join(BASE_DIR, "enrichment", "geolocalisation", "geo_base.json")
 load_dotenv(find_dotenv())
 
@@ -263,7 +263,7 @@ class FallbackEnricher:
         return ioc
 
 def run_fallback_enrichment(source_filter=None):
-    """Processes files in output_enrichment and applies fallback logic."""
+    """Processes files in __TEMP__/global_output/output_enrichment and applies fallback logic."""
     if not os.path.exists(OUTPUT_DIR):
         logger.error(f"Output directory not found: {OUTPUT_DIR}")
         return

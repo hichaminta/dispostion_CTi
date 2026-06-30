@@ -7,7 +7,7 @@ import {
   Eye, Download, Trash2, X
 } from 'lucide-react';
 
-const API_BASE = `http://${window.location.hostname}:8000`;
+const API_BASE = ``;
 
 const PRIORITY_COLORS = {
   CRITICAL: 'bg-red-500/20 text-red-400 border-red-500/40',

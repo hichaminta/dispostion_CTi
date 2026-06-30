@@ -275,7 +275,7 @@ class CTIBulletinGenerator:
 
 def main(input_file=None):
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    out_corr_dir = os.path.join(base_dir, "output_correlation")
+    out_corr_dir = os.path.join(base_dir, "global_output", "output_correlation")
     output_dir = os.path.join(base_dir, "reports", "cti_bulletins")
     
     if not input_file:

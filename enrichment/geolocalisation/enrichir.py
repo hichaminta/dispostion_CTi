@@ -30,7 +30,7 @@ logger = logging.getLogger("Enrichir")
 
 # Paths
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUTPUT_DIR = os.path.join(BASE_DIR, "output_enrichment")
+OUTPUT_DIR = os.path.join(BASE_DIR, "__TEMP__/global_output/output_enrichment")
 GEO_BASE_FILE = os.path.join(os.path.dirname(__file__), "geo_base.json")
 
 # API Configuration
@@ -86,7 +86,8 @@ def enrich_all(source_filter=None):
         logger.error(f"Enrichment directory not found: {OUTPUT_DIR}")
         return
 
-    all_files = sorted([f for f in os.listdir(OUTPUT_DIR) if f.endswith("_enriched.json")])
+    import glob
+    all_files = sorted(glob.glob(os.path.join(BASE_DIR, "global_output", "sources", "*", "enrichment", "*.json")))
     
     if source_filter:
         # Special Fix: 'Pipeline Complet' means process all files
@@ -108,9 +109,9 @@ def enrich_all(source_filter=None):
     total_new_geos = 0
     api_call_count = 0
 
-    for filename in files:
-        source = get_source_from_filename(filename)
-        file_path = os.path.join(OUTPUT_DIR, filename)
+    for file_path in files:
+        filename = os.path.basename(file_path)
+        source = os.path.basename(os.path.dirname(os.path.dirname(file_path)))
         
         logger.info(f"Processing source: {source} (File: {filename})")
         

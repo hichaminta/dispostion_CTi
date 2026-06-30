@@ -1,0 +1,18 @@
+{
+    "cve_enrichment": {
+        "first_cve_date": null,
+        "last_cve_date": null,
+        "total_cves": 0,
+        "last_run": "2026-06-30T20:42:18.783111",
+        "files_processed": [
+            "openphish_enriched.json"
+        ]
+    },
+    "nlp_enrichment_cve": {
+        "last_run": "2026-06-30T20:40:33.841680",
+        "files_processed": [
+            "openphish_enriched.json"
+        ],
+        "entities_extracted": 0
+    }
+}

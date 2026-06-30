@@ -1,0 +1,383 @@
+[
+    {
+        "source": "CINS Army",
+        "record_id": "5015281238363786680",
+        "summary": "Extracted 1 IOCs from CINS Army. Contextual attributes anchored to each indicator.",
+        "iocs": [
+            {
+                "type": "ip",
+                "value": "1.119.194.226",
+                "source": "CINS Army",
+                "ioc_enrichment": {
+                    "country": "CN",
+                    "tlp": "TLP:CLEAR",
+                    "enriched_at": "2026-06-29T11:01:15.161618",
+                    "country_name": "China",
+                    "canne_par_url": 1,
+                    "passer_par_urlscan": 1,
+                    "urlscan_page_title": "1.119.194.226",
+                    "urlscan_effective_url": "http://1.119.194.226/",
+                    "urlscan_screenshot_url": "https://urlscan.io/screenshots/019ef514-9655-70f2-ba47-f75a3d074bcf.png",
+                    "urlscan_report_url": "https://urlscan.io/result/019ef514-9655-70f2-ba47-f75a3d074bcf/",
+                    "abuseConfidenceScore": 100,
+                    "totalReports": 67,
+                    "lastReportedAt": "2026-06-23T12:41:35+00:00",
+                    "countryCode": "CN",
+                    "isp": "BeiJing Wish Network Technology CO.,LTD.",
+                    "source_reliability": "AbuseIPDB Local/API",
+                    "passer_par_abuseipdb": 1,
+                    "vt_malicious_count": 10,
+                    "vt_suspicious_count": 4,
+                    "vt_harmless_count": 47,
+                    "vt_total_engines": 91,
+                    "vt_reputation": 0,
+                    "vt_tags": [],
+                    "vt_last_analysis_date": 1781461579,
+                    "vt_permalink": null,
+                    "passer_par_virustotal": 1
+                },
+                "risk_score": 70.3,
+                "soc_action": "investigate"
+            }
+        ],
+        "cves": [],
+        "tags": [
+            "CN",
+            "reliability:medium",
+            "soc_enriched"
+        ],
+        "references": [],
+        "attributes": {
+            "country": "CN",
+            "urlscan_score": 0,
+            "tlp": "TLP:CLEAR",
+            "enriched_at": "2026-06-29T11:01:15.161618",
+            "urlscan_verdict": false
+        },
+        "collected_at": "2026-06-23T14:53:23.544324+00:00",
+        "enrichment": {
+            "nlp_advanced": {
+                "geography": [
+                    "CN"
+                ]
+            }
+        },
+        "threat_type": "malware",
+        "attack_type": "Other",
+        "passer_par_callasifcation": 1,
+        "source_confidence": 75,
+        "confidence_label": "MEDIUM",
+        "paser_reliablity": 1,
+        "priority_score": "HIGH",
+        "soc_action": "investigate",
+        "risk_score_additive": 70.3,
+        "passser_par_scoring": 1,
+        "passer_par_correler": 1
+    },
+    {
+        "source": "CINS Army",
+        "record_id": "-3102415120555369140",
+        "summary": "Extracted 1 IOCs from CINS Army. Contextual attributes anchored to each indicator.",
+        "iocs": [
+            {
+                "type": "ip",
+                "value": "1.12.229.231",
+                "source": "CINS Army",
+                "ioc_enrichment": {
+                    "country": "CN",
+                    "tlp": "TLP:CLEAR",
+                    "enriched_at": "2026-06-29T11:01:15.161892",
+                    "country_name": "China",
+                    "canne_par_url": 1,
+                    "passer_par_urlscan": 1,
+                    "urlscan_country": "CN",
+                    "urlscan_server": "nginx/1.18.0 (Ubuntu)",
+                    "urlscan_ip": "1.12.229.231",
+                    "urlscan_page_title": "Welcome to nginx!",
+                    "urlscan_effective_url": "http://1.12.229.231/",
+                    "urlscan_screenshot_url": "https://urlscan.io/screenshots/019ef515-0aa0-752b-8cf8-3e3b07499d98.png",
+                    "urlscan_report_url": "https://urlscan.io/result/019ef515-0aa0-752b-8cf8-3e3b07499d98/",
+                    "abuseConfidenceScore": 90,
+                    "totalReports": 30,
+                    "lastReportedAt": "2026-06-23T05:15:10+00:00",
+                    "countryCode": "CN",
+                    "isp": "Tencent cloud computing (Beijing) Co., Ltd.",
+                    "source_reliability": "AbuseIPDB Local/API",
+                    "passer_par_abuseipdb": 1,
+                    "vt_malicious_count": 6,
+                    "vt_suspicious_count": 3,
+                    "vt_harmless_count": 50,
+                    "vt_total_engines": 91,
+                    "vt_reputation": -1,
+                    "vt_tags": [],
+                    "vt_last_analysis_date": 1781474857,
+                    "vt_permalink": null,
+                    "passer_par_virustotal": 1
+                },
+                "risk_score": 66.0,
+                "soc_action": "monitor"
+            }
+        ],
+        "cves": [],
+        "tags": [
+            "CN",
+            "reliability:medium",
+            "soc_enriched"
+        ],
+        "references": [],
+        "attributes": {
+            "country": "CN",
+            "urlscan_score": 0,
+            "tlp": "TLP:CLEAR",
+            "enriched_at": "2026-06-29T11:01:15.161892",
+            "urlscan_verdict": false
+        },
+        "collected_at": "2026-06-23T14:53:23.544324+00:00",
+        "enrichment": {
+            "nlp_advanced": {
+                "geography": [
+                    "CN"
+                ]
+            }
+        },
+        "threat_type": "malware",
+        "attack_type": "Other",
+        "passer_par_callasifcation": 1,
+        "source_confidence": 75,
+        "confidence_label": "MEDIUM",
+        "paser_reliablity": 1,
+        "priority_score": "HIGH",
+        "soc_action": "investigate",
+        "risk_score_additive": 66.0,
+        "passser_par_scoring": 1,
+        "passer_par_correler": 1
+    },
+    {
+        "source": "CINS Army",
+        "record_id": "-2344482418834934396",
+        "summary": "Extracted 1 IOCs from CINS Army. Contextual attributes anchored to each indicator.",
+        "iocs": [
+            {
+                "type": "ip",
+                "value": "1.15.35.79",
+                "source": "CINS Army",
+                "ioc_enrichment": {
+                    "country": "CN",
+                    "tlp": "TLP:CLEAR",
+                    "enriched_at": "2026-06-29T11:01:15.162092",
+                    "country_name": "China",
+                    "canne_par_url": 1,
+                    "passer_par_urlscan": 1,
+                    "urlscan_country": "CN",
+                    "urlscan_server": "nginx",
+                    "urlscan_ip": "1.15.35.79",
+                    "urlscan_page_title": "\u79ef\u5206\u8ba1\u7b97\u52a9\u624b",
+                    "urlscan_effective_url": "http://1.15.35.79/",
+                    "urlscan_screenshot_url": "https://urlscan.io/screenshots/019ef515-6357-723f-8223-e747a373fc5e.png",
+                    "urlscan_report_url": "https://urlscan.io/result/019ef515-6357-723f-8223-e747a373fc5e/",
+                    "abuseConfidenceScore": 100,
+                    "totalReports": 145,
+                    "lastReportedAt": "2026-06-23T08:52:38+00:00",
+                    "countryCode": "CN",
+                    "isp": "Tencent cloud computing (Beijing) Co., Ltd.",
+                    "source_reliability": "AbuseIPDB Local/API",
+                    "passer_par_abuseipdb": 1,
+                    "vt_malicious_count": 4,
+                    "vt_suspicious_count": 3,
+                    "vt_harmless_count": 51,
+                    "vt_total_engines": 91,
+                    "vt_reputation": 0,
+                    "vt_tags": [],
+                    "vt_last_analysis_date": 1781489972,
+                    "vt_permalink": null,
+                    "passer_par_virustotal": 1
+                },
+                "risk_score": 68.4,
+                "soc_action": "monitor"
+            }
+        ],
+        "cves": [],
+        "tags": [
+            "CN",
+            "reliability:medium",
+            "soc_enriched"
+        ],
+        "references": [],
+        "attributes": {
+            "country": "CN",
+            "urlscan_score": 0,
+            "tlp": "TLP:CLEAR",
+            "enriched_at": "2026-06-29T11:01:15.162092",
+            "urlscan_verdict": false
+        },
+        "collected_at": "2026-06-23T14:53:23.544324+00:00",
+        "enrichment": {
+            "nlp_advanced": {
+                "geography": [
+                    "CN"
+                ]
+            }
+        },
+        "threat_type": "malware",
+        "attack_type": "Other",
+        "passer_par_callasifcation": 1,
+        "source_confidence": 75,
+        "confidence_label": "MEDIUM",
+        "paser_reliablity": 1,
+        "priority_score": "HIGH",
+        "soc_action": "investigate",
+        "risk_score_additive": 68.4,
+        "passser_par_scoring": 1,
+        "passer_par_correler": 1
+    },
+    {
+        "source": "CINS Army",
+        "record_id": "2261735442436859180",
+        "summary": "Extracted 1 IOCs from CINS Army. Contextual attributes anchored to each indicator.",
+        "iocs": [
+            {
+                "type": "ip",
+                "value": "1.171.171.216",
+                "source": "CINS Army",
+                "ioc_enrichment": {
+                    "country": "TW",
+                    "tlp": "TLP:CLEAR",
+                    "enriched_at": "2026-06-29T11:01:15.162271",
+                    "country_name": "Taiwan",
+                    "canne_par_url": 1,
+                    "passer_par_urlscan": 1,
+                    "urlscan_country": "TW",
+                    "urlscan_ip": "1.171.171.216",
+                    "urlscan_effective_url": "https://1.171.171.216/",
+                    "urlscan_screenshot_url": "https://urlscan.io/screenshots/019ef515-ddce-7132-860b-8d616324ad38.png",
+                    "urlscan_report_url": "https://urlscan.io/result/019ef515-ddce-7132-860b-8d616324ad38/",
+                    "abuseConfidenceScore": 31,
+                    "totalReports": 4,
+                    "lastReportedAt": "2026-06-23T10:00:04+00:00",
+                    "countryCode": "TW",
+                    "isp": "Chunghwa Telecom Data Communication Business Group",
+                    "source_reliability": "AbuseIPDB Local/API",
+                    "passer_par_abuseipdb": 1,
+                    "vt_malicious_count": 1,
+                    "vt_suspicious_count": 3,
+                    "vt_harmless_count": 51,
+                    "vt_total_engines": 91,
+                    "vt_reputation": 0,
+                    "vt_tags": [],
+                    "vt_last_analysis_date": 1782210652,
+                    "vt_permalink": null,
+                    "passer_par_virustotal": 1
+                },
+                "risk_score": 46.8,
+                "soc_action": "monitor"
+            }
+        ],
+        "cves": [],
+        "tags": [
+            "TW",
+            "reliability:medium",
+            "soc_enriched"
+        ],
+        "references": [],
+        "attributes": {
+            "country": "TW",
+            "urlscan_score": 0,
+            "tlp": "TLP:CLEAR",
+            "enriched_at": "2026-06-29T11:01:15.162271",
+            "urlscan_verdict": false
+        },
+        "collected_at": "2026-06-23T14:53:23.544324+00:00",
+        "enrichment": {
+            "nlp_advanced": {
+                "geography": [
+                    "TW"
+                ]
+            }
+        },
+        "threat_type": "malware",
+        "attack_type": "Other",
+        "passer_par_callasifcation": 1,
+        "source_confidence": 75,
+        "confidence_label": "MEDIUM",
+        "paser_reliablity": 1,
+        "priority_score": "MEDIUM",
+        "soc_action": "monitor",
+        "risk_score_additive": 46.8,
+        "passser_par_scoring": 1,
+        "passer_par_correler": 1
+    },
+    {
+        "source": "CINS Army",
+        "record_id": "-6513580538776415404",
+        "summary": "Extracted 1 IOCs from CINS Army. Contextual attributes anchored to each indicator.",
+        "iocs": [
+            {
+                "type": "ip",
+                "value": "1.171.25.81",
+                "source": "CINS Army",
+                "ioc_enrichment": {
+                    "country": "TW",
+                    "tlp": "TLP:CLEAR",
+                    "enriched_at": "2026-06-29T11:01:15.162454",
+                    "country_name": "Taiwan",
+                    "canne_par_url": 1,
+                    "passer_par_urlscan": 1,
+                    "urlscan_effective_url": "http://1.171.25.81/",
+                    "urlscan_screenshot_url": "https://urlscan.io/screenshots/019ef516-3a70-7403-b832-819f89ece73b.png",
+                    "urlscan_report_url": "https://urlscan.io/result/019ef516-3a70-7403-b832-819f89ece73b/",
+                    "abuseConfidenceScore": 22,
+                    "totalReports": 3,
+                    "lastReportedAt": "2026-06-23T10:00:06+00:00",
+                    "countryCode": "TW",
+                    "isp": "Chunghwa Telecom Data Communication Business Group",
+                    "source_reliability": "AbuseIPDB Local/API",
+                    "passer_par_abuseipdb": 1,
+                    "vt_malicious_count": 3,
+                    "vt_suspicious_count": 2,
+                    "vt_harmless_count": 51,
+                    "vt_total_engines": 91,
+                    "vt_reputation": 0,
+                    "vt_tags": [],
+                    "vt_last_analysis_date": 1782187605,
+                    "vt_permalink": null,
+                    "passer_par_virustotal": 1
+                },
+                "risk_score": 44.7,
+                "soc_action": "monitor"
+            }
+        ],
+        "cves": [],
+        "tags": [
+            "TW",
+            "reliability:medium",
+            "soc_enriched"
+        ],
+        "references": [],
+        "attributes": {
+            "country": "TW",
+            "urlscan_score": 0,
+            "tlp": "TLP:CLEAR",
+            "enriched_at": "2026-06-29T11:01:15.162454",
+            "urlscan_verdict": false
+        },
+        "collected_at": "2026-06-23T14:53:23.544324+00:00",
+        "enrichment": {
+            "nlp_advanced": {
+                "geography": [
+                    "TW"
+                ]
+            }
+        },
+        "threat_type": "malware",
+        "attack_type": "Other",
+        "passer_par_callasifcation": 1,
+        "source_confidence": 75,
+        "confidence_label": "MEDIUM",
+        "paser_reliablity": 1,
+        "priority_score": "MEDIUM",
+        "soc_action": "monitor",
+        "risk_score_additive": 44.7,
+        "passser_par_scoring": 1,
+        "passer_par_correler": 1
+    }
+]

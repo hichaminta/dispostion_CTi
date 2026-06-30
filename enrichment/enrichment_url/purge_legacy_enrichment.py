@@ -11,7 +11,7 @@ logging.basicConfig(encoding="utf-8", level=logging.INFO, format='%(asctime)s - 
 logger = logging.getLogger("LegacyPurge")
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUTPUT_DIR = os.path.join(BASE_DIR, "output_enrichment")
+OUTPUT_DIR = os.path.join(BASE_DIR, "__TEMP__/global_output/output_enrichment")
 
 def purge_file(file_path):
     """Processes a single file to remove legacy enrichment data."""

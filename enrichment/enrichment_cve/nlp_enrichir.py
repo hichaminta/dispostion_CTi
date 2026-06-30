@@ -13,10 +13,11 @@ from datetime import datetime
 # Configuration du logging
 logging.basicConfig(encoding="utf-8", level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("CVENLPEnrichment")
-
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-ENRICHMENT_DIR = os.path.join(BASE_DIR, "output_enrichment")
-TRACKING_DIR = os.path.join(BASE_DIR, "enrichment", "tracking")
+GLOBAL_SOURCES_DIR = os.path.join(BASE_DIR, "global_output", "sources")
+
+
+TRACKING_DIR = os.path.join(BASE_DIR, "tracking", "tracking_enrichment")
 
 def get_tracking_file(source):
     return os.path.join(TRACKING_DIR, f"{source}_tracking.json")
@@ -93,15 +94,13 @@ def extract_entities(text):
     return entities
 
 def process_files():
-    if not os.path.exists(ENRICHMENT_DIR):
-        logger.error(f"Le dossier {ENRICHMENT_DIR} n'existe pas.")
-        return
 
-    json_files = [f for f in os.listdir(ENRICHMENT_DIR) if f.endswith("_enriched.json")]
+    import glob
+    json_files = glob.glob(os.path.join(GLOBAL_SOURCES_DIR, "*", "enrichment", "*_enriched.json"))
     
-    for filename in json_files:
-        source = filename.replace("_enriched.json", "")
-        filepath = os.path.join(ENRICHMENT_DIR, filename)
+    for filepath in json_files:
+        filename = os.path.basename(filepath)
+        source = os.path.basename(os.path.dirname(os.path.dirname(filepath)))
         logger.info(f"Analyse NLP du fichier : {filename}")
         
         # Tracking logic

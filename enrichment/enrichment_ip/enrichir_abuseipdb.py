@@ -17,12 +17,14 @@ logger = logging.getLogger("Enrichment_AbuseIPDB")
 # Configuration
 load_dotenv(find_dotenv())
 API_KEY = os.getenv("ABUSEIPDB_API_KEY")
+
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-ENRICHMENT_DIR = os.path.join(BASE_DIR, "output_enrichment")
+GLOBAL_SOURCES_DIR = os.path.join(BASE_DIR, "global_output", "sources")
+
 
 # ── Local DB path: check in enrichment_ip/ first, then legacy Sources_data/
 _local_db_primary = os.path.join(os.path.dirname(__file__), "abuseipdb_data.json")
-_local_db_legacy   = os.path.join(BASE_DIR, "Sources_data", "AbuseIPDB", "abuseipdb_data.json")
+_local_db_legacy   = os.path.join(BASE_DIR, "collection", "AbuseIPDB", "abuseipdb_data.json")
 DB_PATH = _local_db_primary if os.path.exists(_local_db_primary) else _local_db_legacy
 
 
@@ -71,6 +73,7 @@ class AbuseIPDBEnricher:
         try:
             url = "https://api.abuseipdb.com/api/v2/check"
             headers = {"Key": API_KEY, "Accept": "application/json"}
+
             params  = {"ipAddress": ip, "maxAgeInDays": 90}
             response = requests.get(url, headers=headers, params=params, timeout=10)
             if response.status_code == 200:
@@ -103,19 +106,17 @@ class AbuseIPDBEnricher:
 
     def run(self):
         """Iterate over all enriched files and enrich IP-type IOCs."""
-        if not os.path.exists(ENRICHMENT_DIR):
-            logger.error(f"Enrichment directory not found: {ENRICHMENT_DIR}")
-            return
 
-        files = [f for f in os.listdir(ENRICHMENT_DIR) if f.endswith("_enriched.json")]
+        import glob
+        files = glob.glob(os.path.join(GLOBAL_SOURCES_DIR, "*", "enrichment", "*_enriched.json"))
         if not files:
             logger.warning("[AbuseIPDB] No *_enriched.json files found. Skipping.")
             return
 
         logger.info(f"[AbuseIPDB] Processing {len(files)} enriched file(s)...")
 
-        for filename in files:
-            filepath = os.path.join(ENRICHMENT_DIR, filename)
+        for filepath in files:
+            filename = os.path.basename(filepath)
             modified = False
 
             try:

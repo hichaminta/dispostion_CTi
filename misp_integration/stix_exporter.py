@@ -203,12 +203,12 @@ class STIXExporter:
         self.identity_id = f"identity--{uuid.uuid4()}"
         self.objects      = []
         self._now_str     = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        self.tracking_file = os.path.join(BASE_DIR, "misp_integration", "stix_tracking.json")
+        self.tracking_file = os.path.join(BASE_DIR, "tracking", "stix_tracking.json")
         self._add_identity()
 
     # ── Helpers ─────────────────────────────────────────
     def _get_latest_correlation_file(self):
-        dir_path = os.path.join(BASE_DIR, "output_correlation")
+        dir_path = os.path.join(BASE_DIR, "global_output", "output_correlation")
         if not os.path.exists(dir_path):
             return None
         files = [f for f in os.listdir(dir_path) if f.startswith("correlation_file_") and f.endswith(".json")]

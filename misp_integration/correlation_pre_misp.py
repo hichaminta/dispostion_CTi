@@ -444,14 +444,15 @@ class ThreatCorrelator:
 
     def process_files(self):
         logger.info("Phase 1 — Loading and Grouping Data...")
-        all_files = [f for f in os.listdir(self.input_dir) if f.endswith('_enriched.json')]
+        import glob
+        all_files = glob.glob(os.path.join(BASE_DIR, 'global_output', 'sources', '*', 'enrichment', '*.json'))
 
         if not all_files:
             logger.info("No files to process.")
             return
 
-        for filename in all_files:
-            filepath = os.path.join(self.input_dir, filename)
+        for filepath in all_files:
+            filename = os.path.basename(filepath)
             try:
                 with open(filepath, encoding='utf-8') as f:
                     data = json.load(f)
@@ -979,7 +980,7 @@ if __name__ == "__main__":
 
     BASE_DIR   = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     INPUT_DIR  = args.input  or os.path.join(BASE_DIR, "output_enrichment")
-    OUTPUT_DIR = args.output or os.path.join(BASE_DIR, "output_correlation")
+    OUTPUT_DIR = args.output or os.path.join(BASE_DIR, "global_output", "output_correlation")
 
     correlator = ThreatCorrelator(INPUT_DIR, OUTPUT_DIR)
     correlator.process_files()

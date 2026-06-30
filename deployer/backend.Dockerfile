@@ -19,9 +19,9 @@ COPY . /app
 # Create runtime directories (data volumes will overlay these at runtime)
 RUN mkdir -p \
     /app/store \
-    /app/output_cve_ioc \
-    /app/output_enrichment \
-    /app/output_correlation \
+    /app/__TEMP__/global_output/output_cve_ioc \
+    /app/__TEMP__/global_output/output_enrichment \
+    /app/__TEMP__/global_output/output_correlation \
     /app/reports/cti_bulletins \
     /app/leak_data_integration/results \
     /app/misp_integration/tracking \

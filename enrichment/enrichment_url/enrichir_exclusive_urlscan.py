@@ -35,8 +35,8 @@ logging.basicConfig(encoding="utf-8",
 logger = logging.getLogger("URLScan_Exclusive")
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUTPUT_DIR = os.path.join(BASE_DIR, "output_enrichment")
-TRACKING_DIR = os.path.join(BASE_DIR, "enrichment", "tracking")
+OUTPUT_DIR = os.path.join(BASE_DIR, "__TEMP__/global_output/output_enrichment")
+TRACKING_DIR = os.path.join(BASE_DIR, "tracking", "tracking_enrichment")
 WHITELIST_FILE = os.path.join(BASE_DIR, "hwite.json")
 
 INVALID_EXTENSIONS = [
