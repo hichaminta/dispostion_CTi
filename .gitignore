@@ -36,6 +36,7 @@ enrichment/geolocalisation/geo_base.json
 *.log
 *.rar
 *.jsonL
+*.json
 *.jsonl
 unified_records.jsonl
 *.json.bak
