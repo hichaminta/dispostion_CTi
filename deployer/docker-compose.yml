@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: cyberhud_mysql
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD:-admin}
+      - MYSQL_DATABASE=${MYSQL_DB:-cyberhud_db}
+      - MYSQL_USER=${MYSQL_USER:-admin}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-admin}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deployer/backend.Dockerfile
+    container_name: cyberhud_backend
+    working_dir: /app/app/backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - app_store:/app/store
+      - app_temp_cve_ioc:/app/Pipeline_cti/global_output/output_cve_ioc
+      - app_temp_enrichment:/app/Pipeline_cti/global_output/output_enrichment
+      - app_temp_correlation:/app/Pipeline_cti/global_output/output_correlation
+      - app_bulletins:/app/reports/cti_bulletins
+      - app_leaks:/app/leak_data_integration/results
+      - app_misp_tracking:/app/misp_integration/tracking
+    environment:
+      - MYSQL_USER=${MYSQL_USER:-admin}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-admin}
+      - MYSQL_DB=${MYSQL_DB:-cyberhud_db}
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+    env_file:
+      - ../.env
+    depends_on:
+      - mysql
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../app/frontend
+      dockerfile: ../../deployer/frontend.Dockerfile
+    container_name: cyberhud_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  adminer:
+    image: adminer
+    container_name: cyberhud_adminer
+    restart: unless-stopped
+    ports:
+      - "8085:8080"
+    depends_on:
+      - mysql
+
+volumes:
+  mysql_data:
+  app_store:
+  app_temp_cve_ioc:
+  app_temp_enrichment:
+  app_temp_correlation:
+  app_bulletins:
+  app_leaks:
+  app_misp_tracking:

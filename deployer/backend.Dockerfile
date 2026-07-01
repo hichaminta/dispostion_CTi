@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies first (layer cache)
-COPY backend/requirements.txt /app/requirements.txt
+COPY app/backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy full project code
@@ -30,5 +30,5 @@ RUN mkdir -p \
 
 EXPOSE 8000
 
-WORKDIR /app/backend
+WORKDIR /app/app/backend
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

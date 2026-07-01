@@ -23,7 +23,7 @@ from core.intelligence import IntelligenceAgent
 async def main():
     import argparse
     parser = argparse.ArgumentParser(description="Runner pour le Corrélateur Quotidien (Daily Correlator) de l'IntelligenceAgent")
-    parser.add_argument("--data-dir", type=str, default="../data/leaks", help="Chemin vers le dossier contenant les données (défaut: ../data/leaks)")
+    parser.add_argument("--data-dir", type=str, default="output/data/leaks", help="Chemin vers le dossier contenant les données (défaut: output/data/leaks)")
     parser.add_argument("--channel", type=str, help="Canal spécifique à traiter (ex: Jabaroot)")
     parser.add_argument("--date", type=str, help="Date spécifique à traiter (ex: 2026-04-08)")
     args = parser.parse_args()

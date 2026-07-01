@@ -1,0 +1,184 @@
+import sys
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+import os
+import json
+import sys
+from datetime import datetime
+
+# Path to this script's directory for imports
+EXTRACTORS_DIR = os.path.dirname(os.path.abspath(__file__))
+if EXTRACTORS_DIR not in sys.path:
+    sys.path.append(EXTRACTORS_DIR)
+from base_extractor import BaseExtractor
+
+SOURCE_NAME = "NVd"
+# BASE_DIR is one level above EXTRACTORS_DIR
+BASE_DIR = os.path.abspath(os.path.join(EXTRACTORS_DIR, "..", ".."))
+SOURCE_DIR = os.path.join(BASE_DIR, "Pipeline_cti", "global_output", "sources", "NVd", "collection")
+INPUT_FILE = os.path.join(SOURCE_DIR, "nvd_data.json")
+OUTPUT_DIR = os.path.join(BASE_DIR, "Pipeline_cti", "global_output", "sources", "NVd", "extraction")
+TRACKING_DIR = os.path.join(EXTRACTORS_DIR, "tracking")
+TRACKING_FILE = os.path.join(TRACKING_DIR, "nvd_tracking.json")
+
+def run_extraction():
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(TRACKING_DIR, exist_ok=True)
+    extractor = BaseExtractor()
+    
+    # Check for CLI flags
+    force_full = "--full" in sys.argv
+    if force_full:
+        print(f"[{SOURCE_NAME}] Mode: FORCE FULL (Ignoring tracker)")
+
+    # 1. Load tracking
+    oldest_extracted_at = None
+    recent_extracted_at = None
+    
+    tracker = None
+    try:
+        project_root = os.path.abspath(os.path.join(EXTRACTORS_DIR, ".."))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        from utils.tracking import ExtractionTracker
+        tracker = ExtractionTracker(SOURCE_NAME)
+        tracking = tracker.get_tracking()
+        
+        if not force_full:
+            oldest_extracted_at = tracking.get('oldest_extracted_at')
+            recent_extracted_at = tracking.get('recent_extracted_at')
+    except Exception as e:
+        print(f"Error loading Tracker: {e}")
+
+
+    # 2. Load raw data
+    if not os.path.exists(INPUT_FILE):
+        print(f"Input file {INPUT_FILE} not found.")
+        return
+
+    try:
+        with open(INPUT_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"Error reading {INPUT_FILE}: {e}")
+        return
+    
+    if not isinstance(data, list):
+        data = [data]
+        
+    # 3. Filter data (process if outside [oldest, recent])
+    new_data = extractor.filter_by_timestamp(data, oldest_extracted_at, recent_extracted_at)
+    
+    if not new_data:
+        print(f"No new data for {SOURCE_NAME} outside tracked range [{oldest_extracted_at or 'init'} - {recent_extracted_at or 'init'}].")
+        return
+
+    # 4. Process new items
+    print(f"Processing {len(new_data)} / {len(data)} items for {SOURCE_NAME}...")
+    new_results = []
+    
+    current_oldest = oldest_extracted_at
+    current_recent = recent_extracted_at
+
+    def process_nvd_item(item):
+        cve_id = item.get("id") or item.get("cve", {}).get("id") or item.get("cve_id")
+        record_id = str(cve_id or hash(str(item)))
+        
+        # Get dates
+        date_fields = ['published', 'lastModified', 'modified', 'extracted_at', 'collected_at']
+        collected_at = None
+        for df in date_fields:
+            if item.get(df):
+                collected_at = item.get(df)
+                break
+                
+        tags = set()
+        attrs = {}
+        refs = set()
+        
+        # Extract CVSS information if available
+        cvss_list = item.get("cvss", [])
+        if cvss_list:
+            # We try to get the highest score available
+            try:
+                # Filter out entries where score is not a number
+                valid_cvss = [c for c in cvss_list if isinstance(c.get("score"), (int, float))]
+                if valid_cvss:
+                    best_cvss = max(valid_cvss, key=lambda x: x.get("score", 0))
+                    attrs["cvss_score"] = best_cvss.get("score")
+                    attrs["cvss_version"] = best_cvss.get("version")
+                    attrs["cvss_vector"] = best_cvss.get("vector")
+            except Exception:
+                pass
+
+        # We explicitly don't extract IOCs from NVD
+        extracted_cves = []
+        if cve_id:
+            extracted_cves.append({
+                "id": cve_id.upper(),
+                "source": SOURCE_NAME,
+                "ioc_enrichment": {}
+            })
+            
+        res = {
+            "source": SOURCE_NAME,
+            "record_id": record_id,
+            "summary": f"Extracted CVE from NVD. CVSS: {attrs.get('cvss_score', 'N/A')}",
+            "iocs": [], # Explicitly no IOCs
+            "cves": extracted_cves,
+            "tags": sorted(list(tags)),
+            "references": sorted(list(refs)),
+            "attributes": attrs,
+            "collected_at": collected_at
+        }
+        
+        if "description" in item:
+            res["description"] = item["description"]
+            
+        return res
+
+    for item in new_data:
+        res = process_nvd_item(item)
+        new_results.append(res)
+        
+        # Update bounds
+        item_ts = res.get('collected_at')
+        if item_ts:
+            if not current_oldest or item_ts < current_oldest:
+                current_oldest = item_ts
+            if not current_recent or item_ts > current_recent:
+                current_recent = item_ts
+            
+    # 5. Merge with existing results
+    output_path = os.path.join(OUTPUT_DIR, "nvd_extracted.json")
+    all_results = []
+    if os.path.exists(output_path):
+        try:
+            with open(output_path, "r", encoding="utf-8") as f:
+                all_results = json.load(f)
+        except: pass
+    
+    # Use merge_results from BaseExtractor to handle deduplication and fusion
+    all_results = extractor.merge_results(all_results, new_results, SOURCE_NAME)
+
+    # Save results
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(all_results, f, ensure_ascii=False, indent=2)
+        
+    # 6. Update tracking
+    if tracker:
+        try:
+            tracker.save_tracking({
+                "oldest_extracted_at": current_oldest,
+                "recent_extracted_at": current_recent
+            })
+        except Exception as e:
+            print(f"Error saving tracking: {e}")
+
+    
+    print(f"Extraction for {SOURCE_NAME} completed. {len(new_results)} items processed. Bounds: {current_oldest} to {current_recent}")
+
+if __name__ == "__main__":
+    run_extraction()

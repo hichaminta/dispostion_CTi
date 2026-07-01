@@ -5,88 +5,32 @@ if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 import subprocess
 import os
-import sys
-import time
-import socket
-
-def get_local_ip():
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except:
-        return "localhost"
 
 def run_platform():
-    local_ip = get_local_ip()
     base_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # 0. Start MySQL via Docker Compose
-    print("Starting MySQL (via Docker Compose)...")
-    subprocess.run(
-        ["docker-compose", "up", "-d", "mysql", "adminer"],
-        cwd=base_dir,
-        shell=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
-    )
-    print("Waiting for MySQL to be ready...")
-    time.sleep(5)
-
-    # 1. Start Backend
-    print(f"Starting Backend (app.main on 0.0.0.0)...")
-    backend_process = subprocess.Popen(
-        [sys.executable, "-m", "app.main"],
-        cwd=os.path.join(base_dir, "backend")
-    )
+    deployer_dir = os.path.join(base_dir, "deployer")
     
-    # 2. Wait a bit for backend to start
-    time.sleep(2)
+    print("="*50)
+    print("Lancement de la plateforme CTI via Docker Compose...")
+    print("="*50)
     
-    # 3. Start Frontend
-    print(f"Starting Frontend (Vite --host)...")
-    frontend_process = subprocess.Popen(
-        ["npm", "run", "dev", "--", "--host"],
-        cwd=os.path.join(base_dir, "frontend"),
-        shell=True # Needed for npm on windows
-    )
-    
-    print("\n" + "="*50)
-    print("CTI Pipeline Platform is running!")
-    print(f"Local access:    http://localhost:5173")
-    print(f"Network access:  http://{local_ip}:5173")
-    print("-" * 50)
-    print(f"Backend API:     http://{local_ip}:8000")
-    print("="*50 + "\n")
+    print(f"Dossier de déploiement : {deployer_dir}")
+    print("Reconstruction des images et démarrage des conteneurs...\n")
     
     try:
-        while True:
-            time.sleep(1)
-            if backend_process.poll() is not None:
-                print("Backend stopped unexpectedly.")
-                break
-            if frontend_process.poll() is not None:
-                print("Frontend stopped unexpectedly.")
-                break
+        # Lancer docker-compose up avec l'affichage des logs en temps réel
+        subprocess.run(
+            ["docker-compose", "up", "--build"],
+            cwd=deployer_dir
+        )
     except KeyboardInterrupt:
-        print("\nStopping platform...")
-        
-        # Graceful cleanup
-        def safe_stop(proc, name):
-            if proc.poll() is None:
-                print(f"Stopping {name}...")
-                proc.terminate()
-                try:
-                    proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    print(f"Force killing {name}...")
-                    proc.kill()
-        
-        safe_stop(backend_process, "Backend")
-        safe_stop(frontend_process, "Frontend")
-        print("Platform stopped.")
+        print("\nArrêt demandé par l'utilisateur (Ctrl+C)...")
+        print("Nettoyage des conteneurs Docker...")
+        subprocess.run(
+            ["docker-compose", "down"],
+            cwd=deployer_dir
+        )
+        print("Plateforme arrêtée avec succès.")
 
 if __name__ == "__main__":
     run_platform()

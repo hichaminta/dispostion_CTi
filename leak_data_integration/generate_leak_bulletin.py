@@ -14,7 +14,7 @@ from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 
 class LeakBulletinGenerator:
-    def __init__(self, output_dir="reports/leak_bulletins"):
+    def __init__(self, output_dir="Pipeline_cti/global_output/reports/leak_bulletins"):
         self.output_dir = output_dir
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
@@ -150,8 +150,8 @@ def main(input_file=None):
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     
     # Par défaut, chercher dans leak_data_integration/results
-    results_dir = os.path.join(base_dir, "leak_data_integration", "results")
-    output_dir = os.path.join(base_dir, "reports", "fuite")
+    results_dir = os.path.join(base_dir, "leak_data_integration", "output", "results")
+    output_dir = os.path.join(base_dir, "Pipeline_cti", "global_output", "reports", "fuite")
     
     if not input_file:
         files = [f for f in os.listdir(results_dir) if f.startswith("leaks_intel") and f.endswith(".json")]

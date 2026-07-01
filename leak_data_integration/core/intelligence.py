@@ -12,7 +12,7 @@ logger = logging.getLogger("IntelligenceAgent")
 
 class IntelligenceAgent:
     def __init__(self, base_dir):
-        self.results_dir = os.path.join(base_dir, "results")
+        self.results_dir = os.path.join(base_dir, "output", "results")
         os.makedirs(self.results_dir, exist_ok=True)
         self.intel_file = os.path.join(self.results_dir, "leaks_intel.json")
 
