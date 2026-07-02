@@ -586,8 +586,17 @@ class MISPClient:
 
         tracking_data = self._load_tracking()
 
-        # Chercher les fichiers STIX (stix_export_*.json ou stix_export.json)
-        stix_files = [f for f in os.listdir(corr_dir) if f.startswith("stix_export") and f.endswith(".json")]
+        # Clean up stray temp files left by previous crashed runs
+        for f in os.listdir(corr_dir):
+            if f.startswith("stix_export") and ".tmp" in f:
+                try:
+                    os.remove(os.path.join(corr_dir, f))
+                    logger.info(f"[CLEANUP] Fichier temporaire orphelin supprimé : {f}")
+                except Exception:
+                    pass
+
+        # Chercher les fichiers STIX (stix_export_*.json ou stix_export.json) — exclure les .tmp
+        stix_files = [f for f in os.listdir(corr_dir) if f.startswith("stix_export") and f.endswith(".json") and ".tmp" not in f]
 
         if not stix_files:
             logger.info("Aucun fichier STIX à importer. Assurez-vous d'avoir exécuté stix_exporter.py d'abord.")

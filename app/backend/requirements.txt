@@ -16,7 +16,8 @@ fpdf
 aiohttp
 requests
 OTXv2
-pymisp
+pymisp==2.4.194
+misp-stix==2.4.194
 spacy
 PyYAML
 reportlab

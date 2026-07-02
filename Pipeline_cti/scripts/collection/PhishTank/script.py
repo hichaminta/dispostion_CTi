@@ -80,6 +80,7 @@ def save_json(data, path=None):
     target = path or OUTPUT_JSON
     tmp = target + ".tmp"
     try:
+        os.makedirs(os.path.dirname(target), exist_ok=True)
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         os.replace(tmp, target)

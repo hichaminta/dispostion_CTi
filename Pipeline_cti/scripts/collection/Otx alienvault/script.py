@@ -90,6 +90,7 @@ def save_json_atomic(data, filepath=None):
     target_file = filepath if filepath else OUTPUT_JSON
     tmp_file = target_file + ".tmp"
     try:
+        os.makedirs(os.path.dirname(target_file), exist_ok=True)
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
         os.replace(tmp_file, target_file)
@@ -266,13 +267,12 @@ def main():
         sc_1, ad_1 = sync_pulses(otx, tracking.get("latest_modified"), existing_data, existing_ids, tracking, new_pulses_1, mode="AFTER")
         logging.info(f"Bilan Nouveautés : {sc_1} scannés, {ad_1} ajoutés.")
 
-        # PHASE 2 : Historique (PASSÉ)
+        # PHASE 2 : Historique (PASSÉ) - DÉSACTIVÉ À LA DEMANDE DE L'UTILISATEUR
         # On repart de ZERO et on descend jusqu'à ce qu'on dépasse le plus ancien
-        # Pour simplifier, on peut l'activer via une question ou le faire systématiquement
-        logging.info("--- PHASE 2 : Complétion de l'historique ---")
-        new_pulses_2 = []
-        sc_2, ad_2 = sync_pulses(otx, None, existing_data, existing_ids, tracking, new_pulses_2, mode="BEFORE")
-        logging.info(f"Bilan Historique : {sc_2} scannés, {ad_2} ajoutés.")
+        logging.info("--- PHASE 2 : Complétion de l'historique (DÉSACTIVÉE) ---")
+        # new_pulses_2 = []
+        # sc_2, ad_2 = sync_pulses(otx, None, existing_data, existing_ids, tracking, new_pulses_2, mode="BEFORE")
+        # logging.info(f"Bilan Historique : {sc_2} scannés, {ad_2} ajoutés.")
 
         logging.info("Toutes les phases de synchronisation sont terminées.")
 

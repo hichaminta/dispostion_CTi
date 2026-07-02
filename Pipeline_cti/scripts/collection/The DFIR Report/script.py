@@ -69,6 +69,7 @@ def load_existing() -> list:
 
 
 def save_data(records: list):
+    os.makedirs(os.path.dirname(OUTPUT_JSON), exist_ok=True)
     with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
         json.dump(records, f, ensure_ascii=False, indent=2)
 

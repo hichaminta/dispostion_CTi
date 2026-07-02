@@ -74,6 +74,7 @@ def save_json_atomic(data, filepath=None):
     target_file = filepath if filepath else OUTPUT_JSON
     tmp_file = target_file + ".tmp"
     try:
+        os.makedirs(os.path.dirname(target_file), exist_ok=True)
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
         os.replace(tmp_file, target_file)
