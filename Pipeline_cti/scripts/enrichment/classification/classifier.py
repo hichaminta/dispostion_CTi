@@ -42,7 +42,7 @@ class ThreatClassifier:
 
     @staticmethod
     def infer_threat_type(record, filename):
-        """Détermine la catégorie : malware | phishing | vulnerability | suspicious."""
+        """DÃ©termine la catÃ©gorie : malware | phishing | vulnerability | suspicious."""
         source = filename.lower()
 
         if "nvd" in source or record.get("cves"):
@@ -76,7 +76,7 @@ class ThreatClassifier:
                                     "ransomware", "backdoor", "trojan"]):
             return "malware"
 
-        # malware_family présent dans un IOC
+        # malware_family prÃ©sent dans un IOC
         for ioc in record.get("iocs", []):
             family = ioc.get("ioc_enrichment", {}).get("malware_family", "").lower()
             if family:
@@ -86,7 +86,7 @@ class ThreatClassifier:
 
     @staticmethod
     def classify_attack_type(record, threat_type):
-        """Identifie l'attack_type précis selon la source et les données disponibles."""
+        """Identifie l'attack_type prÃ©cis selon la source et les donnÃ©es disponibles."""
 
         # 1. malware_family dans ioc_enrichment (feodotracker, threatfox)
         for ioc in record.get("iocs", []):
@@ -170,7 +170,7 @@ class ThreatClassifier:
 
     @staticmethod
     def get_confidence_label(source_confidence: int) -> str:
-        """Score numérique -> label lisible SOC."""
+        """Score numÃ©rique -> label lisible SOC."""
         if source_confidence >= 90:
             return "HIGH"
         elif source_confidence >= 75:

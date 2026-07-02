@@ -5,8 +5,8 @@ nlp:
   - ar
   min_confidence: 60
 storage:
-  base_path: ../data/leaks
-  report_path: ../reports
+  base_path: output/data/leaks
+  report_path: output/reports
 telegram:
   backfill_days: 10
   channels:

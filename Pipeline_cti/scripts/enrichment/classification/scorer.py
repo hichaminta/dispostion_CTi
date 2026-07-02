@@ -4,15 +4,15 @@ if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
 if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 class PriorityScorer:
-    """Calcul de priorité SOC et score de risque additif."""
+    """Calcul de prioritÃ© SOC et score de risque additif."""
 
     @staticmethod
     def calculate_priority(record: dict, threat_type: str):
         """
-        Priorité : CRITICAL | HIGH | MEDIUM | LOW
+        PrioritÃ© : CRITICAL | HIGH | MEDIUM | LOW
         Action   : escalate | investigate | monitor | block | monitor_quiet
 
-        Signaux utilisés :
+        Signaux utilisÃ©s :
           - CVSS score (NVD)
           - vt_malicious_count (toutes sources avec VT)
           - abuseConfidenceScore (feodotracker, cins, phishtank)
@@ -74,10 +74,10 @@ class PriorityScorer:
             if ioc.get("type") == "url" and threat_type == "phishing":
                 has_phishing_url = True
 
-        # --- Nouveau système : utiliser le score de risque global ---
+        # --- Nouveau systÃ¨me : utiliser le score de risque global ---
         risk_score = PriorityScorer.calculate_additive_risk(record)
 
-        # Règle spéciale pour les vulnérabilités (CVSS prime)
+        # RÃ¨gle spÃ©ciale pour les vulnÃ©rabilitÃ©s (CVSS prime)
         if threat_type == "vulnerability":
             try:
                 cvss = float(attrs.get("cvss_score", 0) or 0)
@@ -93,7 +93,7 @@ class PriorityScorer:
                 return "MEDIUM", "monitor"
             return "LOW", "monitor_quiet"
 
-        # Mapping direct du score de risque vers la priorité SOC
+        # Mapping direct du score de risque vers la prioritÃ© SOC
         if risk_score >= 80:
             return "CRITICAL", "escalate"
         elif risk_score >= 60:
@@ -107,7 +107,7 @@ class PriorityScorer:
     def calculate_additive_risk(record: dict) -> float:
         """
         Calcule le score de risque additif 0-100 pour MISP / dashboard.
-        Utilise le risque maximal calculé parmi tous les IOCs du record.
+        Utilise le risque maximal calculÃ© parmi tous les IOCs du record.
         """
         source_conf = record.get("source_confidence", 50)
         iocs = record.get("iocs", [])
@@ -121,13 +121,13 @@ class PriorityScorer:
     def calculate_ioc_risk(ioc: dict, source_confidence: int = 50) -> float:
         """
         Calcule le score de risque pour UN SEUL IOC selon son type.
-        Formules spécifiques pour Hash, IP, URL/Domaine pour atteindre 100%.
+        Formules spÃ©cifiques pour Hash, IP, URL/Domaine pour atteindre 100%.
         """
         e = ioc.get("ioc_enrichment", {})
         ioc_type = ioc.get("type", "").lower()
         score = 0.0
 
-        # Récupération de la confiance native (ex: ThreatFox)
+        # RÃ©cupÃ©ration de la confiance native (ex: ThreatFox)
         tf_conf = float(e.get("confidence", 0) or 0)
         # La confiance de base est le max entre la source_confidence globale et la confiance native
         base_conf = max(source_confidence, tf_conf)
@@ -147,7 +147,7 @@ class PriorityScorer:
             score += (base_conf / 100.0) * 40.0
 
             if dl > 0:
-                # MalwareBazaar : VT 40% + volumétrie 20%
+                # MalwareBazaar : VT 40% + volumÃ©trie 20%
                 if vt > 0:
                     score += 20.0 + min(20.0, ((vt - 1) / 49.0) * 20.0)
                 if dl >= 500: score += 20
@@ -164,7 +164,7 @@ class PriorityScorer:
             # Confiance source : 30%
             score += (base_conf / 100.0) * 30.0
             
-            # VirusTotal : 30% (calcul progressif basé sur 50 moteurs)
+            # VirusTotal : 30% (calcul progressif basÃ© sur 50 moteurs)
             if vt > 0:
                 score += 15.0 + min(15.0, ((vt - 1) / 49.0) * 15.0)
             
@@ -180,7 +180,7 @@ class PriorityScorer:
             # Confiance source : 30%
             score += (base_conf / 100.0) * 30.0
             
-            # VirusTotal : 30% (calcul progressif basé sur 50 moteurs)
+            # VirusTotal : 30% (calcul progressif basÃ© sur 50 moteurs)
             if vt > 0:
                 score += 15.0 + min(15.0, ((vt - 1) / 49.0) * 15.0)
             
@@ -200,13 +200,13 @@ class PriorityScorer:
         # Fallback pour autres types
         else:
             score += (base_conf / 100.0) * 50.0
-            # VirusTotal : 50% (calcul progressif basé sur 50 moteurs)
+            # VirusTotal : 50% (calcul progressif basÃ© sur 50 moteurs)
             if vt > 0:
                 score += 25.0 + min(25.0, ((vt - 1) / 49.0) * 25.0)
 
-        # Pénalité stricte pour faux positifs (ex: URLs Malpedia)
+        # PÃ©nalitÃ© stricte pour faux positifs (ex: URLs Malpedia)
         vt_harmless = float(e.get("vt_harmless_count", e.get("harmless_count", 0)) or 0)
         if vt == 0 and vt_harmless > 20:
-            score = score * 0.25  # Divise le score par 4 (ex: passe de 30 à 7.5)
+            score = score * 0.25  # Divise le score par 4 (ex: passe de 30 Ã  7.5)
 
         return round(min(100.0, score), 1)

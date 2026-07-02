@@ -30,16 +30,16 @@ def initialize_nvd_only():
             data = json.load(f)
         
         if isinstance(data, list):
-            # Tri par date décroissante (le plus récent en premier)
+            # Tri par date dÃ©croissante (le plus rÃ©cent en premier)
             data.sort(key=lambda x: x.get("collected_at", ""), reverse=True)
             
-            # On ne garde que les 15 plus récents pour l'enrichissement
+            # On ne garde que les 15 plus rÃ©cents pour l'enrichissement
             limited_data = data[:15]
             
             with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
                 json.dump(limited_data, f, indent=4, ensure_ascii=False)
             
-            logger.info(f"[OK] Initialisation spécifique de NVD réussie : {len(limited_data)} records copiés.")
+            logger.info(f"[OK] Initialisation spÃ©cifique de NVD rÃ©ussie : {len(limited_data)} records copiÃ©s.")
         else:
             logger.error("Le format du fichier nvd_extracted.json n'est pas une liste.")
             

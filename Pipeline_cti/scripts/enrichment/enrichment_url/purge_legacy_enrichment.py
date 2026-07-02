@@ -10,7 +10,7 @@ import logging
 logging.basicConfig(encoding="utf-8", level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("LegacyPurge")
 
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 OUTPUT_DIR = os.path.join(BASE_DIR, "Pipeline_cti/global_output/output_enrichment")
 
 def purge_file(file_path):

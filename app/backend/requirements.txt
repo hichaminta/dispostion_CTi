@@ -15,3 +15,9 @@ telethon
 fpdf
 aiohttp
 requests
+OTXv2
+pymisp
+spacy
+PyYAML
+reportlab
+openai

@@ -27,12 +27,12 @@ def run_enrichment():
 
     logger.info("### PLATFORM STATUS: STARTING ENRICHMENT PIPELINE (GEO -> URLSCAN -> FALLBACK) ###")
 
-    # ─── STAGE 1: ABUSEIPDB DYNAMIC ENRICHMENT (Local DB + API) ───
+    # â”€â”€â”€ STAGE 1: ABUSEIPDB DYNAMIC ENRICHMENT (Local DB + API) â”€â”€â”€
     abuseipdb_script = os.path.join(base_dir, "enrichment_ip", "enrichir_abuseipdb.py")
     if os.path.exists(abuseipdb_script):
-        logger.info("──────────────────────────────────────────")
+        logger.info("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
         logger.info("[STAGE 1/5] Dynamic AbuseIPDB Enrichment (Local DB + API)...")
-        logger.info("──────────────────────────────────────────")
+        logger.info("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
         try:
             subprocess.run([sys.executable, abuseipdb_script], check=False)
         except Exception as e:
@@ -40,12 +40,12 @@ def run_enrichment():
     else:
         logger.warning("[STAGE 1] AbuseIPDB enrichment script NOT FOUND. Skipping.")
 
-    # ─── STAGE 1b: VIRUSTOTAL ENRICHMENT (Local DB + API — URLs / Domains / Hashes / IPs) ───
+    # â”€â”€â”€ STAGE 1b: VIRUSTOTAL ENRICHMENT (Local DB + API â€” URLs / Domains / Hashes / IPs) â”€â”€â”€
     vt_script = os.path.join(base_dir, "enrichment_vt", "enrichir_virustotal.py")
     if os.path.exists(vt_script):
-        logger.info("──────────────────────────────────────────")
+        logger.info("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
         logger.info("[STAGE 1b] VirusTotal Enrichment (Local DB first, then API)...")
-        logger.info("──────────────────────────────────────────")
+        logger.info("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
         try:
             subprocess.run([sys.executable, vt_script], check=False)
         except Exception as e:
@@ -53,11 +53,11 @@ def run_enrichment():
     else:
         logger.warning("[STAGE 1b] VirusTotal enrichment script NOT FOUND. Skipping.")
 
-    # ─── STAGE 2: GEOLOCATION ───
+    # â”€â”€â”€ STAGE 2: GEOLOCATION â”€â”€â”€
     if os.path.exists(geo_script):
-        logger.info("──────────────────────────────────────────")
+        logger.info("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
         logger.info("[STAGE 2/5] Geolocation Enrichment...")
-        logger.info("──────────────────────────────────────────")
+        logger.info("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
         try:
             subprocess.run([sys.executable, geo_script], check=False)
         except Exception as e:
@@ -65,11 +65,11 @@ def run_enrichment():
     else:
         logger.warning("[STAGE 2] Geolocation script NOT FOUND. Skipping.")
 
-    # ─── STAGE 3: URLSCAN ANALYSIS (API) ───
+    # â”€â”€â”€ STAGE 3: URLSCAN ANALYSIS (API) â”€â”€â”€
     if os.path.exists(urlscan_script):
-        logger.info("──────────────────────────────────────────")
+        logger.info("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
         logger.info("[STAGE 3/5] URLScan.io Deep Analysis...")
-        logger.info("──────────────────────────────────────────")
+        logger.info("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
         try:
             subprocess.run([sys.executable, urlscan_script], check=False)
         except Exception as e:
@@ -77,11 +77,11 @@ def run_enrichment():
     else:
         logger.warning("[STAGE 3] URLScan script NOT FOUND. Skipping.")
 
-    # ─── STAGE 4: FALLBACK ENRICHMENT (Reputation, WHOIS, DNS) ───
+    # â”€â”€â”€ STAGE 4: FALLBACK ENRICHMENT (Reputation, WHOIS, DNS) â”€â”€â”€
     if os.path.exists(fallback_script):
-        logger.info("──────────────────────────────────────────")
+        logger.info("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
         logger.info("[STAGE 4/5] Fallback Enrichment (WHOIS, DNS, Reputation)...")
-        logger.info("──────────────────────────────────────────")
+        logger.info("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
         try:
             subprocess.run([sys.executable, fallback_script], check=False)
         except Exception as e:
@@ -89,12 +89,12 @@ def run_enrichment():
     else:
         logger.warning("[STAGE 4] Fallback script NOT FOUND. Skipping.")
 
-    # ─── STAGE 5: CONSOLIDATED CVE ENRICHMENT (NVD + NLP) ───
+    # â”€â”€â”€ STAGE 5: CONSOLIDATED CVE ENRICHMENT (NVD + NLP) â”€â”€â”€
     cve_consolidated = os.path.join(base_dir, "enrichment_cve", "cve_enrchisment.py")
     if os.path.exists(cve_consolidated):
-        logger.info("──────────────────────────────────────────")
+        logger.info("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
         logger.info("[STAGE 5/5] Consolidated CVE Enrichment (NVD & NLP)...")
-        logger.info("──────────────────────────────────────────")
+        logger.info("â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
         try:
             subprocess.run([sys.executable, cve_consolidated], check=False)
         except Exception as e:

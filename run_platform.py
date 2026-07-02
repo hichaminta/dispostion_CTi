@@ -18,9 +18,15 @@ def run_platform():
     print("Reconstruction des images et démarrage des conteneurs...\n")
     
     try:
-        # Lancer docker-compose up avec l'affichage des logs en temps réel
+        # Lancer docker-compose up en mode détaché pour éviter les blocages de la console Windows
         subprocess.run(
-            ["docker-compose", "up", "--build"],
+            ["docker-compose", "up", "--build", "-d"],
+            cwd=deployer_dir,
+            check=True
+        )
+        print("\nConteneurs démarrés avec succès. Affichage des logs (Ctrl+C pour quitter)...")
+        subprocess.run(
+            ["docker-compose", "logs", "-f"],
             cwd=deployer_dir
         )
     except KeyboardInterrupt:

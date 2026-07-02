@@ -18,7 +18,7 @@ except ImportError:
 # Configuration CTI / SOC
 # =========================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_JSON = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "Pipeline_cti", "global_output", "sources", "Otx alienvault", "collection", "otx_pulses.json"))
+OUTPUT_JSON = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "..", "..", "Pipeline_cti", "global_output", "sources", "Otx alienvault", "collection", "otx_pulses.json"))
 # Daily export configuration
 
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
@@ -292,3 +292,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from xml.etree import ElementTree
 
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_JSON = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "Pipeline_cti", "global_output", "sources", "The DFIR Report", "collection", "dfir_report_data.json"))
+OUTPUT_JSON = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "..", "..", "Pipeline_cti", "global_output", "sources", "The DFIR Report", "collection", "dfir_report_data.json"))
 TRACKING    = os.path.join(SCRIPT_DIR, "tracking.json")
 
 RSS_URL     = "https://thedfirreport.com/feed/"
@@ -291,3 +291,5 @@ def run():
 
 if __name__ == "__main__":
     run()
+
+

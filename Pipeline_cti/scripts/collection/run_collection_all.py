@@ -46,3 +46,5 @@ def run_all_collections():
 
 if __name__ == "__main__":
     run_all_collections()
+
+

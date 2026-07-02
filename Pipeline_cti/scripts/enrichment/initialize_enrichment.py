@@ -45,7 +45,7 @@ def initialize_enrichment_files(source_filter=None, force=False, demo=False):
     """
     Copie les fichiers extraits vers le dossier d'enrichissement 
     en les renommant de *_extracted.json vers *_enriched.json.
-    Utilise un fichier de tracking pour ne mettre à jour que si nécessaire.
+    Utilise un fichier de tracking pour ne mettre Ã  jour que si nÃ©cessaire.
     """
     import glob
     files = glob.glob(os.path.join(GLOBAL_SOURCES_DIR, "*", "extraction", "*.json"))
@@ -81,20 +81,20 @@ def initialize_enrichment_files(source_filter=None, force=False, demo=False):
                 count += 1
                 continue
 
-            # ── Cas spécial DFIR Report : split IOC / VULN ──────────────────
+            # â”€â”€ Cas spÃ©cial DFIR Report : split IOC / VULN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if "dfir_report" in filename:
                 if "vuln" in filename:
                     dst_name = "dfir_report_vuln_enriched.json"
                 else:
                     dst_name = "dfir_report_enriched.json"
 
-                # Limite DFIR à 1 seul enregistrement dans le fichier enriched
-                # (le plus récent, pour économiser les quotas API d'enrichissement)
+                # Limite DFIR Ã  1 seul enregistrement dans le fichier enriched
+                # (le plus rÃ©cent, pour Ã©conomiser les quotas API d'enrichissement)
                 DFIR_MAX_RECORDS = 1
 
                 def _merge_dfir(recs, dst_name, max_records=DFIR_MAX_RECORDS):
                     dst = os.path.join(OUTPUT_DIR, dst_name)
-                    # Trier par date descending et garder uniquement les N plus récents
+                    # Trier par date descending et garder uniquement les N plus rÃ©cents
                     recs_sorted = sorted(recs, key=lambda x: x.get("collected_at", ""), reverse=True)
                     recs_limited = recs_sorted[:max_records]
 
@@ -108,7 +108,7 @@ def initialize_enrichment_files(source_filter=None, force=False, demo=False):
                     existing_ids = {r.get("record_id") for r in existing if r.get("record_id")}
                     new_recs = [r for r in recs_limited if r.get("record_id") not in existing_ids]
                     if new_recs or not os.path.exists(dst):
-                        # Remplacer entièrement le fichier avec seulement les N records retenus
+                        # Remplacer entiÃ¨rement le fichier avec seulement les N records retenus
                         with open(dst, "w", encoding="utf-8") as f:
                             json.dump(recs_limited, f, indent=4)
                         logger.info(f"  [DFIR] {dst_name} {len(recs_limited)} record(s) retenus (max={max_records})")
@@ -124,7 +124,7 @@ def initialize_enrichment_files(source_filter=None, force=False, demo=False):
                 count += 1
                 continue
 
-            # ── Cas général : tous les autres fichiers sources ───────────────
+            # â”€â”€ Cas gÃ©nÃ©ral : tous les autres fichiers sources â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if "_extracted.json" in filename:
                 new_filename = filename.replace("_extracted.json", "_enriched.json")
             else:
@@ -140,13 +140,13 @@ def initialize_enrichment_files(source_filter=None, force=False, demo=False):
                 except Exception:
                     existing_data = []
 
-            # ── Séparer les records déjà enrichis des non-enrichis ───────────
-            # Un record est "enrichi" s'il contient des données d'enrichissement API
+            # â”€â”€ SÃ©parer les records dÃ©jÃ  enrichis des non-enrichis â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            # Un record est "enrichi" s'il contient des donnÃ©es d'enrichissement API
             def _is_enriched(item):
-                """Retourne True si le record a déjà été enrichi (données API présentes)."""
+                """Retourne True si le record a dÃ©jÃ  Ã©tÃ© enrichi (donnÃ©es API prÃ©sentes)."""
                 if not isinstance(item, dict):
                     return False
-                # Vérifier les IOCs enrichis
+                # VÃ©rifier les IOCs enrichis
                 for ioc in item.get("iocs", item.get("indicators", [])):
                     enr = ioc.get("ioc_enrichment", {})
                     if enr and any(enr.get(k) for k in (
@@ -154,11 +154,11 @@ def initialize_enrichment_files(source_filter=None, force=False, demo=False):
                         "url_scan", "passer_par_urlscan", "passer_par_fallback"
                     )):
                         return True
-                # Vérifier les CVEs enrichies
+                # VÃ©rifier les CVEs enrichies
                 for cve in item.get("cves", []):
                     if cve.get("enrichment"):
                         return True
-                # Vérifier un champ enrichment global
+                # VÃ©rifier un champ enrichment global
                 if item.get("enrichment"):
                     return True
                 return False
@@ -168,15 +168,15 @@ def initialize_enrichment_files(source_filter=None, force=False, demo=False):
 
             enriched_keys = {item.get('id') or item.get('value') for item in already_enriched if item}
 
-            # Nouveaux items de l'extraction (pas déjà enrichis)
+            # Nouveaux items de l'extraction (pas dÃ©jÃ  enrichis)
             truly_new_items = [
                 item for item in new_data
                 if (item.get('id') or item.get('value')) not in enriched_keys
             ]
 
-            # ── Limites par source ───────────────────────────────────────────
+            # â”€â”€ Limites par source â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if "alienvault" in filename.lower():
-                # OTX : garder seulement les records ayant AU MOINS 1 IOC (éviter les témoins vides)
+                # OTX : garder seulement les records ayant AU MOINS 1 IOC (Ã©viter les tÃ©moins vides)
                 truly_new_items = [
                     item for item in truly_new_items
                     if len(item.get("iocs", item.get("indicators", []))) >= 1
@@ -188,11 +188,11 @@ def initialize_enrichment_files(source_filter=None, force=False, demo=False):
                 # Autres sources : 5 records max
                 max_items = 5
 
-            # Nouveaux items à injecter (remplacent les anciens non-enrichis)
+            # Nouveaux items Ã  injecter (remplacent les anciens non-enrichis)
             items_to_add = truly_new_items[:max_items]
 
-            # ── Stratégie de remplacement ────────────────────────────────────
-            # On garde TOUJOURS les records déjà enrichis (données API précieuses)
+            # â”€â”€ StratÃ©gie de remplacement â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            # On garde TOUJOURS les records dÃ©jÃ  enrichis (donnÃ©es API prÃ©cieuses)
             # On REMPLACE les anciens non-enrichis par les nouveaux de l'extraction
             if items_to_add:
                 replaced = len(not_yet_enriched)
@@ -200,16 +200,16 @@ def initialize_enrichment_files(source_filter=None, force=False, demo=False):
                 logger.info(
                     f"  [OK] {filename} -> {new_filename} "
                     f"(+{len(items_to_add)} nouveaux, "
-                    f"-{replaced} anciens non-enrichis supprimés, "
-                    f"{len(already_enriched)} enrichis conservés, "
+                    f"-{replaced} anciens non-enrichis supprimÃ©s, "
+                    f"{len(already_enriched)} enrichis conservÃ©s, "
                     f"Total: {len(merged_data)})"
                 )
             elif already_enriched:
-                # Aucun nouveau mais des records enrichis existent → conserver tel quel
+                # Aucun nouveau mais des records enrichis existent â†’ conserver tel quel
                 merged_data = already_enriched
                 logger.info(
                     f"  [KEEP] {filename} -> {new_filename} "
-                    f"(aucun nouveau, {len(already_enriched)} records enrichis conservés)"
+                    f"(aucun nouveau, {len(already_enriched)} records enrichis conservÃ©s)"
                 )
             else:
                 logger.info(f"  [SKIP] {filename} (aucun nouveau IOC et aucun record enrichi)")
@@ -233,10 +233,10 @@ def initialize_enrichment_files(source_filter=None, force=False, demo=False):
         tracking["last_run"] = datetime.now().isoformat()
         save_tracking(tracking)
 
-    logger.info(f"Initialisation terminée. {count} fichiers traités.")
+    logger.info(f"Initialisation terminÃ©e. {count} fichiers traitÃ©s.")
 
     if demo:
-        logger.info("Mode DEMO activé : Lancement du filtrage sélectif...")
+        logger.info("Mode DEMO activÃ© : Lancement du filtrage sÃ©lectif...")
         if filter_alienvault_for_demo:
             filter_alienvault_for_demo()
         else:

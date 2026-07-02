@@ -12,7 +12,7 @@ import requests
 # Configuration CTI / SOC
 # =========================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_JSON = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "Pipeline_cti", "global_output", "sources", "Spamhaus", "collection", "spamhaus_data.json"))
+OUTPUT_JSON = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "..", "..", "Pipeline_cti", "global_output", "sources", "Spamhaus", "collection", "spamhaus_data.json"))
 
 # Daily export configuration
 
@@ -217,3 +217,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

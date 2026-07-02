@@ -9,7 +9,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8')
 
 BASE_DIR    = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-OUTPUT_FILE = os.path.join(BASE_DIR, "output_correlation", "stix_export.json")
+OUTPUT_FILE = os.path.join(BASE_DIR, "Pipeline_cti", "global_output", "output_correlation", "stix_export.json")
 
 # MITRE ATT&CK ID to Tactic and Name mapping for enrichment
 MITRE_NAMES = {

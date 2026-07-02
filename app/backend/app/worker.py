@@ -6,8 +6,8 @@ import json
 import traceback
 import logging
 from datetime import datetime
-from .database import db
-from .websockets import manager
+from app.database import db
+from app.websockets import manager
 
 # Configuration du logging pour le worker
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
@@ -57,15 +57,15 @@ def _is_run_cancelled(run_id: str) -> bool:
 
 # Répertoire racine du projet
 PROJECT_ROOT      = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-COLLECTION_DIR  = os.path.join(PROJECT_ROOT, "collection")
-EXTRACTORS_DIR    = os.path.join(PROJECT_ROOT, "extraction_ioc_cve")
 SCRIPTS_DIR       = os.path.join(PROJECT_ROOT, "Pipeline_cti", "scripts")
+COLLECTION_DIR    = os.path.join(SCRIPTS_DIR, "collection")
+EXTRACTORS_DIR    = os.path.join(SCRIPTS_DIR, "extraction_ioc_cve")
 GLOBAL_SOURCES_DIR = os.path.join(PROJECT_ROOT, "Pipeline_cti", "global_output", "sources")
-COLLECTION_SCRIPT = os.path.join(SCRIPTS_DIR, "run_collection_all.py")
+COLLECTION_SCRIPT = os.path.join(COLLECTION_DIR, "run_collection_all.py")
 LEAK_INTEGRATION_SCRIPT = os.path.join(PROJECT_ROOT, "leak_data_integration", "main.py")
-ENRICHMENT_DIR    = os.path.join(PROJECT_ROOT, "enrichment")
-CORRELATION_SCRIPT = os.path.join(PROJECT_ROOT, "misp_integration", "correlation_pre_misp.py")
-STIX_EXPORT_SCRIPT = os.path.join(PROJECT_ROOT, "misp_integration", "stix_exporter.py")
+ENRICHMENT_DIR    = os.path.join(SCRIPTS_DIR, "enrichment")
+CORRELATION_SCRIPT = os.path.join(SCRIPTS_DIR, "misp_integration", "correlation_pre_misp.py")
+STIX_EXPORT_SCRIPT = os.path.join(SCRIPTS_DIR, "misp_integration", "stix_exporter.py")
 
 # Sources CVE-only (pas d'IOCs)
 CVE_ONLY_SOURCES = {"NVD", "NVd"}
@@ -117,6 +117,7 @@ async def _run_proc(run_id: str, step_name: str, cmd: list, cwd: str) -> bool:
                 cwd=cwd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
+                limit=10 * 1024 * 1024  # 10 MB limit for long log lines
             )
             
             # Enregistrement pour pouvoir l'arrêter
@@ -158,7 +159,7 @@ async def _run_proc(run_id: str, step_name: str, cmd: list, cwd: str) -> bool:
                     bufsize=1,
                     encoding="utf-8",
                     errors="replace",
-                    shell=(sys.platform == 'win32')
+                    shell=False
                 )
                 return p
 
@@ -382,14 +383,14 @@ async def execute_pipeline_task(run_id: str, source_name: str):
 
         # Initialisation des fichiers d'enrichissement (copie/split)
         await _ws_log(run_id, "Geolocalisation", f"[{ts()}] ➔ Initialisation des fichiers d'enrichissement...")
-        init_script = os.path.join(PROJECT_ROOT, "enrichment", "initialize_enrichment.py")
+        init_script = os.path.join(SCRIPTS_DIR, "enrichment", "initialize_enrichment.py")
         await _run_proc(run_id, "Geolocalisation", [sys.executable, init_script] + source_flag, PROJECT_ROOT)
 
         # Geolocation
         if _is_run_cancelled(run_id): return
         await _update_step(run_id, "Geolocalisation", "running")
         await _ws_log(run_id, "Geolocalisation", f"[{ts()}] ➔ STAGE 2 : Géolocalisation")
-        geo_script = os.path.join(PROJECT_ROOT, "enrichment", "geolocalisation", "enrichir.py")
+        geo_script = os.path.join(SCRIPTS_DIR, "enrichment", "geolocalisation", "enrichir.py")
         geo_ok = await _run_proc(run_id, "Geolocalisation", [sys.executable, geo_script] + source_flag, PROJECT_ROOT)
         await _update_step(run_id, "Geolocalisation", "success" if geo_ok else "failed")
 
@@ -397,8 +398,8 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         if _is_run_cancelled(run_id): return
         await _update_step(run_id, "URLScan", "running")
         await _ws_log(run_id, "URLScan", f"[{ts()}] ➔ STAGE 3 & 4 : URL Analysis & Fallback")
-        url_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_url", "enrichir_exclusive_urlscan.py")
-        fallback_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_url", "enrichir_fallback.py")
+        url_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_url", "enrichir_exclusive_urlscan.py")
+        fallback_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_url", "enrichir_fallback.py")
         
         ok3 = await _run_proc(run_id, "URLScan", [sys.executable, url_script] + source_flag, PROJECT_ROOT)
         ok4 = await _run_proc(run_id, "URLScan", [sys.executable, fallback_script] + source_flag, PROJECT_ROOT)
@@ -409,7 +410,7 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         if _is_run_cancelled(run_id): return
         await _update_step(run_id, "Enrichissement CVE", "running")
         await _ws_log(run_id, "Enrichissement CVE", f"[{ts()}] ➔ STAGE 5 : Consolidated CVE Enrichment (NVD & NLP)")
-        cve_orchestrator = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_cve", "cve_enrchisment.py")
+        cve_orchestrator = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_cve", "cve_enrchisment.py")
         ok_cve = await _run_proc(run_id, "Enrichissement CVE", [sys.executable, cve_orchestrator] + source_flag, PROJECT_ROOT)
         await _update_step(run_id, "Enrichissement CVE", "success" if ok_cve else "failed")
 
@@ -417,7 +418,7 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         if _is_run_cancelled(run_id): return
         await _update_step(run_id, "AbuseIPDB Enrichment", "running")
         await _ws_log(run_id, "AbuseIPDB Enrichment", f"[{ts()}] ➔ STAGE 1 : AbuseIPDB Reputation Enrichment")
-        abuseipdb_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_ip", "enrichir_abuseipdb.py")
+        abuseipdb_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_ip", "enrichir_abuseipdb.py")
         ok_abuse = await _run_proc(run_id, "AbuseIPDB Enrichment", [sys.executable, abuseipdb_script] + source_flag, PROJECT_ROOT)
         await _update_step(run_id, "AbuseIPDB Enrichment", "success" if ok_abuse else "failed")
 
@@ -425,7 +426,7 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         if _is_run_cancelled(run_id): return
         await _update_step(run_id, "VirusTotal Enrichment", "running")
         await _ws_log(run_id, "VirusTotal Enrichment", f"[{ts()}] ➔ STAGE 1b : VirusTotal Enrichment")
-        virustotal_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_vt", "enrichir_virustotal.py")
+        virustotal_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_vt", "enrichir_virustotal.py")
         ok_vt = await _run_proc(run_id, "VirusTotal Enrichment", [sys.executable, virustotal_script] + source_flag, PROJECT_ROOT)
         await _update_step(run_id, "VirusTotal Enrichment", "success" if ok_vt else "failed")
 
@@ -433,7 +434,7 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         if _is_run_cancelled(run_id): return
         await _update_step(run_id, "Classification", "running")
         await _ws_log(run_id, "Classification", f"[{ts()}] ➔ STAGE 7 : Intelligence Classification & Priority")
-        classif_script = os.path.join(PROJECT_ROOT, "enrichment", "classification", "enrichir.py")
+        classif_script = os.path.join(SCRIPTS_DIR, "enrichment", "classification", "enrichir.py")
         ok7 = await _run_proc(run_id, "Classification", [sys.executable, classif_script] + source_flag + ["--skip-enriched"], PROJECT_ROOT)
         await _update_step(run_id, "Classification", "success" if ok7 else "failed")
 
@@ -441,7 +442,7 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         if _is_run_cancelled(run_id): return
         await _update_step(run_id, "MITRE Mapping", "running")
         await _ws_log(run_id, "MITRE Mapping", f"[{ts()}] ➔ STAGE 8 : MITRE ATT&CK Mapping")
-        mitre_script = os.path.join(PROJECT_ROOT, "enrichment", "classification", "mitre_mapper.py")
+        mitre_script = os.path.join(SCRIPTS_DIR, "enrichment", "classification", "mitre_mapper.py")
         ok8 = await _run_proc(run_id, "MITRE Mapping", [sys.executable, mitre_script] + source_flag + ["--skip-mapped"], PROJECT_ROOT)
         await _update_step(run_id, "MITRE Mapping", "success" if ok8 else "failed")
 
@@ -471,7 +472,7 @@ async def execute_pipeline_task(run_id: str, source_name: str):
         if _is_run_cancelled(run_id): return
         await _update_step(run_id, "Intégration MISP", "running")
         await _ws_log(run_id, "Intégration MISP", f"[{ts()}] ➔ STAGE 11 : Intégration MISP (API Push)")
-        misp_api_script = os.path.join(PROJECT_ROOT, "misp_integration", "misp_api_integration.py")
+        misp_api_script = os.path.join(PROJECT_ROOT, "Pipeline_cti", "scripts", "misp_integration", "misp_api_integration.py")
         ok_misp = await _run_proc(run_id, "Intégration MISP", [sys.executable, misp_api_script], PROJECT_ROOT)
         await _update_step(run_id, "Intégration MISP", "success" if ok_misp else "failed")
 
@@ -516,7 +517,7 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
         }
         if step_name in enrichment_steps:
             await _ws_log(run_id, step_name, f"[{ts()}] ➔ Initialisation des fichiers d'enrichissement...")
-            init_script = os.path.join(PROJECT_ROOT, "enrichment", "initialize_enrichment.py")
+            init_script = os.path.join(SCRIPTS_DIR, "enrichment", "initialize_enrichment.py")
             await _run_proc(run_id, step_name, [sys.executable, init_script] + source_flag, PROJECT_ROOT)
 
         if step_name == "Collecte":
@@ -563,35 +564,35 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
 
                 # Init
                 await _ws_log(run_id, "Enrichissement", f"[{ts()}] ➔ Initialisation des fichiers...")
-                init_script = os.path.join(PROJECT_ROOT, "enrichment", "initialize_enrichment.py")
+                init_script = os.path.join(SCRIPTS_DIR, "enrichment", "initialize_enrichment.py")
                 await _run_proc(run_id, "Enrichissement", [sys.executable, init_script], PROJECT_ROOT)
 
                 # AbuseIPDB
                 if not _is_run_cancelled(run_id):
                     await _update_step(run_id, "AbuseIPDB Enrichment", "running")
-                    abuseipdb_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_ip", "enrichir_abuseipdb.py")
+                    abuseipdb_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_ip", "enrichir_abuseipdb.py")
                     ok_abuse = await _run_proc(run_id, "AbuseIPDB Enrichment", [sys.executable, abuseipdb_script], PROJECT_ROOT)
                     await _update_step(run_id, "AbuseIPDB Enrichment", "success" if ok_abuse else "failed")
 
                 # VirusTotal
                 if not _is_run_cancelled(run_id):
                     await _update_step(run_id, "VirusTotal Enrichment", "running")
-                    vt_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_vt", "enrichir_virustotal.py")
+                    vt_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_vt", "enrichir_virustotal.py")
                     ok_vt = await _run_proc(run_id, "VirusTotal Enrichment", [sys.executable, vt_script], PROJECT_ROOT)
                     await _update_step(run_id, "VirusTotal Enrichment", "success" if ok_vt else "failed")
 
                 # Geolocalisation
                 if not _is_run_cancelled(run_id):
                     await _update_step(run_id, "Geolocalisation", "running")
-                    geo_script = os.path.join(PROJECT_ROOT, "enrichment", "geolocalisation", "enrichir.py")
+                    geo_script = os.path.join(SCRIPTS_DIR, "enrichment", "geolocalisation", "enrichir.py")
                     ok_geo = await _run_proc(run_id, "Geolocalisation", [sys.executable, geo_script], PROJECT_ROOT)
                     await _update_step(run_id, "Geolocalisation", "success" if ok_geo else "failed")
 
                 # URLScan + Fallback
                 if not _is_run_cancelled(run_id):
                     await _update_step(run_id, "URLScan", "running")
-                    url_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_url", "enrichir_exclusive_urlscan.py")
-                    fallback_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_url", "enrichir_fallback.py")
+                    url_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_url", "enrichir_exclusive_urlscan.py")
+                    fallback_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_url", "enrichir_fallback.py")
                     ok_url = await _run_proc(run_id, "URLScan", [sys.executable, url_script], PROJECT_ROOT)
                     ok_fall = await _run_proc(run_id, "URLScan", [sys.executable, fallback_script], PROJECT_ROOT)
                     await _update_step(run_id, "URLScan", "success" if (ok_url and ok_fall) else "failed")
@@ -599,21 +600,21 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
                 # CVE Enrichment
                 if not _is_run_cancelled(run_id):
                     await _update_step(run_id, "Enrichissement CVE", "running")
-                    cve_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_cve", "cve_enrchisment.py")
+                    cve_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_cve", "cve_enrchisment.py")
                     ok_cve = await _run_proc(run_id, "Enrichissement CVE", [sys.executable, cve_script], PROJECT_ROOT)
                     await _update_step(run_id, "Enrichissement CVE", "success" if ok_cve else "failed")
 
                 # Classification
                 if not _is_run_cancelled(run_id):
                     await _update_step(run_id, "Classification", "running")
-                    classif_script = os.path.join(PROJECT_ROOT, "enrichment", "classification", "enrichir.py")
+                    classif_script = os.path.join(SCRIPTS_DIR, "enrichment", "classification", "enrichir.py")
                     ok_classif = await _run_proc(run_id, "Classification", [sys.executable, classif_script, "--skip-enriched"], PROJECT_ROOT)
                     await _update_step(run_id, "Classification", "success" if ok_classif else "failed")
 
                 # MITRE Mapping
                 if not _is_run_cancelled(run_id):
                     await _update_step(run_id, "MITRE Mapping", "running")
-                    mitre_script = os.path.join(PROJECT_ROOT, "enrichment", "classification", "mitre_mapper.py")
+                    mitre_script = os.path.join(SCRIPTS_DIR, "enrichment", "classification", "mitre_mapper.py")
                     ok_mitre = await _run_proc(run_id, "MITRE Mapping", [sys.executable, mitre_script, "--skip-mapped"], PROJECT_ROOT)
                     await _update_step(run_id, "MITRE Mapping", "success" if ok_mitre else "failed")
 
@@ -625,66 +626,66 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
 
                 # AbuseIPDB
                 await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 1 : AbuseIPDB Reputation")
-                abuseipdb_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_ip", "enrichir_abuseipdb.py")
+                abuseipdb_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_ip", "enrichir_abuseipdb.py")
                 ok_abuse = await _run_proc(run_id, step_name, [sys.executable, abuseipdb_script] + source_flag, PROJECT_ROOT)
 
                 # VirusTotal
                 await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 1b : VirusTotal")
-                virustotal_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_vt", "enrichir_virustotal.py")
+                virustotal_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_vt", "enrichir_virustotal.py")
                 ok_vt = await _run_proc(run_id, step_name, [sys.executable, virustotal_script] + source_flag, PROJECT_ROOT)
 
                 # Geo
                 await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 2 : Géolocalisation")
-                geo_script = os.path.join(PROJECT_ROOT, "enrichment", "geolocalisation", "enrichir.py")
+                geo_script = os.path.join(SCRIPTS_DIR, "enrichment", "geolocalisation", "enrichir.py")
                 ok2 = await _run_proc(run_id, step_name, [sys.executable, geo_script] + source_flag, PROJECT_ROOT)
 
                 # URLScan & Fallback
                 await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 3 & 4 : URLScan & Fallback")
-                url_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_url", "enrichir_exclusive_urlscan.py")
-                fallback_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_url", "enrichir_fallback.py")
+                url_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_url", "enrichir_exclusive_urlscan.py")
+                fallback_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_url", "enrichir_fallback.py")
 
                 ok3 = await _run_proc(run_id, step_name, [sys.executable, url_script] + source_flag, PROJECT_ROOT)
                 ok4 = await _run_proc(run_id, step_name, [sys.executable, fallback_script] + source_flag, PROJECT_ROOT)
 
                 # CVE Enrichment (Consolidated)
                 await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 5 : Consolidated CVE Enrichment")
-                cve_orchestrator = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_cve", "cve_enrchisment.py")
+                cve_orchestrator = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_cve", "cve_enrchisment.py")
                 ok_cve = await _run_proc(run_id, step_name, [sys.executable, cve_orchestrator] + source_flag, PROJECT_ROOT)
 
                 # Classification
                 await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 7 : Intelligence Classification")
-                classif_script = os.path.join(PROJECT_ROOT, "enrichment", "classification", "enrichir.py")
+                classif_script = os.path.join(SCRIPTS_DIR, "enrichment", "classification", "enrichir.py")
                 ok7 = await _run_proc(run_id, step_name, [sys.executable, classif_script] + source_flag + ["--skip-enriched"], PROJECT_ROOT)
 
                 # MITRE Mapping
                 await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 8 : MITRE ATT&CK Mapping")
-                mitre_script = os.path.join(PROJECT_ROOT, "enrichment", "classification", "mitre_mapper.py")
+                mitre_script = os.path.join(SCRIPTS_DIR, "enrichment", "classification", "mitre_mapper.py")
                 ok8 = await _run_proc(run_id, step_name, [sys.executable, mitre_script] + source_flag + ["--skip-mapped"], PROJECT_ROOT)
 
                 step_ok = ok_abuse and ok_vt and ok2 and ok3 and ok4 and ok_cve and ok7 and ok8
 
         elif step_name == "AbuseIPDB Enrichment":
             await _ws_log(run_id, step_name, f"[{ts()}] ➔ AbuseIPDB Enrichment Pipeline")
-            abuseipdb_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_ip", "enrichir_abuseipdb.py")
+            abuseipdb_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_ip", "enrichir_abuseipdb.py")
             step_ok = await _run_proc(run_id, step_name, [sys.executable, abuseipdb_script] + source_flag, PROJECT_ROOT)
             ioc_count, cve_count = _count_ioc_cve(source_name)
 
         elif step_name == "VirusTotal Enrichment":
             await _ws_log(run_id, step_name, f"[{ts()}] ➔ VirusTotal Enrichment Pipeline")
-            virustotal_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_vt", "enrichir_virustotal.py")
+            virustotal_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_vt", "enrichir_virustotal.py")
             step_ok = await _run_proc(run_id, step_name, [sys.executable, virustotal_script] + source_flag, PROJECT_ROOT)
             ioc_count, cve_count = _count_ioc_cve(source_name)
 
         elif step_name == "Enrichissement CVE":
             await _ws_log(run_id, step_name, f"[{ts()}] ➔ CVE Enrichment Pipeline (NVD + NLP)")
-            cve_orchestrator = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_cve", "cve_enrchisment.py")
+            cve_orchestrator = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_cve", "cve_enrchisment.py")
             step_ok = await _run_proc(run_id, step_name, [sys.executable, cve_orchestrator] + source_flag, PROJECT_ROOT)
             ioc_count, cve_count = _count_ioc_cve(source_name)
 
         elif step_name == "Analyse NLP CVE":
             # Redirection vers l'orchestrateur consolidé si l'utilisateur clique sur NLP
             await _ws_log(run_id, step_name, f"[{ts()}] ➔ Redirection vers le pipeline CVE consolidé...")
-            cve_orchestrator = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_cve", "cve_enrchisment.py")
+            cve_orchestrator = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_cve", "cve_enrchisment.py")
             step_ok = await _run_proc(run_id, step_name, [sys.executable, cve_orchestrator] + source_flag, PROJECT_ROOT)
             ioc_count, cve_count = _count_ioc_cve(source_name)
 
@@ -693,25 +694,25 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
 
         elif step_name == "Geolocalisation":
             await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 2 : Géolocalisation (Infrastructure)")
-            geo_script = os.path.join(PROJECT_ROOT, "enrichment", "geolocalisation", "enrichir.py")
+            geo_script = os.path.join(SCRIPTS_DIR, "enrichment", "geolocalisation", "enrichir.py")
             step_ok = await _run_proc(run_id, step_name, [sys.executable, geo_script] + source_flag, PROJECT_ROOT)
             ioc_count, cve_count = _count_ioc_cve(source_name)
 
         elif step_name == "URLScan":
             await _ws_log(run_id, step_name, f"[{ts()}] ➔ Analyse Complète URL (URLScan + Fallback)")
-            master_url_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_url", "enrichissement_url.py")
+            master_url_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_url", "enrichissement_url.py")
             step_ok = await _run_proc(run_id, step_name, [sys.executable, master_url_script, "--mode", "both"] + source_flag, PROJECT_ROOT)
             ioc_count, cve_count = _count_ioc_cve(source_name)
 
         elif step_name == "Fallback":
             await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 4 : Recherche Complémentaire / Fallback")
-            master_url_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_url", "enrichissement_url.py")
+            master_url_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_url", "enrichissement_url.py")
             step_ok = await _run_proc(run_id, step_name, [sys.executable, master_url_script, "--mode", "fallback"] + source_flag, PROJECT_ROOT)
             ioc_count, cve_count = _count_ioc_cve(source_name)
 
         elif step_name == "URLScan_Only":
             await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 3 : Analyse URLScan.io Uniquement")
-            master_url_script = os.path.join(PROJECT_ROOT, "enrichment", "enrichment_url", "enrichissement_url.py")
+            master_url_script = os.path.join(SCRIPTS_DIR, "enrichment", "enrichment_url", "enrichissement_url.py")
             step_ok = await _run_proc(run_id, step_name, [sys.executable, master_url_script, "--mode", "urlscan"] + source_flag, PROJECT_ROOT)
             ioc_count, cve_count = _count_ioc_cve(source_name)
 
@@ -725,13 +726,13 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
 
         elif step_name == "Classification":
             await _ws_log(run_id, step_name, f"[{ts()}] ➔ Intelligence Classification & Scoring")
-            classif_script = os.path.join(PROJECT_ROOT, "enrichment", "classification", "enrichir.py")
+            classif_script = os.path.join(SCRIPTS_DIR, "enrichment", "classification", "enrichir.py")
             step_ok = await _run_proc(run_id, step_name, [sys.executable, classif_script] + source_flag + ["--skip-enriched"], PROJECT_ROOT)
             ioc_count, cve_count = _count_ioc_cve(source_name)
 
         elif step_name == "MITRE Mapping":
             await _ws_log(run_id, step_name, f"[{ts()}] ➔ MITRE ATT&CK Technique Mapping")
-            mitre_script = os.path.join(PROJECT_ROOT, "enrichment", "classification", "mitre_mapper.py")
+            mitre_script = os.path.join(SCRIPTS_DIR, "enrichment", "classification", "mitre_mapper.py")
             step_ok = await _run_proc(run_id, step_name, [sys.executable, mitre_script] + source_flag + ["--skip-mapped"], PROJECT_ROOT)
             ioc_count, cve_count = _count_ioc_cve(source_name)
 
@@ -742,8 +743,8 @@ async def execute_targeted_task(run_id: str, source_name: str, step_name: str):
 
         elif step_name == "Intégration MISP":
             await _ws_log(run_id, step_name, f"[{ts()}] ➔ STAGE 5 : Intégration MISP (API Push)")
-            misp_api_script = os.path.join(PROJECT_ROOT, "misp_integration", "misp_api_integration.py")
-            
+            misp_api_script = os.path.join(PROJECT_ROOT, "Pipeline_cti", "scripts", "misp_integration", "misp_api_integration.py")
+
             await _ws_log(run_id, step_name, f"[{ts()}] ── Phase 1 : Exportation via API vers MISP ──")
             step_ok = await _run_proc(run_id, step_name, [sys.executable, misp_api_script] + source_flag, PROJECT_ROOT)
 
@@ -790,3 +791,4 @@ async def execute_leak_collection_task(run_id: str, channels: list = None, start
         logger.error(f"Leak collection error: {e}")
         await _ws_log(run_id, step_name, f"[{ts()}] ❌ ERREUR : {e}")
         db.update_run(run_id, {"status_global": "failed"})
+

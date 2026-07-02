@@ -34,7 +34,7 @@ from base_extractor import BaseExtractor
 
 SOURCE_NAME = "{source_name}"
 # BASE_DIR is one level above EXTRACTORS_DIR
-BASE_DIR = os.path.abspath(os.path.join(EXTRACTORS_DIR, "..", ".."))
+BASE_DIR = os.path.abspath(os.path.join(EXTRACTORS_DIR, "..", "..", ".."))
 SOURCE_DIR = os.path.join(BASE_DIR, "collection", "{source_dir}")
 INPUT_FILE = os.path.join(SOURCE_DIR, "{json_file}")
 OUTPUT_DIR = os.path.join(BASE_DIR, "Pipeline_cti/global_output/output_cve_ioc")

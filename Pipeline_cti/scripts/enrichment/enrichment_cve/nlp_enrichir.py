@@ -13,7 +13,7 @@ from datetime import datetime
 # Configuration du logging
 logging.basicConfig(encoding="utf-8", level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("CVENLPEnrichment")
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 GLOBAL_SOURCES_DIR = os.path.join(BASE_DIR, "Pipeline_cti", "global_output", "sources")
 
 
@@ -39,19 +39,19 @@ def save_source_tracking(source, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
-# Chargement du modèle spaCy
+# Chargement du modÃ¨le spaCy
 try:
     nlp = spacy.load("en_core_web_sm")
-    logger.info("Modèle spaCy 'en_core_web_sm' chargé avec succès.")
+    logger.info("ModÃ¨le spaCy 'en_core_web_sm' chargÃ© avec succÃ¨s.")
 except Exception as e:
     logger.error(f"Erreur lors du chargement de spaCy : {e}")
-    logger.info("Tentative de téléchargement du modèle...")
+    logger.info("Tentative de tÃ©lÃ©chargement du modÃ¨le...")
     os.system("python -m spacy download en_core_web_sm")
     nlp = spacy.load("en_core_web_sm")
 
 def extract_entities(text):
     """
-    Extrait les entités pertinentes d'une description CVE via spaCy et regex.
+    Extrait les entitÃ©s pertinentes d'une description CVE via spaCy et regex.
     """
     if not text or len(text) < 10:
         return None
@@ -73,7 +73,7 @@ def extract_entities(text):
         elif ent.label_ == "GPE":
             entities["platforms"].append(ent.text)
             
-    # Extraction complémentaire via Regex (pour les versions souvent manquées par spaCy)
+    # Extraction complÃ©mentaire via Regex (pour les versions souvent manquÃ©es par spaCy)
     # Cherche des patterns comme v1.2, version 2.0, 5.x, etc.
     version_patterns = [
         r"(?:v|version\s|build\s)([0-9]+(?:\.[0-9x]+)+)",
@@ -149,7 +149,7 @@ def process_files():
                         entities["nlp_enriched_at"] = datetime.now().isoformat()
                         record["attributes"]["nlp_analysis"] = entities
                         
-                        # Mettre à jour également dans les objets CVE pour la cohérence
+                        # Mettre Ã  jour Ã©galement dans les objets CVE pour la cohÃ©rence
                         for cve in cves:
                             if "ioc_enrichment" not in cve:
                                 cve["ioc_enrichment"] = {}
@@ -171,11 +171,11 @@ def process_files():
             try:
                 with open(filepath, 'w', encoding='utf-8') as f:
                     json.dump(data, f, indent=4, ensure_ascii=False)
-                logger.info(f"Fichier {filename} mis à jour avec l'analyse NLP.")
+                logger.info(f"Fichier {filename} mis Ã  jour avec l'analyse NLP.")
             except Exception as e:
-                logger.error(f"Erreur écriture {filename}: {e}")
+                logger.error(f"Erreur Ã©criture {filename}: {e}")
         else:
-            logger.info(f"Aucune nouvelle analyse NLP nécessaire pour {filename}.")
+            logger.info(f"Aucune nouvelle analyse NLP nÃ©cessaire pour {filename}.")
 
 if __name__ == "__main__":
     process_files()

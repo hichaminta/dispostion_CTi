@@ -23,7 +23,7 @@ load_dotenv(find_dotenv(), override=False)
 API_KEY = os.getenv("PHISHTANK_API_KEY", "").strip()
 
 SCRIPT_DIR       = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_JSON = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "Pipeline_cti", "global_output", "sources", "PhishTank", "collection", "phishtank_data.json"))
+OUTPUT_JSON = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "..", "..", "Pipeline_cti", "global_output", "sources", "PhishTank", "collection", "phishtank_data.json"))
 TRACKING_FILE    = os.path.join(SCRIPT_DIR, "tracking.json")
 today_str        = datetime.now().strftime("%Y-%m-%d")
 DAILY_JSON       = os.path.join(SCRIPT_DIR, f"phishtank_data_{today_str}.json")
@@ -385,3 +385,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

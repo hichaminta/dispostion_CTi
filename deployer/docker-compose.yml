@@ -22,18 +22,17 @@ services:
       dockerfile: deployer/backend.Dockerfile
     container_name: cyberhud_backend
     working_dir: /app/app/backend
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
     volumes:
-      - app_store:/app/store
-      - app_temp_cve_ioc:/app/Pipeline_cti/global_output/output_cve_ioc
-      - app_temp_enrichment:/app/Pipeline_cti/global_output/output_enrichment
-      - app_temp_correlation:/app/Pipeline_cti/global_output/output_correlation
-      - app_bulletins:/app/reports/cti_bulletins
-      - app_leaks:/app/leak_data_integration/results
-      - app_misp_tracking:/app/misp_integration/tracking
+      - ../app/backend:/app/app/backend
+      - ../Pipeline_cti:/app/Pipeline_cti
+      - ../store:/app/store
+      - ../tracking:/app/tracking
+      - ../leak_data_integration:/app/leak_data_integration
     environment:
+      - PYTHONPATH=/app:/app/utils:/app/Pipeline_cti/scripts
       - MYSQL_USER=${MYSQL_USER:-admin}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD:-admin}
       - MYSQL_DB=${MYSQL_DB:-cyberhud_db}
@@ -41,6 +40,8 @@ services:
       - MYSQL_PORT=3306
     env_file:
       - ../.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - mysql
     restart: unless-stopped
@@ -51,7 +52,7 @@ services:
       dockerfile: ../../deployer/frontend.Dockerfile
     container_name: cyberhud_frontend
     ports:
-      - "80:80"
+      - "5173:80"
     depends_on:
       - backend
     restart: unless-stopped
@@ -67,10 +68,3 @@ services:
 
 volumes:
   mysql_data:
-  app_store:
-  app_temp_cve_ioc:
-  app_temp_enrichment:
-  app_temp_correlation:
-  app_bulletins:
-  app_leaks:
-  app_misp_tracking:

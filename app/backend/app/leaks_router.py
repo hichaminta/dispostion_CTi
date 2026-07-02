@@ -11,7 +11,7 @@ from datetime import datetime
 import uuid
 from dotenv import load_dotenv
 load_dotenv()
-from . import worker, database, schemas
+from app import worker, database, schemas
 import yaml
 
 router = APIRouter(prefix="/api/leaks", tags=["leaks"])
@@ -456,6 +456,9 @@ def delete_leak(intel_id: str):
 
 @router.get("/csv/view")
 def view_csv(path: str, limit: int = 50, offset: int = 0):
+    # Fix Windows path separators for Linux container
+    path = path.replace("\\", "/")
+    
     # Security: Ensure path is within the data directory
     base_data = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "leak_data_integration", "output", "data"))
     

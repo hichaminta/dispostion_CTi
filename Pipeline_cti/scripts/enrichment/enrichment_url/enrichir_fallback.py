@@ -33,7 +33,7 @@ except ImportError:
     tldextract = None
 
 # Ensure we can import from project root for GeoManager
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")))
 try:
     from enrichment.geolocalisation.geo_manager import GeoManager
 except ImportError:
@@ -47,8 +47,8 @@ logging.basicConfig(encoding="utf-8",
 logger = logging.getLogger("FallbackEnrichment")
 
 # Base directory and paths
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUTPUT_DIR = os.path.join(BASE_DIR, "Pipeline_cti/global_output/output_enrichment")
+BASE_DIR           = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+GLOBAL_SOURCES_DIR = os.path.join(BASE_DIR, "Pipeline_cti", "global_output", "sources")
 GEO_BASE_FILE = os.path.join(BASE_DIR, "enrichment", "geolocalisation", "geo_base.json")
 load_dotenv(find_dotenv())
 
@@ -263,27 +263,27 @@ class FallbackEnricher:
         return ioc
 
 def run_fallback_enrichment(source_filter=None):
-    """Processes files in Pipeline_cti/global_output/output_enrichment and applies fallback logic."""
-    if not os.path.exists(OUTPUT_DIR):
-        logger.error(f"Output directory not found: {OUTPUT_DIR}")
-        return
+    """Processes enriched files across all sources and applies fallback logic."""
+    import glob as _glob
+    _pattern = os.path.join(GLOBAL_SOURCES_DIR, "*", "enrichment", "*_enriched.json")
+    all_filepaths = _glob.glob(_pattern)
 
     enricher = FallbackEnricher()
-    all_files = [f for f in os.listdir(OUTPUT_DIR) if f.endswith("_enriched.json")]
-    
-    if source_filter:
-        files = [f for f in all_files if source_filter.lower() in f.lower()]
-    else:
-        files = all_files
 
-    logger.info(f"### STAGE 4: FALLBACK ENRICHMENT STARTED ({len(files)} files) ###")
-    
-    for filename in files:
+    if source_filter:
+        filepaths = [fp for fp in all_filepaths if source_filter.lower() in os.path.basename(fp).lower()]
+    else:
+        filepaths = all_filepaths
+
+    logger.info(f"### STAGE 4: FALLBACK ENRICHMENT STARTED ({len(filepaths)} files) ###")
+
+    for filepath in filepaths:
+        filename = os.path.basename(filepath)
         if "otx_alienvault" in filename.lower():
             logger.info(f"--- [IGNORE] Skipping OTX source file: {filename} ---")
             continue
             
-        file_path = os.path.join(OUTPUT_DIR, filename)
+        file_path = filepath
         logger.info(f"Processing source: {filename}")
         
         try:

@@ -17,14 +17,14 @@ except ImportError:
 
 logging.basicConfig(encoding="utf-8", level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("Intelligence_Orchestrator")
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 GLOBAL_SOURCES_DIR = os.path.join(BASE_DIR, "Pipeline_cti", "global_output", "sources")
 
 
 
 
 class IntelligenceOrchestrator:
-    """Orchestre classification, fiabilité et scoring sur tous les fichiers enrichis."""
+    """Orchestre classification, fiabilitÃ© et scoring sur tous les fichiers enrichis."""
 
     def __init__(self, enrichment_dir: str):
         self.enrichment_dir = enrichment_dir
@@ -36,7 +36,7 @@ class IntelligenceOrchestrator:
             json_files = [f for f in json_files if source_filter.lower() in f.lower()]
 
         if not json_files:
-            logger.warning("Aucun fichier trouvé.")
+            logger.warning("Aucun fichier trouvÃ©.")
             return
 
         stats = {"total": 0, "CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
@@ -50,7 +50,7 @@ class IntelligenceOrchestrator:
 
             modified = False
             for record in records:
-                # Skip si déjà traité et --skip-enriched activé
+                # Skip si dÃ©jÃ  traitÃ© et --skip-enriched activÃ©
                 if skip_enriched and "soc_enriched" in record.get("tags", []):
                     continue
 
@@ -69,7 +69,7 @@ class IntelligenceOrchestrator:
                 else:
                     threat_type = record.get("threat_type", "suspicious")
 
-                # 2. Fiabilité source / Reliability
+                # 2. FiabilitÃ© source / Reliability
                 if not record.get("paser_reliablity"):
                     source_key = filename.split("_")[0]
                     SourceReliability.apply_reliability_tag(record, source_key)
@@ -85,7 +85,7 @@ class IntelligenceOrchestrator:
                         record["passer_par_mittre_attck"] = 1
                         modified_record = True
 
-                # 3. Scoring priorité + risque additif
+                # 3. Scoring prioritÃ© + risque additif
                 if not record.get("passser_par_scoring"):
                     priority, action = PriorityScorer.calculate_priority(record, threat_type)
                     record["priority_score"]      = priority   # CRITICAL | HIGH | MEDIUM | LOW
@@ -96,7 +96,7 @@ class IntelligenceOrchestrator:
                     src_conf = record.get("source_confidence", 50)
                     for ioc in record.get("iocs", []):
                         ioc["risk_score"] = PriorityScorer.calculate_ioc_risk(ioc, src_conf)
-                        # Action simplifiée par IOC
+                        # Action simplifiÃ©e par IOC
                         if ioc["risk_score"] >= 70: ioc["soc_action"] = "investigate"
                         elif ioc["risk_score"] >= 40: ioc["soc_action"] = "monitor"
                         else: ioc["soc_action"] = "monitor_quiet"
@@ -117,11 +117,11 @@ class IntelligenceOrchestrator:
             if modified:
                 with open(filepath, "w", encoding="utf-8") as f:
                     json.dump(records, f, indent=4, ensure_ascii=False)
-                logger.info(f"[OK] {filename} sauvegardé.")
+                logger.info(f"[OK] {filename} sauvegardÃ©.")
 
-        # Résumé
+        # RÃ©sumÃ©
         logger.info("=" * 55)
-        logger.info(f"  TOTAL     : {stats['total']} records traités")
+        logger.info(f"  TOTAL     : {stats['total']} records traitÃ©s")
         logger.info(f"  CRITICAL  : {stats.get('CRITICAL', 0)}")
         logger.info(f"  HIGH      : {stats.get('HIGH', 0)}")
         logger.info(f"  MEDIUM    : {stats.get('MEDIUM', 0)}")
@@ -132,8 +132,8 @@ class IntelligenceOrchestrator:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="CTI Intelligence Orchestrator")
     parser.add_argument("-s", "--source",        help="Filtrer par source (ex: feodotracker)")
-    parser.add_argument("--skip-enriched",       action="store_true", help="Ignorer les records déjà traités")
-    parser.add_argument("-d", "--dir",           help="Répertoire custom (override ENRICHMENT_DIR)")
+    parser.add_argument("--skip-enriched",       action="store_true", help="Ignorer les records dÃ©jÃ  traitÃ©s")
+    parser.add_argument("-d", "--dir",           help="RÃ©pertoire custom (override ENRICHMENT_DIR)")
     args = parser.parse_args()
 
     enrichment_dir = args.dir if args.dir else GLOBAL_SOURCES_DIR

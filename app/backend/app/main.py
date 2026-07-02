@@ -31,12 +31,12 @@ if sys.platform == 'win32':
         print(f"[INIT] Failed to set Proactor policy: {e}")
 
 from datetime import datetime, timedelta
-from . import schemas, database, websockets, worker, leaks_router
-from .admin import router as admin_router
-from .auth import router as auth_router
+from app import schemas, database, websockets, worker, leaks_router
+from app.admin import router as admin_router
+from app.auth import router as auth_router
 from app.mysql_db import get_db, init_db, User, hash_password, verify_password
 from sqlalchemy.orm import Session
-from .database import db
+from app.database import db
 
 GLOBAL_SOURCES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "Pipeline_cti", "global_output", "sources"))
 CORRELATION_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "Pipeline_cti", "global_output", "output_correlation"))
@@ -1234,7 +1234,7 @@ def get_bulletins():
 def generate_stix_bulletin():
     try:
         import subprocess
-        script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "misp_integration", "generate_cti_bulletin.py"))
+        script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "Pipeline_cti", "scripts", "misp_integration", "generate_cti_bulletin.py"))
         subprocess.run([sys.executable, script_path], check=True)
         
         bulletins_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "Pipeline_cti", "global_output", "reports", "cti_bulletins"))

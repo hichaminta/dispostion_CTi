@@ -19,7 +19,7 @@ API_URL = "https://threatfox-api.abuse.ch/api/v1/"
 BULK_EXPORT_URL_TEMPLATE = "https://threatfox-api.abuse.ch/v2/files/exports/{api_key}/full.json.zip"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_JSON = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "Pipeline_cti", "global_output", "sources", "ThreatFox", "collection", "threatfox_data.json"))
+OUTPUT_JSON = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "..", "..", "Pipeline_cti", "global_output", "sources", "ThreatFox", "collection", "threatfox_data.json"))
 
 # Daily export configuration
 
@@ -237,4 +237,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
 

@@ -16,7 +16,7 @@ from base_extractor import BaseExtractor
 
 SOURCE_NAME = "CINS Army"
 # BASE_DIR is one level above EXTRACTORS_DIR
-BASE_DIR = os.path.abspath(os.path.join(EXTRACTORS_DIR, "..", ".."))
+BASE_DIR = os.path.abspath(os.path.join(EXTRACTORS_DIR, "..", "..", ".."))
 SOURCE_DIR = os.path.join(BASE_DIR, "Pipeline_cti", "global_output", "sources", "CINS Army", "collection")
 INPUT_FILE = os.path.join(SOURCE_DIR, "cins_army_data.json")
 OUTPUT_DIR = os.path.join(BASE_DIR, "Pipeline_cti", "global_output", "sources", "CINS Army", "extraction")

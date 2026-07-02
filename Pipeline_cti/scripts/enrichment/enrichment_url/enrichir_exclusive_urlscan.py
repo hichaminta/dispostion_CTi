@@ -23,7 +23,7 @@ if sys.platform == 'win32':
 # ---------------------------
 
 # Ensure we can import from project root
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")))
 
 from enrichment.enrichment_url.urlscan_client import URLScanClient
 
@@ -34,8 +34,8 @@ logging.basicConfig(encoding="utf-8",
 )
 logger = logging.getLogger("URLScan_Exclusive")
 
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUTPUT_DIR = os.path.join(BASE_DIR, "Pipeline_cti/global_output/output_enrichment")
+BASE_DIR           = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+GLOBAL_SOURCES_DIR = os.path.join(BASE_DIR, "Pipeline_cti", "global_output", "sources")
 TRACKING_DIR = os.path.join(BASE_DIR, "tracking", "tracking_enrichment")
 WHITELIST_FILE = os.path.join(BASE_DIR, "hwite.json")
 
@@ -122,15 +122,19 @@ def enrich_urlscan(source_filter=None):
     urlscan = URLScanClient()
     checker = WhitelistChecker(WHITELIST_FILE)
     
-    if not os.path.exists(OUTPUT_DIR): return
+    import glob as _glob
+    _pattern = os.path.join(GLOBAL_SOURCES_DIR, "*", "enrichment", "*_enriched.json")
+    all_filepaths = sorted(_glob.glob(_pattern))
+    if not all_filepaths:
+        logger.info("### RICH DYNAMIC ENRICHMENT (URLScan.io) STARTED ###")
+        logger.info("URLScan Enrichment Completed. Registry updated. DB Matches: 0, API Submissions: 0")
+        return
 
-    all_files = sorted([f for f in os.listdir(OUTPUT_DIR) if f.endswith("_enriched.json")])
-    
     # Special Fix: 'Pipeline Complet' means process all files
     if source_filter and source_filter.lower() == "unified extraction":
-        files = all_files
+        filepaths = all_filepaths
     else:
-        files = [f for f in all_files if source_filter.lower() in f.lower()] if source_filter else all_files
+        filepaths = [fp for fp in all_filepaths if source_filter.lower() in os.path.basename(fp).lower()] if source_filter else all_filepaths
 
     logger.info(f"### RICH DYNAMIC ENRICHMENT (URLScan.io) STARTED ###")
 
@@ -223,18 +227,18 @@ def enrich_urlscan(source_filter=None):
 
     # ---------------------------
 
-    for filename in files:
+    for file_path in filepaths:
+        filename = os.path.basename(file_path)
         # Exclude AlienVault/OTX files as requested
         if "otx_alienvault" in filename.lower() or "alienvault" in filename.lower():
             logger.info(f"--- [IGNORE] Skipping AlienVault/OTX source file: {filename} ---")
             continue
 
-        if limit_reached: 
+        if limit_reached:
             logger.warning(f"--- [QUOTA REACHED] Skipping {filename} ---")
             continue
 
         source = get_source_from_filename(filename)
-        file_path = os.path.join(OUTPUT_DIR, filename)
         
         logger.info(f">>> STARTING SOURCE: {source.upper()} <<<")
         source_submissions = 0
@@ -351,7 +355,7 @@ def enrich_urlscan(source_filter=None):
                                 attempts += 1
                             
                             if attempts >= 12:
-                                logger.warning(f"  [TIMEOUT] Scan {uuid} toujours en attente après 60s.")
+                                logger.warning(f"  [TIMEOUT] Scan {uuid} toujours en attente aprÃ¨s 60s.")
 
                 if record_modified:
                     modified = True

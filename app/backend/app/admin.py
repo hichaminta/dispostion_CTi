@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 import uuid
 
-from .auth import require_role
+from app.auth import require_role
 from app.mysql_db import get_db, User, hash_password
 
 router = APIRouter(

@@ -18,11 +18,11 @@ logger = logging.getLogger("Enrichment_AbuseIPDB")
 load_dotenv(find_dotenv())
 API_KEY = os.getenv("ABUSEIPDB_API_KEY")
 
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 GLOBAL_SOURCES_DIR = os.path.join(BASE_DIR, "Pipeline_cti", "global_output", "sources")
 
 
-# ── Local DB path: check in enrichment_ip/ first, then legacy Sources_data/
+# â”€â”€ Local DB path: check in enrichment_ip/ first, then legacy Sources_data/
 _local_db_primary = os.path.join(os.path.dirname(__file__), "abuseipdb_data.json")
 _local_db_legacy   = os.path.join(BASE_DIR, "collection", "AbuseIPDB", "abuseipdb_data.json")
 DB_PATH = _local_db_primary if os.path.exists(_local_db_primary) else _local_db_legacy
@@ -36,7 +36,7 @@ class AbuseIPDBEnricher:
         self.local_db = self._load_db()
         self.new_data_count = 0
 
-    # ── Private helpers ────────────────────────────────────────────────────────
+    # â”€â”€ Private helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def _load_db(self):
         """Load the local JSON database into a dict keyed by IP address."""
@@ -50,7 +50,7 @@ class AbuseIPDBEnricher:
             except Exception as e:
                 logger.error(f"Failed to load local DB: {e}")
         else:
-            logger.warning(f"[LOCAL DB] Not found at {self.db_path} — starting fresh.")
+            logger.warning(f"[LOCAL DB] Not found at {self.db_path} â€” starting fresh.")
         return {}
 
     def _save_db(self):
@@ -67,7 +67,7 @@ class AbuseIPDBEnricher:
     def _query_api(self, ip):
         """Call AbuseIPDB API only when the IP is absent from the local DB."""
         if not API_KEY:
-            logger.warning("[API] ABUSEIPDB_API_KEY not set — API calls disabled.")
+            logger.warning("[API] ABUSEIPDB_API_KEY not set â€” API calls disabled.")
             return None
         logger.info(f"  [API] Querying AbuseIPDB for {ip} (not in local DB)...")
         try:
@@ -89,7 +89,7 @@ class AbuseIPDBEnricher:
             logger.error(f"  [API] Error for {ip}: {e}")
         return None
 
-    # ── Public API ─────────────────────────────────────────────────────────────
+    # â”€â”€ Public API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def get_ip_info(self, ip):
         """Return AbuseIPDB info for an IP.
@@ -99,7 +99,7 @@ class AbuseIPDBEnricher:
           2. AbuseIPDB API (result stored in local DB for future runs).
         """
         if ip in self.local_db:
-            logger.debug(f"  [LOCAL] {ip} found in local DB — skipping API call.")
+            logger.debug(f"  [LOCAL] {ip} found in local DB â€” skipping API call.")
             return self.local_db[ip]
 
         return self._query_api(ip)
@@ -133,7 +133,7 @@ class AbuseIPDBEnricher:
 
                     enrichment = ioc.setdefault("ioc_enrichment", {})
 
-                    # ── Skip: already processed by AbuseIPDB ──────────────
+                    # â”€â”€ Skip: already processed by AbuseIPDB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                     if enrichment.get("passer_par_abuseipdb") == 1:
                         logger.debug(f"  [SKIP] {ioc.get('value')} already enriched (passer_par_abuseipdb=1).")
                         continue
@@ -142,13 +142,13 @@ class AbuseIPDBEnricher:
                     if not raw_ip:
                         continue
 
-                    # ── Nettoyage de l'IP ─────────────────────────────────────
-                    # Retirer le port s'il est présent (ex: 42.225.207.134:34110)
+                    # â”€â”€ Nettoyage de l'IP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                    # Retirer le port s'il est prÃ©sent (ex: 42.225.207.134:34110)
                     clean_ip = raw_ip.split(":")[0]
 
-                    # Ignorer les blocs CIDR (ex: 1.10.16.0/20) non supportés par l'endpoint /check
+                    # Ignorer les blocs CIDR (ex: 1.10.16.0/20) non supportÃ©s par l'endpoint /check
                     if "/" in clean_ip:
-                        logger.debug(f"  [SKIP] {raw_ip} est un bloc CIDR, ignoré pour AbuseIPDB.")
+                        logger.debug(f"  [SKIP] {raw_ip} est un bloc CIDR, ignorÃ© pour AbuseIPDB.")
                         continue
 
                     info = self.get_ip_info(clean_ip)
@@ -160,7 +160,7 @@ class AbuseIPDBEnricher:
                             "countryCode":          info.get("countryCode"),
                             "isp":                  info.get("isp"),
                             "source_reliability":   "AbuseIPDB Local/API",
-                            # ── Tracking flag ──────────────────────────────
+                            # â”€â”€ Tracking flag â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                             "passer_par_abuseipdb": 1,
                         })
                         modified = True

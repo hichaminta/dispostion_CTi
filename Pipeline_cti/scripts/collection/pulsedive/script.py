@@ -17,7 +17,7 @@ API_KEY = os.getenv("PULSEDIVE_API_KEY")
 BASE_URL = "https://pulsedive.com/api/explore.php"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_FILE = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "Pipeline_cti", "global_output", "sources", "pulsedive", "collection", "pulsedive_data.json"))
+OUTPUT_FILE = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "..", "..", "Pipeline_cti", "global_output", "sources", "pulsedive", "collection", "pulsedive_data.json"))
 
 # Daily export configuration
 
@@ -201,3 +201,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

@@ -5,19 +5,19 @@ if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 """
 enrichir_virustotal.py
-──────────────────────
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 Enrichit les IOCs de type url / domain / hash avec VirusTotal.
 
-Logique (identique à AbuseIPDB) :
+Logique (identique Ã  AbuseIPDB) :
   1. Consulte la base locale  virustotal_data.json  en PREMIER.
-  2. Si trouvé → utilise les données locales, zéro appel API.
-  3. Si absent → appelle l'API VirusTotal, stocke le résultat dans
+  2. Si trouvÃ© â†’ utilise les donnÃ©es locales, zÃ©ro appel API.
+  3. Si absent â†’ appelle l'API VirusTotal, stocke le rÃ©sultat dans
      la base locale pour les prochains runs.
-  4. Pose le flag  passer_par_virustotal = 1  sur l'IOC traité.
-  5. Skip les IOCs qui ont déjà  passer_par_virustotal = 1.
+  4. Pose le flag  passer_par_virustotal = 1  sur l'IOC traitÃ©.
+  5. Skip les IOCs qui ont dÃ©jÃ   passer_par_virustotal = 1.
 
-# Types ciblés : url, domain, domaine, hash, md5, sha1, sha256, sha512, ip, ipv4.
-# Les IPs sont désormais également gérées par VirusTotal.
+# Types ciblÃ©s : url, domain, domaine, hash, md5, sha1, sha256, sha512, ip, ipv4.
+# Les IPs sont dÃ©sormais Ã©galement gÃ©rÃ©es par VirusTotal.
 """
 
 import os
@@ -28,25 +28,25 @@ import logging
 import requests
 from dotenv import load_dotenv, find_dotenv
 
-# ── Logging ───────────────────────────────────────────────────────────────────
+# â”€â”€ Logging â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 logging.basicConfig(encoding="utf-8", level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("Enrichment_VirusTotal")
 
-# ── Configuration ─────────────────────────────────────────────────────────────
+# â”€â”€ Configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 load_dotenv(find_dotenv())
 API_KEY = os.getenv("VIRUSTOTAL_API_KEY")
 
-BASE_DIR       = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUTPUT_DIR     = os.path.join(BASE_DIR, "Pipeline_cti/global_output/output_enrichment")
-DB_PATH        = os.path.join(os.path.dirname(__file__), "virustotal_data.json")
+BASE_DIR           = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+GLOBAL_SOURCES_DIR = os.path.join(BASE_DIR, "Pipeline_cti", "global_output", "sources")
+DB_PATH            = os.path.join(os.path.dirname(__file__), "virustotal_data.json")
 
 VT_API_BASE    = "https://www.virustotal.com/api/v3"
-API_DELAY_SEC  = 15   # Free tier: 4 req/min → wait 15 s between calls
+API_DELAY_SEC  = 15   # Free tier: 4 req/min â†’ wait 15 s between calls
 
 # IOC types that VirusTotal can analyse
 VT_TARGET_TYPES = {"url", "domain", "domaine", "hash", "hashe", "md5", "sha1", "sha256", "sha512", "ip", "ipv4"}
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class VirusTotalEnricher:
     """Local-first VirusTotal enricher for urls, domains, and file hashes."""
@@ -57,7 +57,7 @@ class VirusTotalEnricher:
         self.new_data_count = 0
         self._api_calls     = 0
 
-    # ── DB helpers ────────────────────────────────────────────────────────────
+    # â”€â”€ DB helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def _load_db(self) -> dict:
         """Load the local JSON database into a dict keyed by IOC value."""
@@ -75,7 +75,7 @@ class VirusTotalEnricher:
             except Exception as e:
                 logger.error(f"[LOCAL DB] Failed to load: {e}")
         else:
-            logger.warning(f"[LOCAL DB] Not found at {self.db_path} — starting fresh.")
+            logger.warning(f"[LOCAL DB] Not found at {self.db_path} â€” starting fresh.")
         return {}
 
     def _save_db(self):
@@ -85,11 +85,11 @@ class VirusTotalEnricher:
                 os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
                 with open(self.db_path, "w", encoding="utf-8") as f:
                     json.dump(list(self.local_db.values()), f, indent=4)
-                logger.info(f"[LOCAL DB] Saved — {self.new_data_count} new entry(ies) added.")
+                logger.info(f"[LOCAL DB] Saved â€” {self.new_data_count} new entry(ies) added.")
             except Exception as e:
                 logger.error(f"[LOCAL DB] Failed to save: {e}")
 
-    # ── API helpers ───────────────────────────────────────────────────────────
+    # â”€â”€ API helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def _headers(self) -> dict:
         return {"x-apikey": API_KEY, "Accept": "application/json"}
@@ -169,7 +169,7 @@ class VirusTotalEnricher:
     def _call_api(self, ioc_value: str, ioc_type: str) -> dict | None:
         """Route to the correct API endpoint based on IOC type."""
         if not API_KEY:
-            logger.warning("[API] VIRUSTOTAL_API_KEY not set — API calls disabled.")
+            logger.warning("[API] VIRUSTOTAL_API_KEY not set â€” API calls disabled.")
             return None
 
         logger.info(f"  [API] Querying VT for {ioc_type}: {ioc_value[:50]}")
@@ -196,31 +196,29 @@ class VirusTotalEnricher:
 
         return result
 
-    # ── Main logic ────────────────────────────────────────────────────────────
+    # â”€â”€ Main logic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def get_vt_info(self, ioc_value: str, ioc_type: str) -> dict | None:
-        """Return VT data for an IOC — local DB first, then API fallback."""
+        """Return VT data for an IOC â€” local DB first, then API fallback."""
         if ioc_value in self.local_db:
-            logger.debug(f"  [LOCAL] {ioc_value[:50]} found in local DB — skipping API.")
+            logger.debug(f"  [LOCAL] {ioc_value[:50]} found in local DB â€” skipping API.")
             return self.local_db[ioc_value]
         return self._call_api(ioc_value, ioc_type)
 
     def run(self):
         """Iterate over all enriched files and enrich VT-compatible IOCs."""
-        if not os.path.exists(OUTPUT_DIR):
-            logger.error(f"Output directory not found: {OUTPUT_DIR}")
-            return
-
-        files = [f for f in os.listdir(OUTPUT_DIR) if f.endswith("_enriched.json")]
-        if not files:
+        import glob
+        pattern = os.path.join(GLOBAL_SOURCES_DIR, "*", "enrichment", "*_enriched.json")
+        all_files = glob.glob(pattern)
+        if not all_files:
             logger.warning("[VT] No *_enriched.json files found. Skipping.")
             return
 
-        logger.info(f"[VT] Processing {len(files)} enriched file(s)...")
+        logger.info(f"[VT] Processing {len(all_files)} enriched file(s)...")
         total_enriched = 0
 
-        for filename in files:
-            filepath = os.path.join(OUTPUT_DIR, filename)
+        for filepath in all_files:
+            filename = os.path.basename(filepath)
             modified = False
 
             try:
@@ -240,7 +238,7 @@ class VirusTotalEnricher:
 
                     enrichment = ioc.setdefault("ioc_enrichment", {})
 
-                    # ── Skip: already processed ───────────────────────────
+                    # â”€â”€ Skip: already processed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                     if enrichment.get("passer_par_virustotal") == 1:
                         logger.debug(f"  [SKIP] {ioc_value[:50]} already flagged.")
                         continue
@@ -257,7 +255,7 @@ class VirusTotalEnricher:
                             "vt_tags":               vt_data.get("vt_tags", []),
                             "vt_last_analysis_date": vt_data.get("vt_last_analysis_date"),
                             "vt_permalink":          vt_data.get("vt_permalink"),
-                            # ── Tracking flag ──────────────────────────────
+                            # â”€â”€ Tracking flag â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                             "passer_par_virustotal": 1,
                         })
                         modified = True
@@ -279,7 +277,7 @@ class VirusTotalEnricher:
 
         self._save_db()
         logger.info(
-            f"[VT] Done — {total_enriched} IOC(s) enriched, "
+            f"[VT] Done â€” {total_enriched} IOC(s) enriched, "
             f"{self._api_calls} API call(s) made."
         )
 

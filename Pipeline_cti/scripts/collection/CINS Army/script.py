@@ -12,7 +12,7 @@ import requests
 # =========================
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CINS_URL = "https://cinsarmy.com/list/ci-badguys.txt"
-OUTPUT_JSON = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "Pipeline_cti", "global_output", "sources", "CINS Army", "collection", "cins_army_data.json"))
+OUTPUT_JSON = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "..", "..", "Pipeline_cti", "global_output", "sources", "CINS Army", "collection", "cins_army_data.json"))
 
 # Daily export configuration
 
@@ -209,4 +209,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
 

@@ -493,7 +493,7 @@ class STIXExporter:
                 # Fallback depuis attack_type
                 mtypes = ATTACK_TYPE_TO_MALWARE_TYPES.get(at, ["trojan"])
                 if family_raw:
-                    base["labels"].append(f"malware-family:{family_raw.lower().replace(' ', "-")}")
+                    base["labels"].append(f"malware-family:{family_raw.lower().replace(' ', '-')}")
 
             # Description enrichie avec la famille
             if family_raw and family_raw not in base["description"]:
@@ -752,7 +752,7 @@ class STIXExporter:
 
         if not output_file:
             timestamp = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
-            dst = os.path.join(BASE_DIR, "output_correlation", f"stix_export_{timestamp}.json")
+            dst = os.path.join(BASE_DIR, "Pipeline_cti", "global_output", "output_correlation", f"stix_export_{timestamp}.json")
         else:
             dst = output_file
 

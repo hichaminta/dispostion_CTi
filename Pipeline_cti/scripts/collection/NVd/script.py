@@ -27,7 +27,7 @@ API_KEY = os.getenv("NVD_API_KEY")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 TRACKING_FILE = os.path.join(SCRIPT_DIR, "tracking.json")
-OUTPUT_JSON = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "Pipeline_cti", "global_output", "sources", "NVd", "collection", "nvd_data.json"))
+OUTPUT_JSON = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "..", "..", "Pipeline_cti", "global_output", "sources", "NVd", "collection", "nvd_data.json"))
 
 # Daily export configuration (optional, like AbuseIPDB)
 
@@ -259,3 +259,5 @@ if __name__ == "__main__":
         extract_all() 
     except Exception as e:
         logging.error(f"Erreur globale : {e}")
+
+

@@ -147,7 +147,8 @@ class CTIBulletinGenerator:
         # PAGE DE GARDE
         # ----------------------------------------------------
         story.append(Spacer(1, 2.5*cm))
-        logo_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "bluesec-logo.png"))
+        # Path to bluesec-logo.png (3 levels up to reach root)
+        logo_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "bluesec-logo.png"))
         if os.path.exists(logo_path):
             img = Image(logo_path, width=9*cm, height=3.5*cm, kind='proportional')
             img.hAlign = 'CENTER'

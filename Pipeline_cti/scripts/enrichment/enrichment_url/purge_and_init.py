@@ -8,7 +8,7 @@ import os
 import glob
 
 # Paths
-ENRICH_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Pipeline_cti/global_output/output_enrichment"))
+ENRICH_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "Pipeline_cti", "global_output", "output_enrichment"))
 REGISTRY_PATH = os.path.join(os.path.dirname(__file__), "scanner_par_url_io.json")
 
 def cleanup():

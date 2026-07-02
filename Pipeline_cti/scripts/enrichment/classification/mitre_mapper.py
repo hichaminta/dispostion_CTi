@@ -13,7 +13,7 @@ from datetime import datetime
 logging.basicConfig(encoding="utf-8", level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("MITRE_Mapper")
 
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 INPUT_DIR = os.path.join(BASE_DIR, "Pipeline_cti/global_output/output_enrichment")
 OUTPUT_DIR = INPUT_DIR  # Update in place in Pipeline_cti/global_output/output_enrichment
 
@@ -111,12 +111,12 @@ def map_record(record):
 def map_ioc(ioc, record_context):
     """
     Mappe les techniques MITRE pour un IOC individuel.
-    Prend en compte l'IOC lui-même et un peu de contexte du record (tags, description).
+    Prend en compte l'IOC lui-mÃªme et un peu de contexte du record (tags, description).
     """
     techniques = set()
     search_text = []
 
-    # 1. Données spécifiques de l'IOC
+    # 1. DonnÃ©es spÃ©cifiques de l'IOC
     search_text.append(ioc.get("type", ""))
     search_text.append(ioc.get("value", ""))
     enrich = ioc.get("ioc_enrichment", {})

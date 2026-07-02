@@ -210,6 +210,137 @@
             "status": "imported",
             "ioc_count": 2,
             "iocs_already_existed": 0
+        },
+        "report--fcf0ae44-ab77-473e-8c34-819ca90afd53": {
+            "name": "SOC Report: Suspicious Infrastructure - Cins Army - CN",
+            "integrated_at": "2026-07-01T20:03:08.955454",
+            "status": "already_exists_in_misp"
+        },
+        "report--9fb89020-ad81-4105-b89a-6ab65a0d7e68": {
+            "name": "SOC Report: Suspicious Infrastructure - Cins Army - TW",
+            "integrated_at": "2026-07-01T20:03:10.939637",
+            "status": "already_exists_in_misp"
+        },
+        "report--9421d3da-4d01-4a1b-9f8a-659fbe1dee86": {
+            "name": "SOC Report: DFIR Report \u2014 Group Policy Object Campaign",
+            "integrated_at": "2026-07-01T20:03:12.754328",
+            "status": "already_exists_in_misp"
+        },
+        "report--c5307f55-ef99-41f4-8453-20a780394ee1": {
+            "name": "SOC Report: Malware - Emotet",
+            "integrated_at": "2026-07-01T20:03:14.508339",
+            "status": "already_exists_in_misp"
+        },
+        "report--8d99f46a-ff9c-4e15-98b5-8f7e1cc9317a": {
+            "name": "SOC Report: Malware - Qakbot",
+            "integrated_at": "2026-07-01T20:03:16.138797",
+            "status": "already_exists_in_misp"
+        },
+        "report--f3b265e3-a28d-4683-ae92-6d7d5aeafd84": {
+            "name": "SOC Report: Malware Sample - MB-A068667D8F2B",
+            "integrated_at": "2026-07-01T20:03:17.824927",
+            "status": "already_exists_in_misp"
+        },
+        "report--49f92482-33e8-46e2-a03b-0878daf1d55d": {
+            "name": "SOC Report: Malware Sample - MB-693E88C3EDE9",
+            "integrated_at": "2026-07-01T20:03:19.578810",
+            "status": "already_exists_in_misp"
+        },
+        "report--61fdbfbe-ce42-428b-a15a-0a8428c386c3": {
+            "name": "SOC Report: Malware - Mirai",
+            "integrated_at": "2026-07-01T20:03:21.158599",
+            "status": "already_exists_in_misp"
+        },
+        "report--31b5895b-5ccd-4877-826f-d0415f96bc96": {
+            "name": "SOC Report: Malware Sample - MB-F2E59B3A78D4",
+            "integrated_at": "2026-07-01T20:03:22.868741",
+            "status": "already_exists_in_misp"
+        },
+        "report--5af8c3e7-fe85-481b-8ff2-00182825a33e": {
+            "name": "SOC Report: Malware Sample - MB-7127CC1A27FC",
+            "integrated_at": "2026-07-01T20:03:24.397799",
+            "status": "already_exists_in_misp"
+        },
+        "report--d53bc18d-4852-4cbf-9725-5b4e2b42e248": {
+            "name": "SOC Report: Vulnerability - CVE-2015-5719",
+            "integrated_at": "2026-07-01T20:03:25.887839",
+            "status": "already_exists_in_misp"
+        },
+        "report--76a86cf0-99d5-46fa-af06-70c7bc4edda9": {
+            "name": "SOC Report: Vulnerability - CVE-2015-5720",
+            "integrated_at": "2026-07-01T20:03:27.433951",
+            "status": "already_exists_in_misp"
+        },
+        "report--bb0a6239-bd11-4617-b53f-c02e48b7567b": {
+            "name": "SOC Report: Vulnerability - CVE-2015-5721",
+            "integrated_at": "2026-07-01T20:03:29.187950",
+            "status": "already_exists_in_misp"
+        },
+        "report--2a74e775-2ffd-4ece-861e-eadf3c0679f6": {
+            "name": "SOC Report: Vulnerability - CVE-2017-13671",
+            "integrated_at": "2026-07-01T20:03:31.121632",
+            "status": "already_exists_in_misp"
+        },
+        "report--065ad4f0-ffb2-4284-b68e-f154425a12e8": {
+            "name": "SOC Report: Vulnerability - CVE-2017-12350",
+            "integrated_at": "2026-07-01T20:03:32.677309",
+            "status": "already_exists_in_misp"
+        },
+        "report--490d0547-77cd-4798-b214-6bf190372031": {
+            "name": "SOC Report: Phishing Campaign - US - sia.inicioseguro.com - 2026-06-23",
+            "integrated_at": "2026-07-01T20:03:34.655401",
+            "status": "already_exists_in_misp"
+        },
+        "report--7bcd9d63-d610-466f-9c5a-a4b7a47e6dec": {
+            "name": "SOC Report: Phishing Campaign - CH - www.r.oblox.com.et - 2026-06-23",
+            "integrated_at": "2026-07-01T20:03:36.347433",
+            "status": "already_exists_in_misp"
+        },
+        "report--fcb159b7-d942-4546-abfd-9912e2ac3fe3": {
+            "name": "SOC Report: Phishing Campaign - UNKNOWN - hawkfs.icu - 2026-06-23",
+            "integrated_at": "2026-07-01T20:03:37.836395",
+            "status": "already_exists_in_misp"
+        },
+        "report--0d772eac-708b-431d-8938-1d04e6c96100": {
+            "name": "SOC Report: Phishing Campaign - CH - www.roblox.com.bi - 2026-06-23",
+            "integrated_at": "2026-07-01T20:03:40.007543",
+            "status": "already_exists_in_misp"
+        },
+        "report--751fa85f-7b3a-4c4a-b838-5906dfcd1817": {
+            "name": "SOC Report: Phishing Campaign - US - www.gov-parkingiss.top - 2026-06-23",
+            "integrated_at": "2026-07-01T20:03:41.868126",
+            "status": "already_exists_in_misp"
+        },
+        "report--56e9beba-dde7-4f53-b6e5-bef47996d454": {
+            "name": "SOC Report: Phishing Campaign - PL - allegro.pl-oferta635h5fs7h.click - 2026-06-23",
+            "integrated_at": "2026-07-01T20:03:43.326571",
+            "status": "already_exists_in_misp"
+        },
+        "report--58247892-93d6-40bd-ac4d-6d9a9cc3a7a7": {
+            "name": "SOC Report: Phishing Campaign - PL - allegrolokainie.pl-oferta635h5fs7h.click - 2026-06-23",
+            "integrated_at": "2026-07-01T20:03:44.878270",
+            "status": "already_exists_in_misp"
+        },
+        "report--3bb56118-e7af-4994-b8e7-556f1b50e28a": {
+            "name": "SOC Report: Phishing Campaign - UNKNOWN - z2mv8qx.skin - 2026-06-23",
+            "integrated_at": "2026-07-01T20:03:46.715834",
+            "status": "already_exists_in_misp"
+        },
+        "report--7280d468-2407-45b5-8367-22f9c8824d57": {
+            "name": "SOC Report: Phishing Campaign - UNKNOWN - x9wt3mq.skin - 2026-06-23",
+            "integrated_at": "2026-07-01T20:03:48.778364",
+            "status": "already_exists_in_misp"
+        },
+        "report--d492bd34-c0b5-457c-aa98-5043657c7712": {
+            "name": "SOC Report: Phishing Campaign - UNKNOWN - n8qv3xt.skin - 2026-06-23",
+            "integrated_at": "2026-07-01T20:03:50.659002",
+            "status": "already_exists_in_misp"
+        },
+        "report--4e050aaa-7674-48d6-97c1-2c1e8396c15d": {
+            "name": "SOC Report: Suspicious Activity - pulsedive",
+            "integrated_at": "2026-07-01T20:03:52.102673",
+            "status": "already_exists_in_misp"
         }
-    }
+    },
+    "correlation_file_01_07_2026_19_29_18.json": "1782934158.6400685"
 }

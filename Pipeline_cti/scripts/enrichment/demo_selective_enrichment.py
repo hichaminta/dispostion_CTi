@@ -18,7 +18,7 @@ ALIENVAULT_FILE = os.path.join(OUTPUT_DIR, "alienvault_enriched.json")
 def score_record(record):
     """
     Calcule un score d'enrichissement pour un enregistrement.
-    Plus le score est élevé, plus l'enregistrement est complet.
+    Plus le score est Ã©levÃ©, plus l'enregistrement est complet.
     """
     score = 0
     
@@ -62,11 +62,11 @@ def filter_alienvault_for_demo():
             data = json.load(f)
             
         if not isinstance(data, list):
-            logger.warning("Les données ne sont pas une liste.")
+            logger.warning("Les donnÃ©es ne sont pas une liste.")
             return
 
         if len(data) <= 3:
-            logger.info("Déjà 3 enregistrements ou moins, aucun filtrage nécessaire.")
+            logger.info("DÃ©jÃ  3 enregistrements ou moins, aucun filtrage nÃ©cessaire.")
             return
 
         # Calculer les scores et trier
@@ -75,7 +75,7 @@ def filter_alienvault_for_demo():
             score = score_record(record)
             scored_records.append((score, record))
             
-        # Trier par score décroissant
+        # Trier par score dÃ©croissant
         scored_records.sort(key=lambda x: x[0], reverse=True)
         
         # Garder les 3 meilleurs
@@ -85,10 +85,10 @@ def filter_alienvault_for_demo():
         with open(ALIENVAULT_FILE, "w", encoding="utf-8") as f:
             json.dump(best_records, f, indent=4)
             
-        logger.info(f"Demo filter: {len(data)} -> 3 enregistrements les plus enrichis conservés dans {ALIENVAULT_FILE}")
+        logger.info(f"Demo filter: {len(data)} -> 3 enregistrements les plus enrichis conservÃ©s dans {ALIENVAULT_FILE}")
         
     except Exception as e:
-        logger.error(f"Erreur lors du filtrage démo : {e}")
+        logger.error(f"Erreur lors du filtrage dÃ©mo : {e}")
 
 if __name__ == "__main__":
     filter_alienvault_for_demo()

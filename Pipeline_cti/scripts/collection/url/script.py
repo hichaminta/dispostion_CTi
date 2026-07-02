@@ -19,7 +19,7 @@ load_dotenv(find_dotenv(), override=False)
 API_KEY = os.getenv("URLHAUS_API_KEY") or os.getenv("THREATFOX_API_KEY", "")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_FILE = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "Pipeline_cti", "global_output", "sources", "url", "collection", "urlhaus_data.json"))
+DB_FILE = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "..", "..", "Pipeline_cti", "global_output", "sources", "url", "collection", "urlhaus_data.json"))
 
 # Daily export configuration
 
@@ -272,4 +272,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
 

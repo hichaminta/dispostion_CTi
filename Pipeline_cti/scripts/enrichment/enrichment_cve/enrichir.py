@@ -14,7 +14,7 @@ from datetime import datetime
 logging.basicConfig(encoding="utf-8", level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("CVEEnrichment")
 
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 GLOBAL_SOURCES_DIR = os.path.join(BASE_DIR, "Pipeline_cti", "global_output", "sources")
 
 DOTENV_PATH = os.path.join(BASE_DIR, ".env")
@@ -85,11 +85,11 @@ def fetch_cve_details(cve_id):
                 cvss_vector = None
                 cvss_version = None
                 
-                # Priorité : v3.1 > v3.0 > v2.0
+                # PrioritÃ© : v3.1 > v3.0 > v2.0
                 for version in ["cvssMetricV31", "cvssMetricV30", "cvssMetricV2"]:
                     v_metrics = metrics.get(version, [])
                     if v_metrics:
-                        # Préférer le type 'Primary' si disponible
+                        # PrÃ©fÃ©rer le type 'Primary' si disponible
                         primary = [m for m in v_metrics if m.get("type") == "Primary"]
                         metric = primary[0] if primary else v_metrics[0]
                         cvss_data = metric.get("cvssData", {})
@@ -105,11 +105,11 @@ def fetch_cve_details(cve_id):
                     "cvss_version": cvss_version
                 }
             else:
-                logger.warning(f"Aucune donnée trouvée pour {cve_id}")
+                logger.warning(f"Aucune donnÃ©e trouvÃ©e pour {cve_id}")
         elif response.status_code == 403:
-            logger.error(f"Clé API invalide ou limite de débit atteinte (403) pour {cve_id}")
+            logger.error(f"ClÃ© API invalide ou limite de dÃ©bit atteinte (403) pour {cve_id}")
         elif response.status_code == 429:
-            logger.error(f"Rate limited (429). Pause nécessaire.")
+            logger.error(f"Rate limited (429). Pause nÃ©cessaire.")
             time.sleep(10)
         else:
             logger.error(f"Erreur API {response.status_code} pour {cve_id}")
@@ -171,14 +171,14 @@ def enrich_cves():
                 if not cve_id:
                     continue
                 
-                # On vérifie si l'enrichissement est nécessaire
+                # On vÃ©rifie si l'enrichissement est nÃ©cessaire
                 # (si score manque dans attributes ou dans ioc_enrichment)
                 attrs = record.get("attributes", {})
                 ioc_enrich = cve_obj.get("ioc_enrichment", {})
                 
-                # Si on a déjà un score dans l'un des deux, on considère que c'est bon
+                # Si on a dÃ©jÃ  un score dans l'un des deux, on considÃ¨re que c'est bon
                 if attrs.get("cvss_score") or ioc_enrich.get("cvss_score"):
-                    # Mais on s'assure quand même que ioc_enrichment est rempli s'il était vide
+                    # Mais on s'assure quand mÃªme que ioc_enrichment est rempli s'il Ã©tait vide
                     if not ioc_enrich.get("cvss_score") and attrs.get("cvss_score"):
                         ioc_enrich["cvss_score"] = attrs.get("cvss_score")
                         ioc_enrich["cvss_vector"] = attrs.get("cvss_vector")
@@ -192,20 +192,20 @@ def enrich_cves():
                 else:
                     details = fetch_cve_details(cve_id)
                     cve_cache[cve_id] = details
-                    # Respecter la limite de débit de la NVD (0.6s avec clé)
+                    # Respecter la limite de dÃ©bit de la NVD (0.6s avec clÃ©)
                     time.sleep(0.8)
                 
                 if details:
                     now_iso = datetime.now().isoformat()
                     if details.get("cvss_score"):
-                        # Mise à jour des attributs globaux
+                        # Mise Ã  jour des attributs globaux
                         attrs["cvss_score"] = details["cvss_score"]
                         attrs["cvss_vector"] = details["cvss_vector"]
                         attrs["cvss_version"] = details["cvss_version"]
                         attrs["tlp"] = "TLP:CLEAR"
                         attrs["enriched_at"] = now_iso
                         
-                        # Mise à jour de l'enrichissement spécifique à l'indicateur
+                        # Mise Ã  jour de l'enrichissement spÃ©cifique Ã  l'indicateur
                         ioc_enrich["cvss_score"] = details["cvss_score"]
                         ioc_enrich["cvss_vector"] = details["cvss_vector"]
                         ioc_enrich["cvss_version"] = details["cvss_version"]
@@ -213,7 +213,7 @@ def enrich_cves():
                         ioc_enrich["tlp"] = "TLP:CLEAR"
                         ioc_enrich["enriched_at"] = now_iso
                         
-                        # Mise à jour du résumé
+                        # Mise Ã  jour du rÃ©sumÃ©
                         record["summary"] = f"CVE Enrichment: {cve_id} | CVSS: {details['cvss_score']}"
                     
                     if details.get("description"):
@@ -234,11 +234,11 @@ def enrich_cves():
             try:
                 with open(filepath, "w", encoding="utf-8") as f:
                     json.dump(records, f, ensure_ascii=False, indent=4)
-                logger.info(f"[OK] {filename} mis à jour avec {modified_count} enrichissements CVE.")
+                logger.info(f"[OK] {filename} mis Ã  jour avec {modified_count} enrichissements CVE.")
             except Exception as e:
-                logger.error(f"Erreur lors de l'écriture de {filename} : {e}")
+                logger.error(f"Erreur lors de l'Ã©criture de {filename} : {e}")
         else:
-            logger.info(f"Aucune modification nécessaire pour {filename}.")
+            logger.info(f"Aucune modification nÃ©cessaire pour {filename}.")
 
 if __name__ == "__main__":
     enrich_cves()

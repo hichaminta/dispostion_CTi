@@ -1,0 +1,32 @@
+# Dossiers Git et autres
+.git
+.gitignore
+.claude
+misp-docker
+
+# Dossiers virtuels et caches Python
+__pycache__
+*.py[cod]
+*$py.class
+venv
+env
+.env
+
+# Dossiers Frontend
+app/frontend/node_modules
+app/frontend/dist
+app/frontend/.vite
+
+# Volumes de données
+store
+leak_data_integration/output
+Pipeline_cti/global_output
+misp_integration/tracking
+
+# Base de données
+mysql_data
+*.sql
+
+# Fichiers système
+.DS_Store
+Thumbs.db

@@ -11,25 +11,9 @@ import ipaddress
 logging.basicConfig(encoding="utf-8", level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("Sync_URLScan_Flags")
 
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUTPUT_DIR = os.path.join(BASE_DIR, "Pipeline_cti/global_output/output_enrichment")
-# FIX: Correct path to the registry file in the same directory
-REGISTRY_FILE = os.path.join(os.path.dirname(__file__), "scanner_par_url_io.json")
-
-FILES_TO_SYNC = [
-    "abuseipdb_enriched.json",
-    "alienvault_enriched.json", # Added AlienVault
-    "cins_army_enriched.json",
-    "feodotracker_enriched.json",
-    "malwarebazaar_enriched.json",
-    "openphish_enriched.json",
-    "phishtank_enriched.json",
-    "pulsedive_enriched.json",
-    "spamhaus_enriched.json",
-    "threatfox_enriched.json",
-    "urlhaus_enriched.json",
-    "virustotal_enriched.json"
-]
+BASE_DIR           = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+GLOBAL_SOURCES_DIR = os.path.join(BASE_DIR, "Pipeline_cti", "global_output", "sources")
+REGISTRY_FILE      = os.path.join(os.path.dirname(__file__), "scanner_par_url_io.json")
 
 def load_registry():
     if os.path.exists(REGISTRY_FILE):
@@ -87,10 +71,13 @@ def sync_flags():
 
     logger.info(f"Loaded {len(registry)} entries from local URLScan database.")
 
-    for filename in FILES_TO_SYNC:
-        file_path = os.path.join(OUTPUT_DIR, filename)
+    import glob as _glob
+    all_files = _glob.glob(os.path.join(GLOBAL_SOURCES_DIR, "*", "enrichment", "*_enriched.json"))
+
+    for file_path in all_files:
         if not os.path.exists(file_path):
             continue
+        filename = os.path.basename(file_path)
         
         try:
             logger.info(f"Syncing {filename}...")
